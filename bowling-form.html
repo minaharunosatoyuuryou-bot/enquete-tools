@@ -149,13 +149,7 @@
     </div>
 
     <div class="q">
-      <div class="q-title">⑦ 送迎バスの利用</div>
-      <label class="opt"><input type="radio" name="shuttle" value="利用する">利用する</label>
-      <label class="opt"><input type="radio" name="shuttle" value="利用しない（自家用車・現地集合など）">利用しない（自家用車・現地集合など）</label>
-    </div>
-
-    <div class="q">
-      <div class="q-title">⑧ ご意見・ご要望など</div>
+      <div class="q-title">⑦ ご意見・ご要望など</div>
       <textarea id="comment" placeholder="自由にご記入ください"></textarea>
     </div>
 
@@ -206,7 +200,6 @@
     }
 
     const bowlingSkill = document.querySelector('input[name="bowlingSkill"]:checked');
-    const shuttle = document.querySelector('input[name="shuttle"]:checked');
     const timePreference = document.querySelector('input[name="timePreference"]:checked');
 
     const payload = {
@@ -220,7 +213,6 @@
       timePreferenceOther: document.getElementById('timePreferenceOther').value.trim(),
       bowlingSkill: bowlingSkill ? bowlingSkill.value : '',
       teamRequest: document.getElementById('teamRequest').value.trim(),
-      shuttle: shuttle ? shuttle.value : '',
       comment: document.getElementById('comment').value.trim()
     };
 

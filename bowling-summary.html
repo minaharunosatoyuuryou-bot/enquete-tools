@@ -90,8 +90,7 @@
         html += listSection('　希望する時間帯（自由記入）', data.timePreferenceOthers);
         html += barSection('⑤ ボウリングの経験', data.bowlingSkill, data.total);
         html += listSection('⑥ チーム希望一覧', data.teamRequests);
-        html += barSection('⑦ 送迎バスの利用', data.shuttle, data.total);
-        html += listSection('⑧ ご意見・ご要望一覧', data.comments);
+        html += listSection('⑦ ご意見・ご要望一覧', data.comments);
 
         document.getElementById('content').innerHTML = html;
         document.getElementById('loading').style.display = 'none';
