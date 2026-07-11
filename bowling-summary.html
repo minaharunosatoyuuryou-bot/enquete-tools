@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>懇親会・ボウリング大会アンケート 集計結果</title>
+<title>職員親睦会アンケート 集計結果</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -28,25 +28,9 @@
   .bar-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px; }
   .bar-bg { background: #eee; border-radius: 6px; height: 14px; overflow: hidden; }
   .bar-fill { background: #d17a2c; height: 100%; }
-  .list-item {
-    background: #f7f7f7;
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin-bottom: 8px;
-    font-size: 14px;
-    white-space: pre-wrap;
-  }
+  .list-item { background: #f7f7f7; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 14px; white-space: pre-wrap; }
   #loading { text-align: center; color: #999; padding: 40px; }
-  #reloadBtn {
-    display: block;
-    margin: 0 auto 20px;
-    padding: 10px 20px;
-    background: #d17a2c;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-size: 14px;
-  }
+  #reloadBtn { display: block; margin: 0 auto 20px; padding: 10px 20px; background: #d17a2c; color: #fff; border: none; border-radius: 8px; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -56,15 +40,12 @@
 <div id="content" style="display:none;"></div>
 
 <script>
-  // ここにデプロイしたGASのURL（.../exec）を貼り付けてください
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbzuWSmznGYf7_mGw39tVrsoeuUxw84zOWSoIK_1TbZ_DsRUlM_FGlmbEeT_W0x_Yxh-/exec';
 
   function barSection(title, dataObj, total) {
     const entries = Object.entries(dataObj).sort((a, b) => b[1] - a[1]);
     let html = `<div class="card"><div class="q-title">${title}</div>`;
-    if (entries.length === 0) {
-      html += `<div style="color:#999;font-size:13px;">まだ回答がありません</div>`;
-    }
+    if (entries.length === 0) html += `<div style="color:#999;font-size:13px;">まだ回答がありません</div>`;
     entries.forEach(([label, count]) => {
       const pct = total > 0 ? Math.round((count / total) * 100) : 0;
       html += `
@@ -97,18 +78,20 @@
       .then(data => {
         let html = `
           <div class="card">
-            <h1>懇親会・ボウリング大会アンケート 集計結果</h1>
+            <h1>職員親睦会アンケート 集計結果</h1>
             <div class="total">回答数：${data.total} 件</div>
           </div>`;
 
         html += barSection('所属施設', data.facility, data.total);
-        html += barSection('① 懇親会への参加', data.partyAttend, data.total);
-        html += barSection('② ボウリング大会への参加', data.bowlingAttend, data.total);
-        html += barSection('③ ボウリングの経験・自信', data.bowlingSkill, data.total);
-        html += barSection('⑥ 送迎バスの利用', data.shuttle, data.total);
-        html += listSection('④ チーム希望一覧', data.teamRequests);
-        html += listSection('⑤ 食事の配慮事項一覧', data.dietaryNotes);
-        html += listSection('⑦ ご意見・ご要望一覧', data.comments);
+        html += barSection('① 親睦会への参加', data.partyAttend, data.total);
+        html += barSection('② お子様の参加', data.childAttend, data.total);
+        html += listSection('③ どんな内容なら参加したいか', data.wouldAttendIfs);
+        html += barSection('④ 開催時間について', data.timePreference, data.total);
+        html += listSection('　希望する時間帯（自由記入）', data.timePreferenceOthers);
+        html += barSection('⑤ ボウリングの経験', data.bowlingSkill, data.total);
+        html += listSection('⑥ チーム希望一覧', data.teamRequests);
+        html += barSection('⑦ 送迎バスの利用', data.shuttle, data.total);
+        html += listSection('⑧ ご意見・ご要望一覧', data.comments);
 
         document.getElementById('content').innerHTML = html;
         document.getElementById('loading').style.display = 'none';

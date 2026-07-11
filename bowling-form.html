@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>職員懇親会・ボウリング大会アンケート</title>
+<title>職員親睦会アンケート</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -22,7 +22,17 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   }
   h1 { font-size: 20px; text-align: center; margin-bottom: 4px; }
-  .sub { text-align: center; color: #777; font-size: 13px; margin-bottom: 24px; }
+  .sub { text-align: center; color: #777; font-size: 13px; margin-bottom: 16px; }
+  .notice {
+    background: #fff4e8;
+    border: 1px solid #f0c48a;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 14px;
+    color: #8a5a1e;
+    margin-bottom: 24px;
+    text-align: center;
+  }
   .q { margin-bottom: 24px; }
   .q-title {
     font-weight: bold;
@@ -45,7 +55,7 @@
     margin-right: 8px;
     transform: scale(1.2);
   }
-  input[type="text"], textarea {
+  input[type="text"], textarea, select {
     width: 100%;
     border: 1px solid #ddd;
     border-radius: 8px;
@@ -75,12 +85,13 @@
 <div class="card">
 
   <div id="formScreen">
-    <h1>職員懇親会・ボウリング大会アンケート</h1>
-    <div class="sub">参加予定の把握とチーム編成のために回答をお願いします（約1分）</div>
+    <h1>職員親睦会アンケート</h1>
+    <div class="sub">参加予定の把握のために回答をお願いします（約1分）</div>
+    <div class="notice">10月にボウリング大会を予定しています（19:00〜21:00を予定）</div>
 
     <div class="q">
       <div class="q-title">所属施設</div>
-      <select id="facility" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;">
+      <select id="facility">
         <option value="">選択してください</option>
         <option value="悠久の里 一番館">悠久の里 一番館</option>
         <option value="悠久の里 二番館">悠久の里 二番館</option>
@@ -99,22 +110,33 @@
     </div>
 
     <div class="q">
-      <div class="q-title">① 懇親会への参加</div>
+      <div class="q-title">① 親睦会への参加</div>
       <label class="opt"><input type="radio" name="partyAttend" value="参加する">参加する</label>
       <label class="opt"><input type="radio" name="partyAttend" value="未定">未定</label>
       <label class="opt"><input type="radio" name="partyAttend" value="参加しない">参加しない</label>
     </div>
 
     <div class="q">
-      <div class="q-title">② ボウリング大会への参加</div>
-      <label class="opt"><input type="radio" name="bowlingAttend" value="参加する（プレー）">参加する（プレーする）</label>
-      <label class="opt"><input type="radio" name="bowlingAttend" value="観戦のみ参加">観戦のみ参加</label>
-      <label class="opt"><input type="radio" name="bowlingAttend" value="未定">未定</label>
-      <label class="opt"><input type="radio" name="bowlingAttend" value="参加しない">参加しない</label>
+      <div class="q-title">② お子様の参加</div>
+      <label class="opt"><input type="radio" name="childAttend" value="参加する">参加する</label>
+      <label class="opt"><input type="radio" name="childAttend" value="参加しない">参加しない</label>
+      <label class="opt"><input type="radio" name="childAttend" value="お子様はいない">お子様はいない</label>
     </div>
 
     <div class="q">
-      <div class="q-title">③ ボウリングの経験・自信（チーム分けの参考にします）</div>
+      <div class="q-title">③ どんな内容なら参加したいですか？（未定・参加しない方はぜひ）</div>
+      <textarea id="wouldAttendIf" placeholder="例）休日ではなく平日開催なら／半日開催なら　など"></textarea>
+    </div>
+
+    <div class="q">
+      <div class="q-title">④ 開催時間（19:00〜21:00を予定）についてどう思いますか？</div>
+      <label class="opt"><input type="radio" name="timePreference" value="この時間でよい">この時間でよい</label>
+      <label class="opt"><input type="radio" name="timePreference" value="変更してほしい">変更してほしい</label>
+      <input type="text" id="timePreferenceOther" placeholder="ご希望の時間帯があれば記入してください（例：18:00〜20:00）" style="margin-top:8px;">
+    </div>
+
+    <div class="q">
+      <div class="q-title">⑤ ボウリングの経験（チーム分けの参考にします）</div>
       <label class="opt"><input type="radio" name="bowlingSkill" value="得意">得意</label>
       <label class="opt"><input type="radio" name="bowlingSkill" value="普通">普通</label>
       <label class="opt"><input type="radio" name="bowlingSkill" value="苦手">苦手</label>
@@ -122,23 +144,18 @@
     </div>
 
     <div class="q">
-      <div class="q-title">④ チーム希望（一緒がいい人がいれば）</div>
+      <div class="q-title">⑥ チーム希望（一緒がいい人がいれば）</div>
       <input type="text" id="teamRequest" placeholder="例）〇〇さんと同じチームがいい　※特になければ空欄でOK">
     </div>
 
     <div class="q">
-      <div class="q-title">⑤ お食事のアレルギー・配慮事項</div>
-      <input type="text" id="dietaryNotes" placeholder="例）エビ・カニアレルギー　※なければ空欄でOK">
-    </div>
-
-    <div class="q">
-      <div class="q-title">⑥ 送迎バスの利用</div>
+      <div class="q-title">⑦ 送迎バスの利用</div>
       <label class="opt"><input type="radio" name="shuttle" value="利用する">利用する</label>
       <label class="opt"><input type="radio" name="shuttle" value="利用しない（自家用車・現地集合など）">利用しない（自家用車・現地集合など）</label>
     </div>
 
     <div class="q">
-      <div class="q-title">⑦ ご意見・ご要望など</div>
+      <div class="q-title">⑧ ご意見・ご要望など</div>
       <textarea id="comment" placeholder="自由にご記入ください"></textarea>
     </div>
 
@@ -155,7 +172,6 @@
 </div>
 
 <script>
-  // ここにデプロイしたGASのURL（.../exec）を貼り付けてください
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbyj-TD04uuQo9_buwmzJX6EJzifIddS0uXD11vPGSAfHUOaaAxA01DPgm-H3i1McFXLoQ/exec';
 
   function submitForm() {
@@ -171,7 +187,7 @@
 
     const name = document.getElementById('name').value.trim();
     const partyAttend = document.querySelector('input[name="partyAttend"]:checked');
-    const bowlingAttend = document.querySelector('input[name="bowlingAttend"]:checked');
+    const childAttend = document.querySelector('input[name="childAttend"]:checked');
 
     if (!name) {
       statusEl.textContent = 'お名前を入力してください';
@@ -179,28 +195,31 @@
       return;
     }
     if (!partyAttend) {
-      statusEl.textContent = '①懇親会への参加を選択してください';
+      statusEl.textContent = '①親睦会への参加を選択してください';
       statusEl.style.color = '#c0392b';
       return;
     }
-    if (!bowlingAttend) {
-      statusEl.textContent = '②ボウリング大会への参加を選択してください';
+    if (!childAttend) {
+      statusEl.textContent = '②お子様の参加を選択してください';
       statusEl.style.color = '#c0392b';
       return;
     }
 
     const bowlingSkill = document.querySelector('input[name="bowlingSkill"]:checked');
     const shuttle = document.querySelector('input[name="shuttle"]:checked');
+    const timePreference = document.querySelector('input[name="timePreference"]:checked');
 
     const payload = {
       formType: 'bowling',
       facility: facility,
       name: name,
       partyAttend: partyAttend.value,
-      bowlingAttend: bowlingAttend.value,
+      childAttend: childAttend.value,
+      wouldAttendIf: document.getElementById('wouldAttendIf').value.trim(),
+      timePreference: timePreference ? timePreference.value : '',
+      timePreferenceOther: document.getElementById('timePreferenceOther').value.trim(),
       bowlingSkill: bowlingSkill ? bowlingSkill.value : '',
       teamRequest: document.getElementById('teamRequest').value.trim(),
-      dietaryNotes: document.getElementById('dietaryNotes').value.trim(),
       shuttle: shuttle ? shuttle.value : '',
       comment: document.getElementById('comment').value.trim()
     };

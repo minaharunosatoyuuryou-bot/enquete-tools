@@ -28,25 +28,9 @@
   .bar-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px; }
   .bar-bg { background: #eee; border-radius: 6px; height: 14px; overflow: hidden; }
   .bar-fill { background: #2e7d5b; height: 100%; }
-  .comment {
-    background: #f7f7f7;
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin-bottom: 8px;
-    font-size: 14px;
-    white-space: pre-wrap;
-  }
+  .comment { background: #f7f7f7; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 14px; white-space: pre-wrap; }
   #loading { text-align: center; color: #999; padding: 40px; }
-  #reloadBtn {
-    display: block;
-    margin: 0 auto 20px;
-    padding: 10px 20px;
-    background: #2e7d5b;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-size: 14px;
-  }
+  #reloadBtn { display: block; margin: 0 auto 20px; padding: 10px 20px; background: #2e7d5b; color: #fff; border: none; border-radius: 8px; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -56,15 +40,12 @@
 <div id="content" style="display:none;"></div>
 
 <script>
-  // ここにデプロイしたGASのURL（.../exec）を貼り付けてください
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbzuWSmznGYf7_mGw39tVrsoeuUxw84zOWSoIK_1TbZ_DsRUlM_FGlmbEeT_W0x_Yxh-/exec';
 
   function barSection(title, dataObj, total) {
     const entries = Object.entries(dataObj).sort((a, b) => b[1] - a[1]);
     let html = `<div class="card"><div class="q-title">${title}</div>`;
-    if (entries.length === 0) {
-      html += `<div style="color:#999;font-size:13px;">まだ回答がありません</div>`;
-    }
+    if (entries.length === 0) html += `<div style="color:#999;font-size:13px;">まだ回答がありません</div>`;
     entries.forEach(([label, count]) => {
       const pct = total > 0 ? Math.round((count / total) * 100) : 0;
       html += `
@@ -91,18 +72,16 @@
           </div>`;
 
         html += barSection('所属施設', data.facility, data.total);
-        html += barSection('① 満足度', data.satisfaction, data.total);
-        html += barSection('② 参加したい活動（複数回答）', data.activities, data.total);
-        html += barSection('③ 希望頻度', data.frequency, data.total);
-        html += barSection('④ 希望時間帯', data.timeOfDay, data.total);
+        html += barSection('① 良いと思うレクリエーション', data.activities, data.total);
+        html += barSection('② 年間行事の満足度', data.eventSatisfaction, data.total);
+        html += barSection('③ 貼り絵・制作活動の満足度', data.craftSatisfaction, data.total);
+        html += barSection('④ コンセプトレクの満足度', data.conceptSatisfaction, data.total);
 
-        html += `<div class="card"><div class="q-title">⑤ ご意見・ご要望（自由記述）</div>`;
+        html += `<div class="card"><div class="q-title">⑤ 今後やってほしいレク・ご要望</div>`;
         if (data.comments.length === 0) {
           html += `<div style="color:#999;font-size:13px;">まだ回答がありません</div>`;
         } else {
-          data.comments.forEach(c => {
-            html += `<div class="comment">${escapeHtml(c)}</div>`;
-          });
+          data.comments.forEach(c => { html += `<div class="comment">${escapeHtml(c)}</div>`; });
         }
         html += `</div>`;
 

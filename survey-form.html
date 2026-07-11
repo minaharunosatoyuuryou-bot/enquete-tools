@@ -21,20 +21,9 @@
     padding: 24px 20px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   }
-  h1 {
-    font-size: 20px;
-    text-align: center;
-    margin-bottom: 4px;
-  }
-  .sub {
-    text-align: center;
-    color: #777;
-    font-size: 13px;
-    margin-bottom: 24px;
-  }
-  .q {
-    margin-bottom: 24px;
-  }
+  h1 { font-size: 20px; text-align: center; margin-bottom: 4px; }
+  .sub { text-align: center; color: #777; font-size: 13px; margin-bottom: 24px; }
+  .q { margin-bottom: 24px; }
   .q-title {
     font-weight: bold;
     font-size: 15px;
@@ -56,7 +45,7 @@
     margin-right: 8px;
     transform: scale(1.2);
   }
-  input[type="text"], textarea {
+  input[type="text"], textarea, select {
     width: 100%;
     border: 1px solid #ddd;
     border-radius: 8px;
@@ -78,20 +67,9 @@
     cursor: pointer;
   }
   button:disabled { background: #aaa; }
-  #status {
-    text-align: center;
-    margin-top: 14px;
-    font-size: 14px;
-  }
-  #doneScreen {
-    display: none;
-    text-align: center;
-    padding: 40px 10px;
-  }
-  #doneScreen .check {
-    font-size: 48px;
-    color: #2e7d5b;
-  }
+  #status { text-align: center; margin-top: 14px; font-size: 14px; }
+  #doneScreen { display: none; text-align: center; padding: 40px 10px; }
+  #doneScreen .check { font-size: 48px; color: #2e7d5b; }
 </style>
 </head>
 <body>
@@ -103,7 +81,7 @@
 
     <div class="q">
       <div class="q-title">所属施設</div>
-      <select id="facility" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;">
+      <select id="facility">
         <option value="">選択してください</option>
         <option value="悠久の里 一番館">悠久の里 一番館</option>
         <option value="悠久の里 二番館">悠久の里 二番館</option>
@@ -117,46 +95,49 @@
     </div>
 
     <div class="q">
-      <div class="q-title">① 現在のレクリエーションの満足度はいかがですか？</div>
-      <label class="opt"><input type="radio" name="satisfaction" value="とても満足している">とても満足している</label>
-      <label class="opt"><input type="radio" name="satisfaction" value="満足している">満足している</label>
-      <label class="opt"><input type="radio" name="satisfaction" value="どちらともいえない">どちらともいえない</label>
-      <label class="opt"><input type="radio" name="satisfaction" value="あまり満足していない">あまり満足していない</label>
-      <label class="opt"><input type="radio" name="satisfaction" value="満足していない">満足していない</label>
-    </div>
-
-    <div class="q">
-      <div class="q-title">② 参加してみたい・続けたい活動（いくつでも）</div>
-      <label class="opt"><input type="checkbox" name="activities" value="体操・運動系">体操・運動系（体操、ストレッチ、ウォーキングなど）</label>
-      <label class="opt"><input type="checkbox" name="activities" value="手工芸・創作系">手工芸・創作系（塗り絵、折り紙、工作など）</label>
-      <label class="opt"><input type="checkbox" name="activities" value="音楽・カラオケ">音楽・カラオケ（合唱、演奏鑑賞、カラオケなど）</label>
-      <label class="opt"><input type="checkbox" name="activities" value="ゲーム・脳トレ">ゲーム・脳トレ（クイズ、麻雀、囲碁将棋など）</label>
-      <label class="opt"><input type="checkbox" name="activities" value="季節行事">季節行事（お花見、七夕、クリスマス会など）</label>
-      <label class="opt"><input type="checkbox" name="activities" value="外出・お出かけ">外出・お出かけ（散歩、買い物、ドライブなど）</label>
-      <label class="opt"><input type="checkbox" name="activities" value="園芸・栽培">園芸・栽培（花植え、野菜づくりなど）</label>
+      <div class="q-title">① 良いと思うレクリエーション（いくつでも）</div>
+      <label class="opt"><input type="checkbox" name="activities" value="魚釣り">魚釣り</label>
+      <label class="opt"><input type="checkbox" name="activities" value="風船バレー">風船バレー</label>
+      <label class="opt"><input type="checkbox" name="activities" value="宇宙人ゲーム">宇宙人ゲーム</label>
+      <label class="opt"><input type="checkbox" name="activities" value="棒サッカー">棒サッカー</label>
+      <label class="opt"><input type="checkbox" name="activities" value="おやつレク">おやつレク</label>
+      <label class="opt"><input type="checkbox" name="activities" value="体操・運動系">体操・運動系</label>
+      <label class="opt"><input type="checkbox" name="activities" value="手工芸・創作系">手工芸・創作系（塗り絵・貼り絵など）</label>
+      <label class="opt"><input type="checkbox" name="activities" value="音楽・カラオケ">音楽・カラオケ</label>
       <div class="other-input">
         <input type="text" id="activitiesOther" placeholder="その他（自由記入）">
       </div>
     </div>
 
     <div class="q">
-      <div class="q-title">③ 実施してほしい頻度</div>
-      <label class="opt"><input type="radio" name="frequency" value="毎日">毎日</label>
-      <label class="opt"><input type="radio" name="frequency" value="週に2〜3回程度">週に2〜3回程度</label>
-      <label class="opt"><input type="radio" name="frequency" value="週に1回程度">週に1回程度</label>
-      <label class="opt"><input type="radio" name="frequency" value="月に数回程度">月に数回程度</label>
+      <div class="q-title">② 年間行事の満足度</div>
+      <label class="opt"><input type="radio" name="eventSatisfaction" value="とても満足している">とても満足している</label>
+      <label class="opt"><input type="radio" name="eventSatisfaction" value="満足している">満足している</label>
+      <label class="opt"><input type="radio" name="eventSatisfaction" value="どちらともいえない">どちらともいえない</label>
+      <label class="opt"><input type="radio" name="eventSatisfaction" value="あまり満足していない">あまり満足していない</label>
+      <label class="opt"><input type="radio" name="eventSatisfaction" value="満足していない">満足していない</label>
     </div>
 
     <div class="q">
-      <div class="q-title">④ 実施してほしい時間帯</div>
-      <label class="opt"><input type="radio" name="timeOfDay" value="午前中">午前中</label>
-      <label class="opt"><input type="radio" name="timeOfDay" value="昼食後">昼食後</label>
-      <label class="opt"><input type="radio" name="timeOfDay" value="午後">午後</label>
-      <label class="opt"><input type="radio" name="timeOfDay" value="夕方">夕方</label>
+      <div class="q-title">③ 貼り絵・制作活動の満足度</div>
+      <label class="opt"><input type="radio" name="craftSatisfaction" value="とても満足している">とても満足している</label>
+      <label class="opt"><input type="radio" name="craftSatisfaction" value="満足している">満足している</label>
+      <label class="opt"><input type="radio" name="craftSatisfaction" value="どちらともいえない">どちらともいえない</label>
+      <label class="opt"><input type="radio" name="craftSatisfaction" value="あまり満足していない">あまり満足していない</label>
+      <label class="opt"><input type="radio" name="craftSatisfaction" value="満足していない">満足していない</label>
     </div>
 
     <div class="q">
-      <div class="q-title">⑤ ご意見・ご要望など</div>
+      <div class="q-title">④ コンセプトレク（季節・テーマ企画）の満足度</div>
+      <label class="opt"><input type="radio" name="conceptSatisfaction" value="とても満足している">とても満足している</label>
+      <label class="opt"><input type="radio" name="conceptSatisfaction" value="満足している">満足している</label>
+      <label class="opt"><input type="radio" name="conceptSatisfaction" value="どちらともいえない">どちらともいえない</label>
+      <label class="opt"><input type="radio" name="conceptSatisfaction" value="あまり満足していない">あまり満足していない</label>
+      <label class="opt"><input type="radio" name="conceptSatisfaction" value="満足していない">満足していない</label>
+    </div>
+
+    <div class="q">
+      <div class="q-title">⑤ 今後やってほしいレクリエーション・ご要望</div>
       <textarea id="comment" placeholder="自由にご記入ください"></textarea>
     </div>
 
@@ -173,7 +154,6 @@
 </div>
 
 <script>
-  // ここにデプロイしたGASのURL（.../exec）を貼り付けてください
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbyj-TD04uuQo9_buwmzJX6EJzifIddS0uXD11vPGSAfHUOaaAxA01DPgm-H3i1McFXLoQ/exec';
 
   function submitForm() {
@@ -187,27 +167,21 @@
       return;
     }
 
-    const satisfaction = document.querySelector('input[name="satisfaction"]:checked');
-    if (!satisfaction) {
-      statusEl.textContent = '①満足度を選択してください';
-      statusEl.style.color = '#c0392b';
-      return;
-    }
-
     const activities = Array.from(document.querySelectorAll('input[name="activities"]:checked')).map(el => el.value);
     const activitiesOther = document.getElementById('activitiesOther').value.trim();
-    const frequency = document.querySelector('input[name="frequency"]:checked');
-    const timeOfDay = document.querySelector('input[name="timeOfDay"]:checked');
+    const eventSatisfaction = document.querySelector('input[name="eventSatisfaction"]:checked');
+    const craftSatisfaction = document.querySelector('input[name="craftSatisfaction"]:checked');
+    const conceptSatisfaction = document.querySelector('input[name="conceptSatisfaction"]:checked');
     const comment = document.getElementById('comment').value.trim();
 
     const payload = {
       formType: 'recreation',
       facility: facility,
-      satisfaction: satisfaction.value,
       activities: activities,
       activitiesOther: activitiesOther,
-      frequency: frequency ? frequency.value : '',
-      timeOfDay: timeOfDay ? timeOfDay.value : '',
+      eventSatisfaction: eventSatisfaction ? eventSatisfaction.value : '',
+      craftSatisfaction: craftSatisfaction ? craftSatisfaction.value : '',
+      conceptSatisfaction: conceptSatisfaction ? conceptSatisfaction.value : '',
       comment: comment
     };
 
