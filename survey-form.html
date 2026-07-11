@@ -141,6 +141,13 @@
       <textarea id="comment" placeholder="自由にご記入ください"></textarea>
     </div>
 
+    <div class="q">
+      <div class="q-title">⑥ レクの企画について</div>
+      <label class="opt"><input type="radio" name="planningStyle" value="今の企画書(全施設共通)のままでよい">今の企画書（全施設共通）のままでよい</label>
+      <label class="opt"><input type="radio" name="planningStyle" value="各施設ごとに企画を立てたほうがよい">各施設ごとに企画を立てたほうがよい</label>
+      <label class="opt"><input type="radio" name="planningStyle" value="どちらともいえない">どちらともいえない</label>
+    </div>
+
     <button id="submitBtn" onclick="submitForm()">回答を送信する</button>
     <div id="status"></div>
   </div>
@@ -172,6 +179,7 @@
     const eventSatisfaction = document.querySelector('input[name="eventSatisfaction"]:checked');
     const craftSatisfaction = document.querySelector('input[name="craftSatisfaction"]:checked');
     const conceptSatisfaction = document.querySelector('input[name="conceptSatisfaction"]:checked');
+    const planningStyle = document.querySelector('input[name="planningStyle"]:checked');
     const comment = document.getElementById('comment').value.trim();
 
     const payload = {
@@ -182,6 +190,7 @@
       eventSatisfaction: eventSatisfaction ? eventSatisfaction.value : '',
       craftSatisfaction: craftSatisfaction ? craftSatisfaction.value : '',
       conceptSatisfaction: conceptSatisfaction ? conceptSatisfaction.value : '',
+      planningStyle: planningStyle ? planningStyle.value : '',
       comment: comment
     };
 

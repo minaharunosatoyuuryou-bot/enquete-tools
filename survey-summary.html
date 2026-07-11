@@ -76,6 +76,7 @@
         html += barSection('② 年間行事の満足度', data.eventSatisfaction, data.total);
         html += barSection('③ 貼り絵・制作活動の満足度', data.craftSatisfaction, data.total);
         html += barSection('④ コンセプトレクの満足度', data.conceptSatisfaction, data.total);
+        html += barSection('⑥ レクの企画について', data.planningStyle, data.total);
 
         html += `<div class="card"><div class="q-title">⑤ 今後やってほしいレク・ご要望</div>`;
         if (data.comments.length === 0) {
