@@ -1,0 +1,563 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>実績記録再構成ツール</title>
+<style>
+  :root {
+    --navy: #1f3864;
+    --navy-light: #2e5395;
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --border: #dfe3e8;
+    --text: #232a33;
+    --muted: #6b7684;
+    --gray: #b9c0c9;
+    --amber: #d9922c;
+    --green: #2f8f5b;
+    --red: #c0392b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    background: var(--navy);
+    color: #fff;
+    padding: 18px 24px;
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.02em; }
+  header p { margin: 4px 0 0; font-size: 12px; color: #cdd9ef; }
+
+  .tabs {
+    display: flex;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    padding: 12px 20px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--muted);
+    border-bottom: 3px solid transparent;
+  }
+  .tab.active {
+    color: var(--navy);
+    border-bottom-color: var(--navy);
+    font-weight: 600;
+  }
+
+  .container { padding: 20px; max-width: 1100px; margin: 0 auto; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  .card h2 { margin: 0 0 12px; font-size: 15px; color: var(--navy); }
+
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  select, input[type=text], textarea {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  textarea { width: 100%; min-height: 70px; resize: vertical; }
+  button {
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    background: var(--navy);
+    color: #fff;
+    font-weight: 600;
+  }
+  button.secondary { background: #eef1f5; color: var(--navy); }
+  button.small { padding: 5px 10px; font-size: 12px; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* 進捗グリッド */
+  table.progress { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table.progress th, table.progress td {
+    border: 1px solid var(--border);
+    padding: 0;
+    text-align: center;
+  }
+  table.progress th {
+    background: #eef1f5;
+    padding: 8px 4px;
+    font-weight: 600;
+    color: var(--navy);
+  }
+  table.progress td.user-name {
+    text-align: left;
+    padding: 8px 10px;
+    font-weight: 600;
+    background: #fafbfc;
+    white-space: nowrap;
+  }
+  .cell-btn {
+    display: block;
+    width: 100%;
+    height: 36px;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--gray);
+  }
+  .cell-btn.doing { background: var(--amber); }
+  .cell-btn.done { background: var(--green); }
+
+  .legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  /* 実施内容チップ */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .chip {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    background: #fff;
+    color: var(--text);
+    user-select: none;
+  }
+  .chip.selected { background: var(--navy); color: #fff; border-color: var(--navy); }
+
+  /* 日付リスト */
+  .date-list { max-height: 460px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+  .date-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .date-row:last-child { border-bottom: none; }
+  .date-label { width: 80px; font-weight: 600; flex-shrink: 0; }
+  .date-status { width: 60px; flex-shrink: 0; font-size: 11px; color: var(--muted); }
+  .date-summary { flex: 1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .date-row.filled .date-status { color: var(--green); font-weight: 600; }
+  .date-row.attended-only .date-status { color: var(--amber); font-weight: 600; }
+  .date-row.selected { background: #eef4ff; }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--navy); color: #fff; padding: 10px 20px; border-radius: 6px;
+    font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+
+  .note-remark {
+    font-size: 12px; color: var(--red); margin-top: 6px;
+  }
+  .settings-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .settings-list .chip { cursor: default; }
+  .settings-list .chip button { background: none; border: none; color: inherit; margin-left: 6px; cursor: pointer; padding: 0; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>実績記録再構成ツール</h1>
+  <p>悠巡 定期巡回 実績内容 整備支援（令和7年10月〜令和8年6月分）</p>
+</header>
+
+<div class="tabs">
+  <div class="tab active" data-tab="progress">進捗管理</div>
+  <div class="tab" data-tab="input">内容入力</div>
+  <div class="tab" data-tab="settings">設定</div>
+</div>
+
+<div class="container">
+
+  <!-- 進捗管理タブ -->
+  <div id="tab-progress" class="card">
+    <h2>利用者 × 月 進捗一覧</h2>
+    <p style="font-size:12px;color:var(--muted);margin-top:-6px;">マスをクリックすると 未着手 → 作業中 → 完了 の順に切り替わります</p>
+    <div id="progressTableWrap">読み込み中...</div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--gray)"></span>未着手</span>
+      <span><span class="dot" style="background:var(--amber)"></span>作業中</span>
+      <span><span class="dot" style="background:var(--green)"></span>完了</span>
+    </div>
+  </div>
+
+  <!-- 内容入力タブ -->
+  <div id="tab-input" class="card" style="display:none;">
+    <h2>実績内容の入力・再構成</h2>
+    <div class="row">
+      <select id="userSelect"></select>
+      <select id="monthSelect"></select>
+      <button class="secondary small" onclick="loadRecords()">読み込み</button>
+    </div>
+
+    <div class="card" style="background:#fafbfc;">
+      <h2 style="font-size:13px;">① スクリーンショットから実績日を読み込む</h2>
+      <p style="font-size:11px;color:var(--muted);margin-top:-6px;">ほのぼの画面の「実績」欄が写ったスクリーンショットを選択してください。実績が入っている日を自動で判定し、下の一覧に反映します（内容欄は空のままです）</p>
+      <div class="row">
+        <input type="file" id="screenshotInput" accept="image/*">
+        <button onclick="analyzeScreenshot()" id="analyzeBtn">画像を解析して反映</button>
+        <span id="analyzeStatus" style="font-size:12px;color:var(--muted);"></span>
+      </div>
+    </div>
+
+    <div class="card" style="background:#fafbfc;">
+      <h2 style="font-size:13px;">② まとめて適用する内容（テンプレート）</h2>
+      <div class="chips" id="templateChips"></div>
+      <textarea id="templateNote" placeholder="特記事項（例：バイタル安定、特変なし　等）"></textarea>
+      <div class="row" style="margin-top:8px;">
+        <label style="font-size:13px;">適用範囲：</label>
+        <input type="text" id="bulkFrom" placeholder="開始日 例:1" style="width:90px;">〜
+        <input type="text" id="bulkTo" placeholder="終了日 例:31" style="width:90px;">
+        <button onclick="bulkApply()">この内容をまとめて適用</button>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">※ シフト表の勤務実績と照合し、実際に訪問できていた日のみに適用してください</p>
+    </div>
+
+    <h2 style="font-size:13px;margin-top:16px;">③ 日付ごとの内容（実績があった日のみ手入力）</h2>
+    <div class="legend" style="margin-bottom:6px;">
+      <span><span class="dot" style="background:var(--gray)"></span>実績なし</span>
+      <span><span class="dot" style="background:var(--amber)"></span>実績あり・内容未入力</span>
+      <span><span class="dot" style="background:var(--green)"></span>入力済み</span>
+    </div>
+    <div class="date-list" id="dateList"></div>
+
+    <div class="card" style="background:#fafbfc;margin-top:12px;" id="editPanel" style="display:none;">
+      <h2 style="font-size:13px;" id="editDateLabel">日付を選択してください</h2>
+      <div class="chips" id="editChips"></div>
+      <textarea id="editNote" placeholder="特記事項"></textarea>
+      <div class="row" style="margin-top:8px;">
+        <button onclick="saveOne()">この日を保存</button>
+        <span id="editMeta" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 設定タブ -->
+  <div id="tab-settings" class="card" style="display:none;">
+    <h2>利用者一覧の設定</h2>
+    <div class="row">
+      <input type="text" id="newUserName" placeholder="利用者名を入力">
+      <button onclick="addUser()">追加</button>
+    </div>
+    <div class="settings-list" id="userChipList"></div>
+    <button class="secondary" onclick="saveUsersList()">保存</button>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ==== 設定：GASのURLを貼り付けてください ====
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxuPuMXvOa9XNFZsD3_CcVWR0vusuQZp1wzIaRQBuRK0q-CW-zlDV6EAAjIFA_YmnQmJw/exec';
+const GEMINI_API_KEY = 'AQ.Ab8RN6LEGYU0waineQvaRxbrggKukJfU2UF8T41tlivGSEitBQ';
+
+const MONTHS = ['R7/10','R7/11','R7/12','R8/1','R8/2','R8/3','R8/4','R8/5','R8/6'];
+const MONTH_DAYS = { 'R7/10':31,'R7/11':30,'R7/12':31,'R8/1':31,'R8/2':28,'R8/3':31,'R8/4':30,'R8/5':31,'R8/6':30 };
+const CONTENT_OPTIONS = ['安否確認','バイタルチェック','食事介助','排泄介助','服薬確認','水分補給','体位変換','環境整備'];
+
+let users = [];
+let progressMap = {};
+let currentRecords = {};
+let selectedDate = null;
+
+// ---- 共通 ----
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+async function apiGet(params) {
+  const url = GAS_URL + '?' + new URLSearchParams(params).toString();
+  const res = await fetch(url);
+  return res.json();
+}
+async function apiPost(body) {
+  const res = await fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body)
+  });
+  return res.json();
+}
+
+// ---- タブ切替 ----
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    ['progress','input','settings'].forEach(id => {
+      document.getElementById('tab-' + id).style.display = (id === tab.dataset.tab) ? 'block' : 'none';
+    });
+  });
+});
+
+// ---- 初期化 ----
+async function init() {
+  if (GAS_URL.indexOf('http') !== 0) {
+    document.getElementById('progressTableWrap').innerHTML =
+      '<p style="color:var(--red);">GASのURLが未設定です。コード内の GAS_URL を設定してください。</p>';
+    return;
+  }
+  const u = await apiGet({ action: 'getUsers' });
+  users = u.users || [];
+  renderUserSelect();
+  renderMonthSelect();
+  renderSettingsChips();
+  await loadProgress();
+}
+
+function renderUserSelect() {
+  const sel = document.getElementById('userSelect');
+  sel.innerHTML = users.map(u => `<option value="${u}">${u}</option>`).join('');
+}
+function renderMonthSelect() {
+  const sel = document.getElementById('monthSelect');
+  sel.innerHTML = MONTHS.map(m => `<option value="${m}">${m}</option>`).join('');
+}
+
+// ---- 進捗管理 ----
+async function loadProgress() {
+  const p = await apiGet({ action: 'getProgress' });
+  progressMap = p.progress || {};
+  renderProgressTable();
+}
+
+function renderProgressTable() {
+  const wrap = document.getElementById('progressTableWrap');
+  if (!users.length) {
+    wrap.innerHTML = '<p style="color:var(--muted);">設定タブで利用者を登録してください。</p>';
+    return;
+  }
+  let html = '<table class="progress"><tr><th style="text-align:left;">利用者</th>';
+  MONTHS.forEach(m => html += `<th>${m}</th>`);
+  html += '</tr>';
+  users.forEach(u => {
+    html += `<tr><td class="user-name">${u}</td>`;
+    MONTHS.forEach(m => {
+      const key = u + '|' + m;
+      const status = progressMap[key] || '未着手';
+      const cls = status === '完了' ? 'done' : (status === '作業中' ? 'doing' : '');
+      html += `<td><button class="cell-btn ${cls}" onclick="cycleStatus('${u}','${m}')">${status === '未着手' ? '' : status}</button></td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</table>';
+  wrap.innerHTML = html;
+}
+
+async function cycleStatus(user, month) {
+  const key = user + '|' + month;
+  const current = progressMap[key] || '未着手';
+  const next = current === '未着手' ? '作業中' : (current === '作業中' ? '完了' : '未着手');
+  progressMap[key] = next;
+  renderProgressTable();
+  await apiPost({ action: 'saveProgress', user, month, status: next });
+}
+
+// ---- 内容入力 ----
+function renderTemplateChips() {
+  const wrap = document.getElementById('templateChips');
+  wrap.innerHTML = CONTENT_OPTIONS.map(c => `<div class="chip" data-val="${c}" onclick="toggleChip(this)">${c}</div>`).join('');
+}
+function renderEditChips(selected) {
+  const wrap = document.getElementById('editChips');
+  wrap.innerHTML = CONTENT_OPTIONS.map(c =>
+    `<div class="chip ${selected.includes(c) ? 'selected' : ''}" data-val="${c}" onclick="toggleChip(this)">${c}</div>`
+  ).join('');
+}
+function toggleChip(el) { el.classList.toggle('selected'); }
+function getSelectedChips(containerId) {
+  return Array.from(document.querySelectorAll('#' + containerId + ' .chip.selected')).map(c => c.dataset.val);
+}
+
+async function loadRecords() {
+  const user = document.getElementById('userSelect').value;
+  const month = document.getElementById('monthSelect').value;
+  if (!user || !month) return;
+  const r = await apiGet({ action: 'getRecords', user, month });
+  currentRecords = r.records || {};
+  renderTemplateChips();
+  renderDateList(user, month);
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function analyzeScreenshot() {
+  const user = document.getElementById('userSelect').value;
+  const month = document.getElementById('monthSelect').value;
+  if (!user || !month) { toast('利用者と年月を選択してください'); return; }
+  const fileInput = document.getElementById('screenshotInput');
+  const file = fileInput.files[0];
+  if (!file) { toast('画像を選択してください'); return; }
+  if (GEMINI_API_KEY.indexOf('AQ.') !== 0 && GEMINI_API_KEY.indexOf('AIza') !== 0) {
+    toast('Gemini APIキーが未設定です');
+    return;
+  }
+  const statusEl = document.getElementById('analyzeStatus');
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = true;
+  statusEl.textContent = '解析中…';
+  try {
+    const base64 = await fileToBase64(file);
+    const prompt = 'この画像は介護記録ソフトの月間スケジュール一覧表です。「実績」と書かれた行(予定ではなく実績の行)に日付ごとの数字(1など)が入っているマスを探し、その日にちの数字だけをJSON配列で返してください。複数のサービス行がある場合はいずれかの実績行に数字が入っていればその日を含めてください。説明文は一切不要で、JSON配列のみを返してください。例: [1,2,3,5,6,7]';
+    const res = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=' + GEMINI_API_KEY,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: file.type || 'image/png', data: base64 } }
+            ]
+          }]
+        })
+      }
+    );
+    const data = await res.json();
+    let text = data.candidates && data.candidates[0] && data.candidates[0].content.parts[0].text;
+    if (!text) throw new Error('解析結果を取得できませんでした');
+    text = text.replace(/```json|```/g, '').trim();
+    const dates = JSON.parse(text);
+    if (!Array.isArray(dates) || !dates.length) {
+      statusEl.textContent = '実績日を検出できませんでした';
+      btn.disabled = false;
+      return;
+    }
+    await apiPost({ action: 'saveAttendance', user, month, dates });
+    dates.forEach(d => {
+      if (!currentRecords[d]) currentRecords[d] = { attended: true };
+      else currentRecords[d].attended = true;
+    });
+    renderDateList(user, month);
+    statusEl.textContent = dates.length + '日分の実績を反映しました';
+  } catch (err) {
+    statusEl.textContent = '解析エラー: ' + err.message;
+  }
+  btn.disabled = false;
+}
+
+function renderDateList(user, month) {
+  const days = MONTH_DAYS[month];
+  const wrap = document.getElementById('dateList');
+  let html = '';
+  for (let d = 1; d <= days; d++) {
+    const rec = currentRecords[d];
+    const filled = !!(rec && rec.contents);
+    const attended = !!(rec && rec.attended);
+    let cls = '';
+    let statusLabel = '実績なし';
+    if (filled) { cls = 'filled'; statusLabel = '入力済'; }
+    else if (attended) { cls = 'attended-only'; statusLabel = '要入力'; }
+    html += `<div class="date-row ${cls}" id="daterow-${d}" onclick="selectDate(${d})">
+      <div class="date-label">${d}日</div>
+      <div class="date-status">${statusLabel}</div>
+      <div class="date-summary">${filled ? rec.contents : ''}</div>
+    </div>`;
+  }
+  wrap.innerHTML = html;
+}
+
+function selectDate(d) {
+  selectedDate = d;
+  document.querySelectorAll('.date-row').forEach(r => r.classList.remove('selected'));
+  document.getElementById('daterow-' + d).classList.add('selected');
+  const rec = currentRecords[d] || {};
+  document.getElementById('editDateLabel').textContent = d + '日 の内容';
+  renderEditChips(rec.contents ? rec.contents.split('、') : []);
+  document.getElementById('editNote').value = rec.note || '';
+  document.getElementById('editMeta').textContent = rec.createdAt ? ('前回作成: ' + rec.createdAt) : '';
+  document.getElementById('editPanel').style.display = 'block';
+}
+
+async function saveOne() {
+  if (!selectedDate) { toast('日付を選択してください'); return; }
+  const user = document.getElementById('userSelect').value;
+  const month = document.getElementById('monthSelect').value;
+  const contents = getSelectedChips('editChips').join('、');
+  const note = document.getElementById('editNote').value;
+  await apiPost({
+    action: 'saveRecord', user, month, date: selectedDate, contents, note,
+    author: '牧良子', remark: '事後作成'
+  });
+  currentRecords[selectedDate] = { contents, note, createdAt: new Date().toLocaleString('ja-JP') };
+  renderDateList(user, month);
+  toast(selectedDate + '日を保存しました');
+}
+
+async function bulkApply() {
+  const user = document.getElementById('userSelect').value;
+  const month = document.getElementById('monthSelect').value;
+  const from = parseInt(document.getElementById('bulkFrom').value, 10);
+  const to = parseInt(document.getElementById('bulkTo').value, 10);
+  const contents = getSelectedChips('templateChips').join('、');
+  const note = document.getElementById('templateNote').value;
+  if (!contents) { toast('実施内容を選択してください'); return; }
+  if (!from || !to || from > to) { toast('適用範囲(開始日・終了日)を正しく入力してください'); return; }
+  const dates = [];
+  for (let d = from; d <= to; d++) dates.push(d);
+  await apiPost({ action: 'bulkApply', user, month, dates, contents, note, author: '牧良子', remark: '事後作成(まとめて適用)' });
+  dates.forEach(d => currentRecords[d] = { contents, note, createdAt: new Date().toLocaleString('ja-JP') });
+  renderDateList(user, month);
+  toast(from + '日〜' + to + '日に適用しました（' + dates.length + '件）');
+}
+
+// ---- 設定：利用者 ----
+function renderSettingsChips() {
+  const wrap = document.getElementById('userChipList');
+  wrap.innerHTML = users.map((u, i) =>
+    `<div class="chip">${u}<button onclick="removeUser(${i})">×</button></div>`
+  ).join('');
+}
+function addUser() {
+  const input = document.getElementById('newUserName');
+  const name = input.value.trim();
+  if (!name) return;
+  users.push(name);
+  input.value = '';
+  renderSettingsChips();
+  renderUserSelect();
+  renderProgressTable();
+}
+function removeUser(i) {
+  users.splice(i, 1);
+  renderSettingsChips();
+  renderUserSelect();
+  renderProgressTable();
+}
+async function saveUsersList() {
+  await apiPost({ action: 'saveUsers', users });
+  toast('利用者一覧を保存しました');
+}
+
+init();
+</script>
+</body>
+</html>
