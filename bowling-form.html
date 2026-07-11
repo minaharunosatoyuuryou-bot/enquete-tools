@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>職員懇親会・ボウリング大会アンケート</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    background: #f4f6f8;
+    margin: 0;
+    padding: 16px;
+    color: #333;
+  }
+  .card {
+    max-width: 560px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  h1 { font-size: 20px; text-align: center; margin-bottom: 4px; }
+  .sub { text-align: center; color: #777; font-size: 13px; margin-bottom: 24px; }
+  .q { margin-bottom: 24px; }
+  .q-title {
+    font-weight: bold;
+    font-size: 15px;
+    margin-bottom: 10px;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 6px;
+  }
+  label.opt {
+    display: block;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  label.opt:active { background: #f0f0f0; }
+  input[type="radio"], input[type="checkbox"] {
+    margin-right: 8px;
+    transform: scale(1.2);
+  }
+  input[type="text"], textarea {
+    width: 100%;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 15px;
+    font-family: inherit;
+  }
+  textarea { min-height: 80px; resize: vertical; }
+  button {
+    width: 100%;
+    padding: 14px;
+    background: #d17a2c;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  button:disabled { background: #aaa; }
+  #status { text-align: center; margin-top: 14px; font-size: 14px; }
+  #doneScreen { display: none; text-align: center; padding: 40px 10px; }
+  #doneScreen .check { font-size: 48px; color: #d17a2c; }
+</style>
+</head>
+<body>
+<div class="card">
+
+  <div id="formScreen">
+    <h1>職員懇親会・ボウリング大会アンケート</h1>
+    <div class="sub">参加予定の把握とチーム編成のために回答をお願いします（約1分）</div>
+
+    <div class="q">
+      <div class="q-title">お名前</div>
+      <input type="text" id="name" placeholder="例）大分 太郎">
+    </div>
+
+    <div class="q">
+      <div class="q-title">① 懇親会への参加</div>
+      <label class="opt"><input type="radio" name="partyAttend" value="参加する">参加する</label>
+      <label class="opt"><input type="radio" name="partyAttend" value="未定">未定</label>
+      <label class="opt"><input type="radio" name="partyAttend" value="参加しない">参加しない</label>
+    </div>
+
+    <div class="q">
+      <div class="q-title">② ボウリング大会への参加</div>
+      <label class="opt"><input type="radio" name="bowlingAttend" value="参加する（プレー）">参加する（プレーする）</label>
+      <label class="opt"><input type="radio" name="bowlingAttend" value="観戦のみ参加">観戦のみ参加</label>
+      <label class="opt"><input type="radio" name="bowlingAttend" value="未定">未定</label>
+      <label class="opt"><input type="radio" name="bowlingAttend" value="参加しない">参加しない</label>
+    </div>
+
+    <div class="q">
+      <div class="q-title">③ ボウリングの経験・自信（チーム分けの参考にします）</div>
+      <label class="opt"><input type="radio" name="bowlingSkill" value="得意">得意</label>
+      <label class="opt"><input type="radio" name="bowlingSkill" value="普通">普通</label>
+      <label class="opt"><input type="radio" name="bowlingSkill" value="苦手">苦手</label>
+      <label class="opt"><input type="radio" name="bowlingSkill" value="未経験">未経験</label>
+    </div>
+
+    <div class="q">
+      <div class="q-title">④ チーム希望（一緒がいい人がいれば）</div>
+      <input type="text" id="teamRequest" placeholder="例）〇〇さんと同じチームがいい　※特になければ空欄でOK">
+    </div>
+
+    <div class="q">
+      <div class="q-title">⑤ お食事のアレルギー・配慮事項</div>
+      <input type="text" id="dietaryNotes" placeholder="例）エビ・カニアレルギー　※なければ空欄でOK">
+    </div>
+
+    <div class="q">
+      <div class="q-title">⑥ 送迎バスの利用</div>
+      <label class="opt"><input type="radio" name="shuttle" value="利用する">利用する</label>
+      <label class="opt"><input type="radio" name="shuttle" value="利用しない（自家用車・現地集合など）">利用しない（自家用車・現地集合など）</label>
+    </div>
+
+    <div class="q">
+      <div class="q-title">⑦ ご意見・ご要望など</div>
+      <textarea id="comment" placeholder="自由にご記入ください"></textarea>
+    </div>
+
+    <button id="submitBtn" onclick="submitForm()">回答を送信する</button>
+    <div id="status"></div>
+  </div>
+
+  <div id="doneScreen">
+    <div class="check">✓</div>
+    <h1>送信しました</h1>
+    <div class="sub">ご協力ありがとうございました</div>
+  </div>
+
+</div>
+
+<script>
+  // ここにデプロイしたGASのURL（.../exec）を貼り付けてください
+  const GAS_URL = 'GAS_URL_HERE';
+
+  function submitForm() {
+    const btn = document.getElementById('submitBtn');
+    const statusEl = document.getElementById('status');
+
+    const name = document.getElementById('name').value.trim();
+    const partyAttend = document.querySelector('input[name="partyAttend"]:checked');
+    const bowlingAttend = document.querySelector('input[name="bowlingAttend"]:checked');
+
+    if (!name) {
+      statusEl.textContent = 'お名前を入力してください';
+      statusEl.style.color = '#c0392b';
+      return;
+    }
+    if (!partyAttend) {
+      statusEl.textContent = '①懇親会への参加を選択してください';
+      statusEl.style.color = '#c0392b';
+      return;
+    }
+    if (!bowlingAttend) {
+      statusEl.textContent = '②ボウリング大会への参加を選択してください';
+      statusEl.style.color = '#c0392b';
+      return;
+    }
+
+    const bowlingSkill = document.querySelector('input[name="bowlingSkill"]:checked');
+    const shuttle = document.querySelector('input[name="shuttle"]:checked');
+
+    const payload = {
+      formType: 'bowling',
+      name: name,
+      partyAttend: partyAttend.value,
+      bowlingAttend: bowlingAttend.value,
+      bowlingSkill: bowlingSkill ? bowlingSkill.value : '',
+      teamRequest: document.getElementById('teamRequest').value.trim(),
+      dietaryNotes: document.getElementById('dietaryNotes').value.trim(),
+      shuttle: shuttle ? shuttle.value : '',
+      comment: document.getElementById('comment').value.trim()
+    };
+
+    btn.disabled = true;
+    btn.textContent = '送信中...';
+    statusEl.textContent = '';
+
+    fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.result === 'ok') {
+          document.getElementById('formScreen').style.display = 'none';
+          document.getElementById('doneScreen').style.display = 'block';
+        } else {
+          throw new Error(data.message || '送信エラー');
+        }
+      })
+      .catch(err => {
+        statusEl.textContent = '送信に失敗しました。もう一度お試しください。';
+        statusEl.style.color = '#c0392b';
+        btn.disabled = false;
+        btn.textContent = '回答を送信する';
+      });
+  }
+</script>
+</body>
+</html>
