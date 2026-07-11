@@ -79,6 +79,21 @@
     <div class="sub">参加予定の把握とチーム編成のために回答をお願いします（約1分）</div>
 
     <div class="q">
+      <div class="q-title">所属施設</div>
+      <select id="facility" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;">
+        <option value="">選択してください</option>
+        <option value="悠久の里 一番館">悠久の里 一番館</option>
+        <option value="悠久の里 二番館">悠久の里 二番館</option>
+        <option value="悠久の里 三番館">悠久の里 三番館</option>
+        <option value="悠久の里 横尾">悠久の里 横尾</option>
+        <option value="悠久の里 佐伯">悠久の里 佐伯</option>
+        <option value="悠久の里 米良">悠久の里 米良</option>
+        <option value="みなはるの里">みなはるの里</option>
+        <option value="みどりの郷ほんじょう">みどりの郷ほんじょう</option>
+      </select>
+    </div>
+
+    <div class="q">
       <div class="q-title">お名前</div>
       <input type="text" id="name" placeholder="例）大分 太郎">
     </div>
@@ -141,11 +156,18 @@
 
 <script>
   // ここにデプロイしたGASのURL（.../exec）を貼り付けてください
-  const GAS_URL = 'GAS_URL_HERE';
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbyj-TD04uuQo9_buwmzJX6EJzifIddS0uXD11vPGSAfHUOaaAxA01DPgm-H3i1McFXLoQ/exec';
 
   function submitForm() {
     const btn = document.getElementById('submitBtn');
     const statusEl = document.getElementById('status');
+
+    const facility = document.getElementById('facility').value;
+    if (!facility) {
+      statusEl.textContent = '所属施設を選択してください';
+      statusEl.style.color = '#c0392b';
+      return;
+    }
 
     const name = document.getElementById('name').value.trim();
     const partyAttend = document.querySelector('input[name="partyAttend"]:checked');
@@ -172,6 +194,7 @@
 
     const payload = {
       formType: 'bowling',
+      facility: facility,
       name: name,
       partyAttend: partyAttend.value,
       bowlingAttend: bowlingAttend.value,

@@ -102,6 +102,21 @@
     <div class="sub">ご協力よろしくお願いします（所要時間 約1分）</div>
 
     <div class="q">
+      <div class="q-title">所属施設</div>
+      <select id="facility" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:15px;">
+        <option value="">選択してください</option>
+        <option value="悠久の里 一番館">悠久の里 一番館</option>
+        <option value="悠久の里 二番館">悠久の里 二番館</option>
+        <option value="悠久の里 三番館">悠久の里 三番館</option>
+        <option value="悠久の里 横尾">悠久の里 横尾</option>
+        <option value="悠久の里 佐伯">悠久の里 佐伯</option>
+        <option value="悠久の里 米良">悠久の里 米良</option>
+        <option value="みなはるの里">みなはるの里</option>
+        <option value="みどりの郷ほんじょう">みどりの郷ほんじょう</option>
+      </select>
+    </div>
+
+    <div class="q">
       <div class="q-title">① 現在のレクリエーションの満足度はいかがですか？</div>
       <label class="opt"><input type="radio" name="satisfaction" value="とても満足している">とても満足している</label>
       <label class="opt"><input type="radio" name="satisfaction" value="満足している">満足している</label>
@@ -165,6 +180,13 @@
     const btn = document.getElementById('submitBtn');
     const statusEl = document.getElementById('status');
 
+    const facility = document.getElementById('facility').value;
+    if (!facility) {
+      statusEl.textContent = '所属施設を選択してください';
+      statusEl.style.color = '#c0392b';
+      return;
+    }
+
     const satisfaction = document.querySelector('input[name="satisfaction"]:checked');
     if (!satisfaction) {
       statusEl.textContent = '①満足度を選択してください';
@@ -180,6 +202,7 @@
 
     const payload = {
       formType: 'recreation',
+      facility: facility,
       satisfaction: satisfaction.value,
       activities: activities,
       activitiesOther: activitiesOther,

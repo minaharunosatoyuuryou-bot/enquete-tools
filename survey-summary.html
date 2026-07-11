@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>レクリエーションアンケート 集計結果</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    background: #f4f6f8;
+    margin: 0;
+    padding: 16px;
+    color: #333;
+  }
+  .card {
+    max-width: 640px;
+    margin: 0 auto 20px;
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  h1 { font-size: 20px; text-align: center; margin-bottom: 4px; }
+  .total { text-align: center; color: #777; font-size: 14px; margin-bottom: 20px; }
+  .q-title { font-weight: bold; font-size: 15px; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 6px; }
+  .bar-row { margin-bottom: 10px; }
+  .bar-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px; }
+  .bar-bg { background: #eee; border-radius: 6px; height: 14px; overflow: hidden; }
+  .bar-fill { background: #2e7d5b; height: 100%; }
+  .comment {
+    background: #f7f7f7;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    white-space: pre-wrap;
+  }
+  #loading { text-align: center; color: #999; padding: 40px; }
+  #reloadBtn {
+    display: block;
+    margin: 0 auto 20px;
+    padding: 10px 20px;
+    background: #2e7d5b;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+
+<button id="reloadBtn" onclick="load()">最新の集計に更新</button>
+<div id="loading">読み込み中...</div>
+<div id="content" style="display:none;"></div>
+
+<script>
+  // ここにデプロイしたGASのURL（.../exec）を貼り付けてください
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbzuWSmznGYf7_mGw39tVrsoeuUxw84zOWSoIK_1TbZ_DsRUlM_FGlmbEeT_W0x_Yxh-/exec';
+
+  function barSection(title, dataObj, total) {
+    const entries = Object.entries(dataObj).sort((a, b) => b[1] - a[1]);
+    let html = `<div class="card"><div class="q-title">${title}</div>`;
+    if (entries.length === 0) {
+      html += `<div style="color:#999;font-size:13px;">まだ回答がありません</div>`;
+    }
+    entries.forEach(([label, count]) => {
+      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+      html += `
+        <div class="bar-row">
+          <div class="bar-label"><span>${label}</span><span>${count}件（${pct}%）</span></div>
+          <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;"></div></div>
+        </div>`;
+    });
+    html += `</div>`;
+    return html;
+  }
+
+  function load() {
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('content').style.display = 'none';
+
+    fetch(GAS_URL + '?action=summary')
+      .then(res => res.json())
+      .then(data => {
+        let html = `
+          <div class="card">
+            <h1>レクリエーションアンケート 集計結果</h1>
+            <div class="total">回答数：${data.total} 件</div>
+          </div>`;
+
+        html += barSection('所属施設', data.facility, data.total);
+        html += barSection('① 満足度', data.satisfaction, data.total);
+        html += barSection('② 参加したい活動（複数回答）', data.activities, data.total);
+        html += barSection('③ 希望頻度', data.frequency, data.total);
+        html += barSection('④ 希望時間帯', data.timeOfDay, data.total);
+
+        html += `<div class="card"><div class="q-title">⑤ ご意見・ご要望（自由記述）</div>`;
+        if (data.comments.length === 0) {
+          html += `<div style="color:#999;font-size:13px;">まだ回答がありません</div>`;
+        } else {
+          data.comments.forEach(c => {
+            html += `<div class="comment">${escapeHtml(c)}</div>`;
+          });
+        }
+        html += `</div>`;
+
+        document.getElementById('content').innerHTML = html;
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('content').style.display = 'block';
+      })
+      .catch(err => {
+        document.getElementById('loading').textContent = '読み込みに失敗しました: ' + err;
+      });
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  load();
+</script>
+</body>
+</html>
