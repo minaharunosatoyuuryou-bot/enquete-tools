@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大分高齢者紹介センター | 案件管理</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F5F2EC;
+    --surface:#FFFFFF;
+    --line:#E3DED2;
+    --ink:#26302E;
+    --ink-soft:#6B7570;
+    --primary:#1F5F56;
+    --primary-light:#E5F0EE;
+    --primary-dark:#153F39;
+    --gold:#C99A3B;
+    --gold-light:#FBF3E1;
+    --danger:#A65454;
+    --danger-light:#F6E9E9;
+    --info:#3F6E91;
+    --info-light:#E7EFF4;
+    --purple:#6E5E8E;
+    --purple-light:#EFEAF3;
+    --gray:#6B7280;
+    --gray-light:#EEEFF1;
+    --radius:14px;
+    --shadow: 0 2px 10px rgba(31,95,86,0.06), 0 1px 2px rgba(31,95,86,0.08);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Noto Sans JP', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3, .display{
+    font-family:'Shippori Mincho', serif;
+    font-weight:700;
+    letter-spacing:.02em;
+  }
+
+  /* ---------- Lock screen ---------- */
+  #lock{
+    position:fixed; inset:0; background:var(--primary-dark);
+    display:flex; align-items:center; justify-content:center; z-index:999;
+  }
+  .lock-card{
+    background:var(--surface); border-radius:var(--radius);
+    padding:40px 36px; width:300px; text-align:center;
+    box-shadow:0 20px 50px rgba(0,0,0,.25);
+  }
+  .lock-card h2{ margin:0 0 4px; font-size:22px; color:var(--primary-dark);}
+  .lock-card p{ margin:0 0 20px; font-size:12px; color:var(--ink-soft);}
+  .lock-card input{
+    width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:10px;
+    font-size:16px; text-align:center; letter-spacing:.3em; margin-bottom:14px;
+  }
+  .lock-card button{
+    width:100%; padding:12px; border:none; border-radius:10px;
+    background:var(--primary); color:#fff; font-size:14px; font-weight:600; cursor:pointer;
+  }
+  .lock-err{ color:var(--danger); font-size:12px; height:16px; margin-top:-6px; margin-bottom:8px;}
+
+  /* ---------- Shell ---------- */
+  #app{ display:none; max-width:1100px; margin:0 auto; padding:28px 20px 80px;}
+  header.top{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    padding-bottom:18px; margin-bottom:20px; border-bottom:2px solid var(--primary);
+  }
+  header.top .eyebrow{ font-size:11px; letter-spacing:.18em; color:var(--gold); font-weight:600; margin-bottom:2px;}
+  header.top h1{ font-size:26px; margin:0; color:var(--primary-dark);}
+  header.top .sub{ font-size:12px; color:var(--ink-soft); margin-top:4px;}
+
+  nav.tabs{ display:flex; gap:6px; margin-bottom:22px;}
+  nav.tabs button{
+    border:none; background:transparent; padding:10px 18px; font-size:13.5px; font-weight:600;
+    color:var(--ink-soft); cursor:pointer; border-radius:999px; font-family:inherit;
+    transition:.15s;
+  }
+  nav.tabs button.active{ background:var(--primary); color:#fff;}
+  nav.tabs button:not(.active):hover{ background:var(--primary-light); color:var(--primary-dark);}
+
+  .view{ display:none; }
+  .view.active{ display:block; animation:fade .25s ease;}
+  @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+
+  /* ---------- Dashboard ---------- */
+  .kpi-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:26px;}
+  .kpi{
+    background:var(--surface); border-radius:var(--radius); padding:18px 16px;
+    box-shadow:var(--shadow); border-left:4px solid var(--primary);
+  }
+  .kpi .num{ font-family:'Shippori Mincho',serif; font-size:30px; color:var(--primary-dark); line-height:1;}
+  .kpi .lbl{ font-size:12px; color:var(--ink-soft); margin-top:6px;}
+  .kpi.gold{ border-left-color:var(--gold);}
+  .kpi.gold .num{ color:var(--gold);}
+  .kpi.danger{ border-left-color:var(--danger);}
+  .kpi.danger .num{ color:var(--danger);}
+
+  section.panel{
+    background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow);
+    padding:20px 22px; margin-bottom:20px;
+  }
+  section.panel h3{ font-size:15px; margin:0 0 14px; color:var(--primary-dark); display:flex; align-items:center; gap:8px;}
+  section.panel h3::before{ content:''; width:5px; height:16px; background:var(--gold); border-radius:3px; display:inline-block;}
+
+  .follow-row{
+    display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--line);
+    font-size:13.5px;
+  }
+  .follow-row:last-child{ border-bottom:none;}
+  .follow-date{
+    font-weight:700; color:var(--primary-dark); min-width:76px; font-variant-numeric:tabular-nums;
+  }
+  .follow-date.overdue{ color:var(--danger);}
+  .follow-name{ font-weight:600; flex:1;}
+  .empty-note{ font-size:13px; color:var(--ink-soft); padding:6px 0;}
+
+  /* ---------- Pipeline stepper ---------- */
+  .pipeline{ display:flex; gap:0; margin-bottom:22px; flex-wrap:wrap;}
+  .pipeline .stage{
+    flex:1; min-width:90px; text-align:center; padding:10px 4px; font-size:11.5px; font-weight:600;
+    color:var(--ink-soft); background:var(--surface); border-top:3px solid var(--line); cursor:pointer;
+  }
+  .pipeline .stage .n{ display:block; font-family:'Shippori Mincho',serif; font-size:20px; color:var(--ink-soft);}
+  .pipeline .stage.on{ border-top-color:var(--primary); color:var(--primary-dark); background:var(--primary-light);}
+  .pipeline .stage.on .n{ color:var(--primary);}
+
+  /* ---------- Toolbar ---------- */
+  .toolbar{ display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap;}
+  .toolbar select, .toolbar input[type=text]{
+    padding:8px 12px; border:1px solid var(--line); border-radius:8px; font-size:13px; font-family:inherit; background:#fff;
+  }
+  .btn{
+    border:none; border-radius:8px; padding:9px 18px; font-size:13.5px; font-weight:600;
+    cursor:pointer; font-family:inherit; transition:.15s;
+  }
+  .btn-primary{ background:var(--primary); color:#fff;}
+  .btn-primary:hover{ background:var(--primary-dark);}
+  .btn-ghost{ background:transparent; color:var(--primary); border:1px solid var(--primary);}
+  .btn-ghost:hover{ background:var(--primary-light);}
+  .btn-danger{ background:transparent; color:var(--danger); border:1px solid var(--danger);}
+
+  /* ---------- Deal cards ---------- */
+  .deal-list{ display:flex; flex-direction:column; gap:10px;}
+  .deal-card{
+    background:var(--surface); border-radius:12px; box-shadow:var(--shadow); padding:14px 18px;
+    display:flex; align-items:center; gap:14px; cursor:pointer; border:1px solid transparent;
+  }
+  .deal-card:hover{ border-color:var(--primary);}
+  .deal-type{ font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:999px; white-space:nowrap;}
+  .deal-type.inq{ background:var(--gold-light); color:#8a6a1f;}
+  .deal-type.biz{ background:var(--primary-light); color:var(--primary-dark);}
+  .deal-type.hospital{ background:var(--danger-light); color:var(--danger);}
+  .deal-type.home{ background:var(--info-light); color:var(--info);}
+  .deal-type.community{ background:var(--purple-light); color:var(--purple);}
+  .deal-type.other{ background:var(--gray-light); color:var(--gray);}
+  .deal-name{ font-weight:700; font-size:14.5px; min-width:140px;}
+  .deal-facility{ font-size:12.5px; color:var(--ink-soft); flex:1;}
+  .status-badge{
+    font-size:11.5px; font-weight:700; padding:5px 12px; border-radius:999px; white-space:nowrap;
+  }
+  .deal-next{ font-size:12px; color:var(--ink-soft); min-width:110px; text-align:right;}
+  .deal-next.overdue{ color:var(--danger); font-weight:700;}
+
+  /* ---------- Facility grid ---------- */
+  .fac-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px;}
+  .fac-card{
+    background:var(--surface); border-radius:12px; box-shadow:var(--shadow); padding:16px 18px; cursor:pointer;
+    border-top:3px solid var(--gold);
+  }
+  .fac-card h4{ margin:0 0 6px; font-size:15px; color:var(--primary-dark);}
+  .fac-card .cat{ font-size:11px; color:var(--gold); font-weight:700; margin-bottom:8px;}
+  .fac-card .meta{ font-size:12.5px; color:var(--ink-soft); line-height:1.7;}
+  .fac-card .count{ margin-top:10px; font-size:12px; color:var(--primary);}
+
+  /* ---------- Modal ---------- */
+  .modal-bg{
+    position:fixed; inset:0; background:rgba(21,63,57,0.35); display:none;
+    align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto; z-index:500;
+  }
+  .modal-bg.show{ display:flex;}
+  .modal{
+    background:var(--surface); border-radius:var(--radius); padding:28px; width:100%; max-width:560px;
+    box-shadow:0 30px 60px rgba(0,0,0,.25);
+  }
+  .modal h3{ margin:0 0 18px; font-size:18px; color:var(--primary-dark);}
+  .field{ margin-bottom:14px;}
+  .field label{ display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:5px;}
+  .field input, .field select, .field textarea{
+    width:100%; padding:9px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; font-family:inherit;
+  }
+  .field textarea{ resize:vertical; min-height:60px;}
+  .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .modal-actions{ display:flex; justify-content:space-between; margin-top:20px; gap:10px;}
+
+  .log-list{ max-height:180px; overflow-y:auto; border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:10px; background:#FAFAF8;}
+  .log-item{ font-size:12.5px; padding:6px 0; border-bottom:1px dashed var(--line);}
+  .log-item:last-child{ border-bottom:none;}
+  .log-item .d{ font-weight:700; color:var(--primary-dark); margin-right:6px;}
+  .log-add{ display:flex; gap:8px;}
+  .log-add input{ flex:1;}
+
+  @media (max-width:720px){
+    .kpi-grid{ grid-template-columns:repeat(2,1fr);}
+    .field-row{ grid-template-columns:1fr;}
+    .deal-card{ flex-wrap:wrap;}
+    .pipeline .stage{ font-size:10px;}
+  }
+</style>
+</head>
+<body>
+
+<div id="lock">
+  <div class="lock-card">
+    <h2>大分高齢者紹介センター</h2>
+    <p>案件・商談管理</p>
+    <input type="password" id="pw" maxlength="8" placeholder="パスワード">
+    <div class="lock-err" id="pwErr"></div>
+    <button onclick="tryUnlock()">開く</button>
+  </div>
+</div>
+
+<div id="app">
+  <header class="top">
+    <div>
+      <div class="eyebrow">OITA SENIOR CARE REFERRAL</div>
+      <h1>大分高齢者紹介センター</h1>
+      <div class="sub">案件・商談管理 ― 施設営業 / 問い合わせ / 成約</div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="active" data-tab="dashboard">ダッシュボード</button>
+    <button data-tab="deals">案件管理</button>
+    <button data-tab="facilities">施設マスタ</button>
+    <button data-tab="visits">営業活動記録</button>
+  </nav>
+
+  <!-- DASHBOARD -->
+  <div class="view active" id="view-dashboard">
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <section class="panel">
+      <h3>フォロー予定</h3>
+      <div id="followList"></div>
+    </section>
+
+    <section class="panel">
+      <h3>案件パイプライン</h3>
+      <div class="pipeline" id="pipelineStats"></div>
+    </section>
+
+    <section class="panel">
+      <h3>今月の営業件数</h3>
+      <div class="pipeline" id="visitStats"></div>
+    </section>
+  </div>
+
+  <!-- DEALS -->
+  <div class="view" id="view-deals">
+    <div class="toolbar">
+      <button class="btn btn-primary" onclick="openDealModal()">＋ 新規案件</button>
+      <select id="filterStatus" onchange="renderDeals()">
+        <option value="">すべてのステータス</option>
+      </select>
+      <select id="filterType" onchange="renderDeals()">
+        <option value="">すべての種別</option>
+      </select>
+      <input type="text" id="filterText" placeholder="名前で検索" oninput="renderDeals()">
+    </div>
+    <div class="deal-list" id="dealList"></div>
+  </div>
+
+  <!-- FACILITIES -->
+  <div class="view" id="view-facilities">
+    <div class="toolbar">
+      <button class="btn btn-primary" onclick="openFacilityModal()">＋ 施設を追加</button>
+    </div>
+    <div class="fac-grid" id="facGrid"></div>
+  </div>
+
+  <!-- VISITS -->
+  <div class="view" id="view-visits">
+    <div class="kpi-grid" id="visitKpiGrid" style="grid-template-columns:repeat(4,1fr);"></div>
+    <div class="toolbar">
+      <button class="btn btn-primary" onclick="openVisitModal()">＋ 営業記録を追加</button>
+      <input type="month" id="visitMonthFilter" onchange="renderVisits()">
+      <select id="visitCategoryFilter" onchange="renderVisits()">
+        <option value="">すべての種別</option>
+      </select>
+      <button class="btn btn-ghost" onclick="promptAddCategory()">＋ 種別を追加</button>
+    </div>
+    <div class="deal-list" id="visitList"></div>
+  </div>
+</div>
+
+<!-- DEAL MODAL -->
+<div class="modal-bg" id="dealModalBg">
+  <div class="modal">
+    <h3 id="dealModalTitle">新規案件</h3>
+    <input type="hidden" id="dealId">
+    <div class="field-row">
+      <div class="field">
+        <label>種別</label>
+        <select id="dealType"></select>
+      </div>
+      <div class="field">
+        <label>ステータス</label>
+        <select id="dealStatus"></select>
+      </div>
+    </div>
+    <div class="field">
+      <label id="dealNameLabel">お名前 / 施設名</label>
+      <input type="text" id="dealName" placeholder="例）田中様　ご家族">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>連絡先</label>
+        <input type="text" id="dealContact" placeholder="電話番号 / LINEなど">
+      </div>
+      <div class="field">
+        <label>紹介先施設</label>
+        <select id="dealFacility"><option value="">未定</option></select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>次回アクション予定日</label>
+        <input type="date" id="dealNextDate">
+      </div>
+      <div class="field">
+        <label>成約時の手数料（任意）</label>
+        <input type="text" id="dealFee" placeholder="例）30,000円">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>経緯・対応履歴</label>
+      <div class="log-list" id="dealLogs"></div>
+      <div class="log-add">
+        <input type="text" id="newLogText" placeholder="対応内容を入力してEnter">
+        <button class="btn btn-ghost" onclick="addLog()">追加</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="dealDeleteBtn" onclick="deleteDeal()">削除</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-ghost" onclick="closeDealModal()">閉じる</button>
+        <button class="btn btn-primary" onclick="saveDeal()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FACILITY MODAL -->
+<div class="modal-bg" id="facModalBg">
+  <div class="modal">
+    <h3 id="facModalTitle">施設を追加</h3>
+    <input type="hidden" id="facId">
+    <div class="field">
+      <label>施設名</label>
+      <input type="text" id="facName">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>種別</label>
+        <input type="text" id="facCategory" placeholder="例）有料老人ホーム / グループホーム">
+      </div>
+      <div class="field">
+        <label>担当者</label>
+        <input type="text" id="facContactPerson">
+      </div>
+    </div>
+    <div class="field">
+      <label>連絡先</label>
+      <input type="text" id="facContact">
+    </div>
+    <div class="field">
+      <label>手数料条件</label>
+      <input type="text" id="facFeeTerms" placeholder="例）成約1件につき初月利用料の50%">
+    </div>
+    <div class="field">
+      <label>メモ</label>
+      <textarea id="facMemo"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="facDeleteBtn" onclick="deleteFacility()">削除</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-ghost" onclick="closeFacilityModal()">閉じる</button>
+        <button class="btn btn-primary" onclick="saveFacility()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VISIT MODAL -->
+<div class="modal-bg" id="visitModalBg">
+  <div class="modal">
+    <h3 id="visitModalTitle">営業記録を追加</h3>
+    <input type="hidden" id="visitId">
+    <div class="field-row">
+      <div class="field">
+        <label>営業日</label>
+        <input type="date" id="visitDate">
+      </div>
+      <div class="field">
+        <label>種別</label>
+        <div style="display:flex; gap:6px;">
+          <select id="visitCategory" style="flex:1;"></select>
+          <button type="button" class="btn btn-ghost" style="padding:9px 12px; white-space:nowrap;" onclick="promptAddCategory(true)">＋</button>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label>訪問先名</label>
+      <input type="text" id="visitTarget" placeholder="例）〇〇地域包括支援センター">
+    </div>
+    <div class="field">
+      <label>対応者</label>
+      <input type="text" id="visitContactPerson">
+    </div>
+    <div class="field">
+      <label>内容メモ</label>
+      <textarea id="visitMemo" placeholder="訪問目的・話した内容・反応など"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="visitDeleteBtn" onclick="deleteVisit()">削除</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-ghost" onclick="closeVisitModal()">閉じる</button>
+        <button class="btn btn-primary" onclick="saveVisit()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PASSWORD = "2408";
+const DEFAULT_VISIT_CATEGORIES = ["施設","地域包括","病院"];
+const COLOR_PALETTE = [
+  {bg:"#E5F0EE", fg:"#1F5F56"},
+  {bg:"#FBF3E1", fg:"#8a6a1f"},
+  {bg:"#E6EEF6", fg:"#3B6EA5"},
+  {bg:"#F1ECF7", fg:"#7A5C9E"},
+  {bg:"#F6E9E9", fg:"#A65454"},
+  {bg:"#EEF0F3", fg:"#5A6478"}
+];
+let visitCategories = [];
+function categoryColor(cat){
+  const idx = visitCategories.indexOf(cat);
+  return COLOR_PALETTE[(idx>=0?idx:0) % COLOR_PALETTE.length];
+}
+let visits = [];
+const STAGES = ["問い合わせ受付","資料送付","見学調整中","見学実施","検討中","成約"];
+const DEAL_TYPES = [
+  {value:"問い合わせ", label:"家族からの問い合わせ", badge:"問合せ", cls:"inq"},
+  {value:"施設営業",   label:"施設への営業",       badge:"営業",   cls:"biz"},
+  {value:"病院",       label:"病院",               badge:"病院",   cls:"hospital"},
+  {value:"居宅",       label:"居宅介護支援事業所", badge:"居宅",   cls:"home"},
+  {value:"地域包括",   label:"地域包括支援センター", badge:"地域包括", cls:"community"},
+  {value:"その他",     label:"その他",             badge:"その他", cls:"other"}
+];
+function dealTypeInfo(type){
+  return DEAL_TYPES.find(t=>t.value===type) || {badge:type||"その他", cls:"other"};
+}
+const STAGE_COLORS = {
+  "問い合わせ受付": {bg:"#EEF0F3", fg:"#5A6478"},
+  "資料送付": {bg:"#E6EEF6", fg:"#3B6EA5"},
+  "見学調整中": {bg:"#E6EEF6", fg:"#3B6EA5"},
+  "見学実施": {bg:"#FBF3E1", fg:"#8a6a1f"},
+  "検討中": {bg:"#F1ECF7", fg:"#7A5C9E"},
+  "成約": {bg:"#E5F0EE", fg:"#1F5F56"},
+  "不成約": {bg:"#F6E9E9", fg:"#A65454"}
+};
+let deals = [];
+let facilities = [];
+
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
+
+/* ---------- storage (Google Apps Script) ---------- */
+const GAS_URL = "https://script.google.com/macros/s/AKfycbw5fuD95354xlV-fetJXvAt8CsdmrUiNbsAJ8Jdp4y_4OwAwuL7TB0N2BS8Quehan46/exec";
+
+async function gasLoad(){
+  const res = await fetch(GAS_URL + '?action=load');
+  return await res.json();
+}
+async function gasSave(key, value){
+  await fetch(GAS_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'text/plain;charset=utf-8'},
+    body: JSON.stringify({ key, value })
+  });
+}
+
+async function loadAll(){
+  let json = {};
+  try{
+    json = await gasLoad();
+  }catch(e){
+    console.error('load failed', e);
+    alert('データの読み込みに失敗しました。通信環境をご確認のうえ、再読み込みしてください。');
+  }
+  try{ deals = json['deals-data'] ? JSON.parse(json['deals-data']) : []; }catch(e){ deals = []; }
+  try{ facilities = json['facilities-data'] ? JSON.parse(json['facilities-data']) : []; }catch(e){ facilities = []; }
+  try{ visits = json['visits-data'] ? JSON.parse(json['visits-data']) : []; }catch(e){ visits = []; }
+  try{ visitCategories = json['visit-categories-data'] ? JSON.parse(json['visit-categories-data']) : DEFAULT_VISIT_CATEGORIES.slice(); }
+  catch(e){ visitCategories = DEFAULT_VISIT_CATEGORIES.slice(); }
+}
+async function saveDeals(){
+  try{ await gasSave('deals-data', JSON.stringify(deals)); }
+  catch(e){ console.error('save deals failed', e); alert('保存に失敗しました。もう一度お試しください。'); }
+}
+async function saveFacilities(){
+  try{ await gasSave('facilities-data', JSON.stringify(facilities)); }
+  catch(e){ console.error('save facilities failed', e); alert('保存に失敗しました。もう一度お試しください。'); }
+}
+async function saveVisits(){
+  try{ await gasSave('visits-data', JSON.stringify(visits)); }
+  catch(e){ console.error('save visits failed', e); alert('保存に失敗しました。もう一度お試しください。'); }
+}
+async function saveVisitCategories(){
+  try{ await gasSave('visit-categories-data', JSON.stringify(visitCategories)); }
+  catch(e){ console.error('save categories failed', e); alert('保存に失敗しました。もう一度お試しください。'); }
+}
+
+/* ---------- lock ---------- */
+function tryUnlock(){
+  const v = document.getElementById('pw').value;
+  if(v === PASSWORD){
+    document.getElementById('lock').style.display='none';
+    document.getElementById('app').style.display='block';
+    init();
+  } else {
+    document.getElementById('pwErr').textContent = 'パスワードが違います';
+  }
+}
+document.getElementById('pw').addEventListener('keydown', e=>{ if(e.key==='Enter') tryUnlock(); });
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+/* ---------- init ---------- */
+async function init(){
+  await loadAll();
+  populateStatusSelects();
+  populateDealTypeSelects();
+  populateFacilitySelect();
+  populateVisitCategorySelects();
+  document.getElementById('visitMonthFilter').value = new Date().toISOString().slice(0,7);
+  document.getElementById('visitDate').value = todayStr();
+  renderDashboard();
+  renderDeals();
+  renderFacilities();
+  renderVisits();
+}
+
+function populateStatusSelects(){
+  const filterSel = document.getElementById('filterStatus');
+  const dealSel = document.getElementById('dealStatus');
+  [...STAGES, "不成約"].forEach(s=>{
+    const o1=document.createElement('option'); o1.value=s; o1.textContent=s; filterSel.appendChild(o1);
+    const o2=document.createElement('option'); o2.value=s; o2.textContent=s; dealSel.appendChild(o2);
+  });
+}
+function populateDealTypeSelects(){
+  const filterSel = document.getElementById('filterType');
+  const dealSel = document.getElementById('dealType');
+  const filterCurrent = filterSel.value;
+  filterSel.innerHTML = '<option value="">すべての種別</option>';
+  dealSel.innerHTML = '';
+  DEAL_TYPES.forEach(t=>{
+    const o1=document.createElement('option'); o1.value=t.value; o1.textContent=t.label; filterSel.appendChild(o1);
+    const o2=document.createElement('option'); o2.value=t.value; o2.textContent=t.label; dealSel.appendChild(o2);
+  });
+  if(DEAL_TYPES.some(t=>t.value===filterCurrent)) filterSel.value = filterCurrent;
+}
+function populateFacilitySelect(){
+  const sel = document.getElementById('dealFacility');
+  sel.innerHTML = '<option value="">未定</option>';
+  facilities.forEach(f=>{
+    const o=document.createElement('option'); o.value=f.id; o.textContent=f.name; sel.appendChild(o);
+  });
+}
+
+function populateVisitCategorySelects(){
+  const filterSel = document.getElementById('visitCategoryFilter');
+  const modalSel = document.getElementById('visitCategory');
+  const filterCurrent = filterSel.value;
+  const modalCurrent = modalSel.value;
+  filterSel.innerHTML = '<option value="">すべての種別</option>';
+  modalSel.innerHTML = '';
+  visitCategories.forEach(c=>{
+    const o1=document.createElement('option'); o1.value=c; o1.textContent=c; filterSel.appendChild(o1);
+    const o2=document.createElement('option'); o2.value=c; o2.textContent=c; modalSel.appendChild(o2);
+  });
+  if(visitCategories.includes(filterCurrent)) filterSel.value = filterCurrent;
+  if(visitCategories.includes(modalCurrent)) modalSel.value = modalCurrent;
+}
+
+async function promptAddCategory(selectAfter){
+  const name = (prompt('追加する営業先の種別名を入力してください（例：ケアマネ事業所）') || '').trim();
+  if(!name) return;
+  if(visitCategories.includes(name)){
+    alert('その種別はすでに登録されています。');
+    if(selectAfter){ document.getElementById('visitCategory').value = name; }
+    return;
+  }
+  visitCategories.push(name);
+  await saveVisitCategories();
+  populateVisitCategorySelects();
+  if(selectAfter){ document.getElementById('visitCategory').value = name; }
+  renderVisits();
+  renderDashboard();
+}
+
+/* ---------- dashboard ---------- */
+function renderDashboard(){
+  const total = deals.length;
+  const inProgress = deals.filter(d=>d.status!=='成約' && d.status!=='不成約').length;
+  const won = deals.filter(d=>d.status==='成約').length;
+  const today = todayStr();
+  const overdue = deals.filter(d=>d.nextDate && d.nextDate < today && d.status!=='成約' && d.status!=='不成約').length;
+
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi"><div class="num">${total}</div><div class="lbl">総案件数</div></div>
+    <div class="kpi"><div class="num">${inProgress}</div><div class="lbl">対応中</div></div>
+    <div class="kpi gold"><div class="num">${won}</div><div class="lbl">成約</div></div>
+    <div class="kpi danger"><div class="num">${overdue}</div><div class="lbl">フォロー遅延</div></div>
+  `;
+
+  const upcoming = deals
+    .filter(d=>d.nextDate && d.status!=='成約' && d.status!=='不成約')
+    .sort((a,b)=> a.nextDate.localeCompare(b.nextDate))
+    .slice(0,8);
+
+  const followList = document.getElementById('followList');
+  if(upcoming.length===0){
+    followList.innerHTML = '<div class="empty-note">フォロー予定はありません。</div>';
+  } else {
+    followList.innerHTML = upcoming.map(d=>{
+      const isOverdue = d.nextDate < today;
+      return `<div class="follow-row">
+        <div class="follow-date ${isOverdue?'overdue':''}">${d.nextDate}</div>
+        <div class="follow-name">${escapeHtml(d.name)}</div>
+        <div>${statusBadge(d.status)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  const pipelineStats = document.getElementById('pipelineStats');
+  pipelineStats.innerHTML = STAGES.map(s=>{
+    const count = deals.filter(d=>d.status===s).length;
+    return `<div class="stage on"><span class="n">${count}</span>${s}</div>`;
+  }).join('');
+
+  const curMonth = new Date().toISOString().slice(0,7);
+  const monthVisits = visits.filter(v=>v.date && v.date.slice(0,7)===curMonth);
+  const visitStats = document.getElementById('visitStats');
+  visitStats.innerHTML = visitCategories.map(c=>{
+    const count = monthVisits.filter(v=>v.category===c).length;
+    return `<div class="stage on"><span class="n">${count}</span>${c}</div>`;
+  }).join('') + `<div class="stage on"><span class="n">${monthVisits.length}</span>合計</div>`;
+}
+
+function statusBadge(status){
+  const c = STAGE_COLORS[status] || {bg:'#eee', fg:'#555'};
+  return `<span class="status-badge" style="background:${c.bg}; color:${c.fg}">${status}</span>`;
+}
+
+/* ---------- deals ---------- */
+function renderDeals(){
+  const fStatus = document.getElementById('filterStatus').value;
+  const fType = document.getElementById('filterType').value;
+  const fText = document.getElementById('filterText').value.trim().toLowerCase();
+  const today = todayStr();
+
+  let list = deals.slice().sort((a,b)=> (b.createdAt||'').localeCompare(a.createdAt||''));
+  if(fStatus) list = list.filter(d=>d.status===fStatus);
+  if(fType) list = list.filter(d=>d.type===fType);
+  if(fText) list = list.filter(d=>d.name.toLowerCase().includes(fText));
+
+  const dealList = document.getElementById('dealList');
+  if(list.length===0){
+    dealList.innerHTML = '<div class="empty-note">該当する案件がありません。</div>';
+    return;
+  }
+  dealList.innerHTML = list.map(d=>{
+    const fac = facilities.find(f=>f.id===d.facilityId);
+    const isOverdue = d.nextDate && d.nextDate < today && d.status!=='成約' && d.status!=='不成約';
+    const ti = dealTypeInfo(d.type);
+    return `<div class="deal-card" onclick="openDealModal('${d.id}')">
+      <span class="deal-type ${ti.cls}">${escapeHtml(ti.badge)}</span>
+      <span class="deal-name">${escapeHtml(d.name)}</span>
+      <span class="deal-facility">${fac ? escapeHtml(fac.name) : '紹介先未定'}</span>
+      ${statusBadge(d.status)}
+      <span class="deal-next ${isOverdue?'overdue':''}">${d.nextDate ? '次回: '+d.nextDate : ''}</span>
+    </div>`;
+  }).join('');
+}
+
+let currentLogs = [];
+function openDealModal(id){
+  currentLogs = [];
+  document.getElementById('dealModalBg').classList.add('show');
+  document.getElementById('dealDeleteBtn').style.display = id ? 'inline-block' : 'none';
+  if(id){
+    const d = deals.find(x=>x.id===id);
+    document.getElementById('dealModalTitle').textContent = '案件を編集';
+    document.getElementById('dealId').value = d.id;
+    document.getElementById('dealType').value = d.type;
+    document.getElementById('dealStatus').value = d.status;
+    document.getElementById('dealName').value = d.name;
+    document.getElementById('dealContact').value = d.contact || '';
+    document.getElementById('dealFacility').value = d.facilityId || '';
+    document.getElementById('dealNextDate').value = d.nextDate || '';
+    document.getElementById('dealFee').value = d.fee || '';
+    currentLogs = (d.logs || []).slice();
+  } else {
+    document.getElementById('dealModalTitle').textContent = '新規案件';
+    document.getElementById('dealId').value = '';
+    document.getElementById('dealType').value = '問い合わせ';
+    document.getElementById('dealStatus').value = STAGES[0];
+    document.getElementById('dealName').value = '';
+    document.getElementById('dealContact').value = '';
+    document.getElementById('dealFacility').value = '';
+    document.getElementById('dealNextDate').value = '';
+    document.getElementById('dealFee').value = '';
+  }
+  renderLogs();
+}
+function renderLogs(){
+  const box = document.getElementById('dealLogs');
+  if(currentLogs.length===0){
+    box.innerHTML = '<div class="empty-note" style="padding:2px 0;">記録はまだありません。</div>';
+    return;
+  }
+  box.innerHTML = currentLogs.slice().reverse().map(l=>`<div class="log-item"><span class="d">${l.date}</span>${escapeHtml(l.text)}</div>`).join('');
+}
+function addLog(){
+  const input = document.getElementById('newLogText');
+  const text = input.value.trim();
+  if(!text) return;
+  currentLogs.push({date: todayStr(), text});
+  input.value='';
+  renderLogs();
+}
+document.getElementById('newLogText').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addLog(); }});
+
+function closeDealModal(){
+  document.getElementById('dealModalBg').classList.remove('show');
+}
+async function saveDeal(){
+  const name = document.getElementById('dealName').value.trim();
+  if(!name){ alert('お名前または施設名を入力してください。'); return; }
+  const id = document.getElementById('dealId').value || uid();
+  const existing = deals.find(x=>x.id===id);
+  const record = {
+    id,
+    type: document.getElementById('dealType').value,
+    status: document.getElementById('dealStatus').value,
+    name,
+    contact: document.getElementById('dealContact').value.trim(),
+    facilityId: document.getElementById('dealFacility').value,
+    nextDate: document.getElementById('dealNextDate').value,
+    fee: document.getElementById('dealFee').value.trim(),
+    logs: currentLogs,
+    createdAt: existing ? existing.createdAt : new Date().toISOString()
+  };
+  if(existing){
+    Object.assign(existing, record);
+  } else {
+    deals.push(record);
+  }
+  await saveDeals();
+  closeDealModal();
+  renderDashboard(); renderDeals();
+}
+async function deleteDeal(){
+  const id = document.getElementById('dealId').value;
+  if(!id) return;
+  if(!confirm('この案件を削除しますか？')) return;
+  deals = deals.filter(x=>x.id!==id);
+  await saveDeals();
+  closeDealModal();
+  renderDashboard(); renderDeals();
+}
+
+/* ---------- facilities ---------- */
+function renderFacilities(){
+  const grid = document.getElementById('facGrid');
+  if(facilities.length===0){
+    grid.innerHTML = '<div class="empty-note">施設が登録されていません。</div>';
+    return;
+  }
+  grid.innerHTML = facilities.map(f=>{
+    const count = deals.filter(d=>d.facilityId===f.id && d.status==='成約').length;
+    return `<div class="fac-card" onclick="openFacilityModal('${f.id}')">
+      <div class="cat">${escapeHtml(f.category||'')}</div>
+      <h4>${escapeHtml(f.name)}</h4>
+      <div class="meta">
+        ${f.contactPerson ? '担当: '+escapeHtml(f.contactPerson)+'<br>' : ''}
+        ${f.contact ? '連絡先: '+escapeHtml(f.contact)+'<br>' : ''}
+        ${f.feeTerms ? '手数料: '+escapeHtml(f.feeTerms) : ''}
+      </div>
+      <div class="count">紹介成約実績: ${count}件</div>
+    </div>`;
+  }).join('');
+}
+function openFacilityModal(id){
+  document.getElementById('facModalBg').classList.add('show');
+  document.getElementById('facDeleteBtn').style.display = id ? 'inline-block' : 'none';
+  if(id){
+    const f = facilities.find(x=>x.id===id);
+    document.getElementById('facModalTitle').textContent = '施設を編集';
+    document.getElementById('facId').value = f.id;
+    document.getElementById('facName').value = f.name;
+    document.getElementById('facCategory').value = f.category || '';
+    document.getElementById('facContactPerson').value = f.contactPerson || '';
+    document.getElementById('facContact').value = f.contact || '';
+    document.getElementById('facFeeTerms').value = f.feeTerms || '';
+    document.getElementById('facMemo').value = f.memo || '';
+  } else {
+    document.getElementById('facModalTitle').textContent = '施設を追加';
+    document.getElementById('facId').value = '';
+    document.getElementById('facName').value = '';
+    document.getElementById('facCategory').value = '';
+    document.getElementById('facContactPerson').value = '';
+    document.getElementById('facContact').value = '';
+    document.getElementById('facFeeTerms').value = '';
+    document.getElementById('facMemo').value = '';
+  }
+}
+function closeFacilityModal(){
+  document.getElementById('facModalBg').classList.remove('show');
+}
+async function saveFacility(){
+  const name = document.getElementById('facName').value.trim();
+  if(!name){ alert('施設名を入力してください。'); return; }
+  const id = document.getElementById('facId').value || uid();
+  const existing = facilities.find(x=>x.id===id);
+  const record = {
+    id,
+    name,
+    category: document.getElementById('facCategory').value.trim(),
+    contactPerson: document.getElementById('facContactPerson').value.trim(),
+    contact: document.getElementById('facContact').value.trim(),
+    feeTerms: document.getElementById('facFeeTerms').value.trim(),
+    memo: document.getElementById('facMemo').value.trim()
+  };
+  if(existing){ Object.assign(existing, record); } else { facilities.push(record); }
+  await saveFacilities();
+  populateFacilitySelect();
+  closeFacilityModal();
+  renderFacilities(); renderDeals();
+}
+async function deleteFacility(){
+  const id = document.getElementById('facId').value;
+  if(!id) return;
+  if(!confirm('この施設を削除しますか？（関連する案件の紹介先情報は空欄になります）')) return;
+  facilities = facilities.filter(x=>x.id!==id);
+  deals.forEach(d=>{ if(d.facilityId===id) d.facilityId=''; });
+  await saveFacilities();
+  await saveDeals();
+  populateFacilitySelect();
+  closeFacilityModal();
+  renderFacilities(); renderDeals(); renderDashboard();
+}
+
+/* ---------- visits ---------- */
+function renderVisits(){
+  const month = document.getElementById('visitMonthFilter').value;
+  const cat = document.getElementById('visitCategoryFilter').value;
+
+  let list = visits.slice().sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+  if(month) list = list.filter(v=>v.date && v.date.slice(0,7)===month);
+  if(cat) list = list.filter(v=>v.category===cat);
+
+  const kpiGrid = document.getElementById('visitKpiGrid');
+  kpiGrid.style.gridTemplateColumns = `repeat(${visitCategories.length+1}, 1fr)`;
+  kpiGrid.innerHTML = visitCategories.map(c=>{
+    const count = list.filter(v=>v.category===c).length;
+    return `<div class="kpi gold"><div class="num">${count}</div><div class="lbl">${c}</div></div>`;
+  }).join('') + `<div class="kpi"><div class="num">${list.length}</div><div class="lbl">合計</div></div>`;
+
+  const visitList = document.getElementById('visitList');
+  if(list.length===0){
+    visitList.innerHTML = '<div class="empty-note">該当する営業記録がありません。</div>';
+    return;
+  }
+  visitList.innerHTML = list.map(v=>{
+    const c = categoryColor(v.category);
+    return `<div class="deal-card" onclick="openVisitModal('${v.id}')">
+      <span class="deal-next" style="min-width:90px; text-align:left; font-weight:700; color:var(--primary-dark);">${v.date}</span>
+      <span class="status-badge" style="background:${c.bg}; color:${c.fg}">${v.category}</span>
+      <span class="deal-name">${escapeHtml(v.target)}</span>
+      <span class="deal-facility">${v.contactPerson ? '対応: '+escapeHtml(v.contactPerson) : ''}</span>
+      <span class="deal-facility" style="flex:2;">${escapeHtml(v.memo||'')}</span>
+    </div>`;
+  }).join('');
+}
+function openVisitModal(id){
+  document.getElementById('visitModalBg').classList.add('show');
+  document.getElementById('visitDeleteBtn').style.display = id ? 'inline-block' : 'none';
+  if(id){
+    const v = visits.find(x=>x.id===id);
+    document.getElementById('visitModalTitle').textContent = '営業記録を編集';
+    document.getElementById('visitId').value = v.id;
+    document.getElementById('visitDate').value = v.date;
+    document.getElementById('visitCategory').value = v.category;
+    document.getElementById('visitTarget').value = v.target;
+    document.getElementById('visitContactPerson').value = v.contactPerson || '';
+    document.getElementById('visitMemo').value = v.memo || '';
+  } else {
+    document.getElementById('visitModalTitle').textContent = '営業記録を追加';
+    document.getElementById('visitId').value = '';
+    document.getElementById('visitDate').value = todayStr();
+    document.getElementById('visitCategory').value = visitCategories[0] || '';
+    document.getElementById('visitTarget').value = '';
+    document.getElementById('visitContactPerson').value = '';
+    document.getElementById('visitMemo').value = '';
+  }
+}
+function closeVisitModal(){
+  document.getElementById('visitModalBg').classList.remove('show');
+}
+async function saveVisit(){
+  const target = document.getElementById('visitTarget').value.trim();
+  const date = document.getElementById('visitDate').value;
+  if(!target){ alert('訪問先名を入力してください。'); return; }
+  if(!date){ alert('営業日を入力してください。'); return; }
+  const id = document.getElementById('visitId').value || uid();
+  const existing = visits.find(x=>x.id===id);
+  const record = {
+    id,
+    date,
+    category: document.getElementById('visitCategory').value,
+    target,
+    contactPerson: document.getElementById('visitContactPerson').value.trim(),
+    memo: document.getElementById('visitMemo').value.trim(),
+    createdAt: existing ? existing.createdAt : new Date().toISOString()
+  };
+  if(existing){ Object.assign(existing, record); } else { visits.push(record); }
+  await saveVisits();
+  closeVisitModal();
+  renderVisits(); renderDashboard();
+}
+async function deleteVisit(){
+  const id = document.getElementById('visitId').value;
+  if(!id) return;
+  if(!confirm('この営業記録を削除しますか？')) return;
+  visits = visits.filter(x=>x.id!==id);
+  await saveVisits();
+  closeVisitModal();
+  renderVisits(); renderDashboard();
+}
+
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+</script>
+</body>
+</html>
