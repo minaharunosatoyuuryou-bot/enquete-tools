@@ -32,77 +32,37 @@
     padding:28px 20px 22px;
     text-align:center;
   }
-  header h1{
-    margin:0 0 6px;
-    font-size:1.3rem;
-    letter-spacing:.03em;
-  }
-  header p{
-    margin:0;
-    font-size:.82rem;
-    color:#d9e3dc;
-  }
+  header h1{margin:0 0 6px;font-size:1.3rem;letter-spacing:.03em;}
+  header p{margin:0;font-size:.82rem;color:#d9e3dc;}
   .wrap{max-width:720px;margin:0 auto;padding:18px 16px;}
-  .card{
-    background:#fff;
-    border:1px solid var(--line);
-    border-radius:10px;
-    padding:18px 18px 20px;
-    margin-bottom:16px;
-  }
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px 18px 20px;margin-bottom:16px;}
   .intro{font-size:.86rem;color:#4a5650;}
-  .round-field{margin-bottom:4px;}
-  .round-field label{display:block;font-size:.82rem;font-weight:bold;margin-bottom:6px;}
-  .round-field input{
-    width:100%;padding:10px;border:1px solid var(--line);border-radius:6px;font-size:.95rem;
-  }
-  .qnum{
-    display:inline-block;
-    background:var(--moss);
-    color:#fff;
-    font-size:.75rem;
-    border-radius:5px;
-    padding:2px 8px;
-    margin-bottom:8px;
-  }
+  .field{margin-bottom:4px;}
+  .field label{display:block;font-size:.82rem;font-weight:bold;margin-bottom:6px;}
+  .field input,.field select{width:100%;padding:10px;border:1px solid var(--line);border-radius:6px;font-size:.95rem;background:#fff;}
+  .qnum{display:inline-block;background:var(--moss);color:#fff;font-size:.75rem;border-radius:5px;padding:2px 8px;margin-bottom:8px;}
   .qtext{font-size:.92rem;margin:0 0 12px;font-weight:600;}
+  .subhint{font-size:.75rem;color:#8a8172;margin:2px 0 8px;}
   .opts{display:flex;flex-direction:column;gap:8px;}
-  .opt{
-    display:flex;align-items:center;gap:10px;
-    border:1px solid var(--line);border-radius:8px;
-    padding:10px 12px;cursor:pointer;
-    font-size:.9rem;
-    transition:background .15s, border-color .15s;
-  }
+  .opt{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer;font-size:.9rem;transition:background .15s, border-color .15s;}
   .opt input{width:18px;height:18px;accent-color:var(--moss);}
   .opt.checked{border-color:var(--moss);background:#eef3ef;}
-  .submit-btn{
-    width:100%;padding:14px;background:var(--moss-dark);color:#fff;border:none;
-    border-radius:8px;font-size:1rem;font-weight:bold;cursor:pointer;margin-top:6px;
-  }
+  .obs-box{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);}
+  .obs-box .opt{border-style:dashed;}
+  .submit-btn{width:100%;padding:14px;background:var(--moss-dark);color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:bold;cursor:pointer;margin-top:6px;}
   .submit-btn:disabled{opacity:.5;}
-  .footer-link{
-    text-align:center;margin-top:24px;
-  }
-  .footer-link button{
-    background:none;border:1px solid var(--line);color:#6b6257;
-    padding:8px 14px;border-radius:20px;font-size:.78rem;cursor:pointer;
-  }
-  .thanks{
-    text-align:center;padding:40px 16px;
-  }
+  .footer-link{text-align:center;margin-top:24px;}
+  .footer-link button{background:none;border:1px solid var(--line);color:#6b6257;padding:8px 14px;border-radius:20px;font-size:.78rem;cursor:pointer;}
+  .thanks{text-align:center;padding:40px 16px;}
   .thanks .mark{font-size:2.2rem;color:var(--moss);}
   .hidden{display:none !important;}
-  /* 集計画面 */
   .agg-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
-  .agg-toolbar select,.agg-toolbar button{
-    padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:.85rem;background:#fff;
-  }
+  .agg-toolbar select,.agg-toolbar button{padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:.85rem;background:#fff;}
   .agg-toolbar button.primary{background:var(--moss-dark);color:#fff;border:none;cursor:pointer;}
-  table.agg{width:100%;border-collapse:collapse;font-size:.78rem;margin-top:6px;}
-  table.agg th,table.agg td{border:1px solid var(--line);padding:6px 6px;text-align:center;vertical-align:middle;}
+  table.agg{width:100%;border-collapse:collapse;font-size:.76rem;margin-top:6px;}
+  table.agg th,table.agg td{border:1px solid var(--line);padding:6px 5px;text-align:center;vertical-align:middle;}
   table.agg th{background:#eef1ec;}
-  table.agg td.qtext-cell{text-align:left;font-weight:600;width:34%;}
+  table.agg td.qtext-cell{text-align:left;font-weight:600;width:30%;}
   table.agg td.warn{background:var(--warn-bg);border-color:var(--warn-border);font-weight:bold;}
   .agg-note{font-size:.75rem;color:#7a7264;margin-top:8px;}
   .total-line{font-size:.8rem;color:#4a5650;margin-bottom:10px;}
@@ -110,6 +70,10 @@
   .pw-box input{padding:10px;font-size:1rem;width:60%;border:1px solid var(--line);border-radius:6px;}
   .pw-box button{padding:10px 16px;font-size:1rem;border:none;background:var(--moss-dark);color:#fff;border-radius:6px;cursor:pointer;margin-left:6px;}
   .err{color:var(--clay);font-size:.8rem;margin-top:8px;}
+  .staff-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);}
+  .staff-row label{font-size:.88rem;}
+  .staff-row input{width:80px;padding:6px;border:1px solid var(--line);border-radius:6px;text-align:right;}
+  .save-btn{background:var(--moss-dark);color:#fff;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-size:.9rem;margin-top:10px;}
 </style>
 </head>
 <body>
@@ -127,9 +91,17 @@
       虐待の芽や不適切ケアを自己チェックして、高齢者虐待を防止しましょう。あてはまるものを選び、最後に送信してください。回答は匿名で集計され、個人が特定されることはありません。
     </div>
 
-    <div class="card round-field">
-      <label>実施回（例：2026年7月度）</label>
-      <input type="text" id="roundInput" placeholder="施設からの案内に記載の実施回を入力してください">
+    <div class="card">
+      <div class="field" style="margin-bottom:14px;">
+        <label>施設</label>
+        <select id="facilitySelect" required>
+          <option value="">選択してください</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>実施回（例：2026年7月度）</label>
+        <input type="text" id="roundInput" placeholder="施設からの案内に記載の実施回を入力してください">
+      </div>
     </div>
 
     <form id="checklistForm"></form>
@@ -137,7 +109,7 @@
     <button class="submit-btn" id="submitBtn">回答を送信する</button>
 
     <div class="footer-link">
-      <button type="button" id="toAggBtn">🔒 委員会用：集計結果を見る</button>
+      <button type="button" id="toAggBtn">🔒 委員会用：集計結果・施設設定を見る</button>
     </div>
   </div>
 
@@ -150,10 +122,10 @@
     </div>
   </div>
 
-  <!-- ▼ パスワード画面（集計） -->
+  <!-- ▼ パスワード画面 -->
   <div id="pwView" class="hidden">
     <div class="pw-box">
-      <p>委員会用集計画面のパスワードを入力してください</p>
+      <p>委員会用画面のパスワードを入力してください</p>
       <input type="password" id="pwInput" maxlength="10">
       <button id="pwBtn">開く</button>
       <div class="err" id="pwErr"></div>
@@ -163,16 +135,26 @@
 
   <!-- ▼ 集計結果画面 -->
   <div id="aggView" class="hidden">
+
+    <div class="card">
+      <h3 style="margin-top:0;font-size:1rem;">施設別 職員数の設定</h3>
+      <div id="staffCountList"></div>
+      <button class="save-btn" id="saveStaffBtn">職員数を保存</button>
+      <div class="err" id="staffErr"></div>
+    </div>
+
     <div class="card">
       <div class="agg-toolbar">
+        <select id="facilityFilter"><option value="__all__">すべての施設</option></select>
         <select id="roundFilter"><option value="__all__">すべての実施回（累計）</option></select>
         <button id="reloadBtn" class="primary">再読込</button>
         <button id="exportBtn">Excelダウンロード</button>
       </div>
       <div class="total-line" id="totalLine"></div>
       <div id="aggTableWrap">読み込み中...</div>
-      <div class="agg-note">黄色のセルは、回答が総数の35%以上を占めた項目です。</div>
+      <div class="agg-note">黄色のセルは、回答が総数の35%以上を占めた項目です。「目撃・伝聞」欄は主回答とは独立した割合です。</div>
     </div>
+
     <div class="footer-link">
       <button type="button" id="backFromAggBtn">回答画面に戻る</button>
     </div>
@@ -181,66 +163,90 @@
 </div>
 
 <script>
-// ==== 設定 ====
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbyECZk0qGV3KR7Nk98uFAOMAGy1JMaZVGi4iHCO1oIE-Y8ReKZVLy1KxOC7H35QTjA5Tw/exec';
 var PASSWORD = '2408';
 
-// ==== 設問データ（PDF「虐待の芽チェックリスト（入所施設版）」に準拠） ====
-var QUESTIONS = [
-  {n:1, text:'利用者に友達感覚で接したり、子供扱いしたりしていませんか？', opts:['している','していない','見たこと・聞いたことがある']},
-  {n:2, text:'利用者に対して、アセスメント・施設サービス計画書に基づかず、あだ名や○○ちゃん呼び、呼び捨てなどをしていませんか？', opts:['している','していない','聞いたことがある']},
-  {n:3, text:'利用者に対して、威圧的な態度、命令口調（「○○して」「ダメ！」など）で接していませんか？', opts:['している','していない','見たこと・聞いたことがある']},
-  {n:4, text:'利用者への声掛けなしに介助したり、居室に入ったり、勝手に私物に触ったりしていませんか？', opts:['している','していない','見たことがある']},
-  {n:5, text:'利用者のプライバシーに配慮せず、職員同士で話題にしたり個人情報を取り扱ったりしていませんか？', opts:['している','していない','聞いたことがある']},
-  {n:6, text:'利用者に対して、「ちょっと待って」を乱用し、長時間待たせていませんか？', opts:['いる','いない','見たこと・聞いたことがある']},
-  {n:7, text:'利用者に必要な日用品（眼鏡、義歯、補聴器など）や道具（コールボタンなど）が壊れていたり、使えなかったりしていませんか？', opts:['している','していない']},
-  {n:8, text:'利用者の呼びかけやコールを無視したり、意見や訴えに否定的な態度をとったりしていませんか？', opts:['している','していない','見たことがある']},
-  {n:9, text:'食事や入浴介助の無理強いなど、利用者に嫌悪感を抱かせるような援助を強要していませんか？', opts:['している','していない','見たことがある']},
-  {n:10, text:'利用者の身体で遊んだり、人格を無視した関わり（落書きをする、くすぐるなど）をしたりしていませんか？', opts:['している','していない','見たことがある']},
-  {n:11, text:'利用者や利用者の家族の言動をあざ笑ったり、悪口を言ったりしていませんか？', opts:['している','していない','聞いたことがある']},
-  {n:12, text:'プライバシーへの配慮に欠けたケア（排泄について大声で話す、カーテンを開けたまま排泄ケアをするなど）をしていませんか？', opts:['している','していない','見たことがある']},
-  {n:13, text:'利用者に対して乱暴で雑な介助や、いい加減な態度・受け答えをしていませんか？', opts:['している','していない','見たこと・聞いたことがある']},
-  {n:14, text:'他の職員に仕事に関わる相談ができない等、職場でのコミュニケーションがとりにくくなっていませんか？', opts:['とりにくい','良好']},
-  {n:15, text:'他の職員が行っているサービス提供・ケアに問題があると感じることがありませんか？', opts:['ある','ない']}
+var FACILITIES = [
+  '悠久の里一番館', '悠久の里二番館', '悠久の里三番館',
+  '悠久の里横尾', '悠久の里佐伯', '悠久の里米良', 'みどりの郷ほんじょう'
 ];
+
+// primary: 主回答（2択・必須） / obs: 目撃・伝聞（複数選択可・任意）
+var QUESTIONS = [
+  {n:1, text:'利用者に友達感覚で接したり、子供扱いしたりしていませんか？', primary:['している','していない'], obs:['見たことがある','聞いたことがある']},
+  {n:2, text:'利用者に対して、アセスメント・施設サービス計画書に基づかず、あだ名や○○ちゃん呼び、呼び捨てなどをしていませんか？', primary:['している','していない'], obs:['聞いたことがある']},
+  {n:3, text:'利用者に対して、威圧的な態度、命令口調（「○○して」「ダメ！」など）で接していませんか？', primary:['している','していない'], obs:['見たことがある','聞いたことがある']},
+  {n:4, text:'利用者への声掛けなしに介助したり、居室に入ったり、勝手に私物に触ったりしていませんか？', primary:['している','していない'], obs:['見たことがある']},
+  {n:5, text:'利用者のプライバシーに配慮せず、職員同士で話題にしたり個人情報を取り扱ったりしていませんか？', primary:['している','していない'], obs:['聞いたことがある']},
+  {n:6, text:'利用者に対して、「ちょっと待って」を乱用し、長時間待たせていませんか？', primary:['いる','いない'], obs:['見たことがある','聞いたことがある']},
+  {n:7, text:'利用者に必要な日用品（眼鏡、義歯、補聴器など）や道具（コールボタンなど）が壊れていたり、使えなかったりしていませんか？', primary:['している','していない'], obs:[]},
+  {n:8, text:'利用者の呼びかけやコールを無視したり、意見や訴えに否定的な態度をとったりしていませんか？', primary:['している','していない'], obs:['見たことがある']},
+  {n:9, text:'食事や入浴介助の無理強いなど、利用者に嫌悪感を抱かせるような援助を強要していませんか？', primary:['している','していない'], obs:['見たことがある']},
+  {n:10, text:'利用者の身体で遊んだり、人格を無視した関わり（落書きをする、くすぐるなど）をしたりしていませんか？', primary:['している','していない'], obs:['見たことがある']},
+  {n:11, text:'利用者や利用者の家族の言動をあざ笑ったり、悪口を言ったりしていませんか？', primary:['している','していない'], obs:['聞いたことがある']},
+  {n:12, text:'プライバシーへの配慮に欠けたケア（排泄について大声で話す、カーテンを開けたまま排泄ケアをするなど）をしていませんか？', primary:['している','していない'], obs:['見たことがある']},
+  {n:13, text:'利用者に対して乱暴で雑な介助や、いい加減な態度・受け答えをしていませんか？', primary:['している','していない'], obs:['見たことがある','聞いたことがある']},
+  {n:14, text:'他の職員に仕事に関わる相談ができない等、職場でのコミュニケーションがとりにくくなっていませんか？', primary:['とりにくい','良好'], obs:[]},
+  {n:15, text:'他の職員が行っているサービス提供・ケアに問題があると感じることがありませんか？', primary:['ある','ない'], obs:[]}
+];
+
+// 施設プルダウン設定
+var facilitySelect = document.getElementById('facilitySelect');
+FACILITIES.forEach(function(f){
+  var o = document.createElement('option'); o.value = f; o.textContent = f;
+  facilitySelect.appendChild(o);
+});
 
 // ==== 回答フォーム構築 ====
 var form = document.getElementById('checklistForm');
 QUESTIONS.forEach(function(q){
   var block = document.createElement('div');
   block.className = 'card';
-  var optsHtml = q.opts.map(function(o, idx){
+  var primaryHtml = q.primary.map(function(o){
     return '<label class="opt" data-q="'+q.n+'">'+
-      '<input type="radio" name="q'+q.n+'" value="'+o+'" required>'+
+      '<input type="radio" name="q'+q.n+'_primary" value="'+o+'" required>'+
       '<span>'+o+'</span></label>';
   }).join('');
+  var obsHtml = '';
+  if(q.obs.length){
+    obsHtml = '<div class="obs-box"><div class="subhint">該当する場合は追加でチェック（複数選択・任意）</div><div class="opts">' +
+      q.obs.map(function(o){
+        return '<label class="opt" data-q="'+q.n+'">'+
+          '<input type="checkbox" name="q'+q.n+'_obs" value="'+o+'">'+
+          '<span>'+o+'</span></label>';
+      }).join('') + '</div></div>';
+  }
   block.innerHTML = '<span class="qnum">問'+q.n+'</span>'+
     '<p class="qtext">'+q.text+'</p>'+
-    '<div class="opts">'+optsHtml+'</div>';
+    '<div class="opts">'+primaryHtml+'</div>' + obsHtml;
   form.appendChild(block);
 });
 
-// 選択時のハイライト
 form.addEventListener('change', function(e){
-  if(e.target.type !== 'radio') return;
-  var name = e.target.name;
-  document.querySelectorAll('input[name="'+name+'"]').forEach(function(inp){
+  var t = e.target;
+  if(t.type !== 'radio' && t.type !== 'checkbox') return;
+  document.querySelectorAll('input[name="'+t.name+'"]').forEach(function(inp){
     inp.closest('.opt').classList.toggle('checked', inp.checked);
   });
 });
 
 // ==== 送信 ====
 document.getElementById('submitBtn').addEventListener('click', function(){
+  if(!facilitySelect.value){
+    alert('施設を選択してください。');
+    return;
+  }
   var missing = QUESTIONS.find(function(q){
-    return !form.querySelector('input[name="q'+q.n+'"]:checked');
+    return !form.querySelector('input[name="q'+q.n+'_primary"]:checked');
   });
   if(missing){
     alert('問'+missing.n+'に未回答があります。すべての設問にお答えください。');
     return;
   }
-  var payload = { round: document.getElementById('roundInput').value || '' };
+  var payload = { facility: facilitySelect.value, round: document.getElementById('roundInput').value || '' };
   QUESTIONS.forEach(function(q){
-    payload['q'+q.n] = form.querySelector('input[name="q'+q.n+'"]:checked').value;
+    payload['q'+q.n+'_primary'] = form.querySelector('input[name="q'+q.n+'_primary"]:checked').value;
+    payload['q'+q.n+'_obs'] = Array.from(form.querySelectorAll('input[name="q'+q.n+'_obs"]:checked')).map(function(i){ return i.value; });
   });
   var btn = document.getElementById('submitBtn');
   btn.disabled = true; btn.textContent = '送信中...';
@@ -276,16 +282,23 @@ document.getElementById('pwBtn').addEventListener('click', function(){
   }
 });
 
-// ==== 集計 ====
+document.getElementById('facilityFilter').innerHTML =
+  '<option value="__all__">すべての施設</option>' +
+  FACILITIES.map(function(f){ return '<option value="'+f+'">'+f+'</option>'; }).join('');
+
+// ==== 集計・職員数 ====
 var allResponses = [];
+var staffCounts = {};
 
 function loadAggregation(){
   document.getElementById('aggTableWrap').textContent = '読み込み中...';
   fetch(GAS_URL)
     .then(function(r){ return r.json(); })
     .then(function(data){
-      allResponses = data;
-      populateRoundFilter(data);
+      allResponses = data.responses || [];
+      staffCounts = data.staffCounts || {};
+      populateRoundFilter(allResponses);
+      renderStaffCountInputs();
       renderAggregation();
     })
     .catch(function(){
@@ -294,6 +307,33 @@ function loadAggregation(){
 }
 document.getElementById('reloadBtn').addEventListener('click', loadAggregation);
 document.getElementById('roundFilter').addEventListener('change', renderAggregation);
+document.getElementById('facilityFilter').addEventListener('change', renderAggregation);
+
+function renderStaffCountInputs(){
+  var wrap = document.getElementById('staffCountList');
+  wrap.innerHTML = FACILITIES.map(function(f){
+    var v = staffCounts[f] || 0;
+    return '<div class="staff-row"><label>'+f+'</label><input type="number" min="0" data-facility="'+f+'" value="'+v+'"></div>';
+  }).join('');
+}
+
+document.getElementById('saveStaffBtn').addEventListener('click', function(){
+  var counts = {};
+  document.querySelectorAll('#staffCountList input').forEach(function(inp){
+    counts[inp.getAttribute('data-facility')] = Number(inp.value) || 0;
+  });
+  fetch(GAS_URL, { method:'POST', body: JSON.stringify({ type:'staffCounts', counts: counts }) })
+    .then(function(){
+      staffCounts = counts;
+      document.getElementById('staffErr').textContent = '保存しました。';
+      document.getElementById('staffErr').style.color = 'var(--moss-dark)';
+      renderAggregation();
+    })
+    .catch(function(){
+      document.getElementById('staffErr').textContent = '保存に失敗しました。';
+      document.getElementById('staffErr').style.color = 'var(--clay)';
+    });
+});
 
 function populateRoundFilter(data){
   var sel = document.getElementById('roundFilter');
@@ -302,8 +342,7 @@ function populateRoundFilter(data){
   var rounds = Array.from(new Set(data.map(function(d){ return d.round; }).filter(Boolean)));
   rounds.sort();
   rounds.forEach(function(r){
-    var o = document.createElement('option');
-    o.value = r; o.textContent = r;
+    var o = document.createElement('option'); o.value = r; o.textContent = r;
     sel.appendChild(o);
   });
   if(rounds.indexOf(current) !== -1) sel.value = current;
@@ -311,31 +350,53 @@ function populateRoundFilter(data){
 
 function currentFiltered(){
   var round = document.getElementById('roundFilter').value;
-  if(round === '__all__') return allResponses;
-  return allResponses.filter(function(d){ return d.round === round; });
+  var facility = document.getElementById('facilityFilter').value;
+  return allResponses.filter(function(d){
+    var roundOk = (round === '__all__') || (d.round === round);
+    var facOk = (facility === '__all__') || (d.facility === facility);
+    return roundOk && facOk;
+  });
+}
+
+function totalStaffForFilter(){
+  var facility = document.getElementById('facilityFilter').value;
+  if(facility === '__all__'){
+    return FACILITIES.reduce(function(sum,f){ return sum + (staffCounts[f]||0); }, 0);
+  }
+  return staffCounts[facility] || 0;
 }
 
 function renderAggregation(){
   var rows = currentFiltered();
   var total = rows.length;
-  document.getElementById('totalLine').textContent = '回答数：' + total + '件';
+  var staffTotal = totalStaffForFilter();
+  var rateText = staffTotal ? '（回収率：' + Math.round(total/staffTotal*1000)/10 + '%　対象職員数：' + staffTotal + '名）' : '';
+  document.getElementById('totalLine').textContent = '回答数：' + total + '件 ' + rateText;
 
-  var maxOpts = Math.max.apply(null, QUESTIONS.map(function(q){ return q.opts.length; }));
   var thead = '<tr><th rowspan="2">No.</th><th rowspan="2">チェック項目</th>' +
-    '<th colspan="'+maxOpts+'">回答（件数 / 割合）</th></tr>';
+    '<th colspan="2">主回答</th><th colspan="2">目撃・伝聞（独立集計）</th></tr>' +
+    '<tr><th>主回答①</th><th>主回答②</th><th>見たことがある</th><th>聞いたことがある</th></tr>';
 
   var trs = QUESTIONS.map(function(q){
-    var counts = q.opts.map(function(o){
-      return rows.filter(function(r){ return r['q'+q.n] === o; }).length;
+    var pCounts = q.primary.map(function(o){
+      return rows.filter(function(r){ return r['q'+q.n+'_primary'] === o; }).length;
     });
-    var cells = q.opts.map(function(o, i){
-      var pct = total ? Math.round(counts[i] / total * 1000) / 10 : 0;
+    var pCells = q.primary.map(function(o,i){
+      var pct = total ? Math.round(pCounts[i]/total*1000)/10 : 0;
       var warn = total && pct >= 35;
-      return '<td class="'+(warn?'warn':'')+'">'+o+'<br>'+counts[i]+'件（'+pct+'%）</td>';
+      return '<td class="'+(warn?'warn':'')+'">'+o+'<br>'+pCounts[i]+'件（'+pct+'%）</td>';
     }).join('');
-    // 選択肢数が少ない設問は空セルで埋める
-    for(var i=q.opts.length;i<maxOpts;i++){ cells += '<td>―</td>'; }
-    return '<tr><td>'+q.n+'</td><td class="qtext-cell">'+q.text+'</td>'+cells+'</tr>';
+
+    var obsLabels = ['見たことがある','聞いたことがある'];
+    var obsCells = obsLabels.map(function(label){
+      if(q.obs.indexOf(label) === -1) return '<td>―</td>';
+      var count = rows.filter(function(r){ return (r['q'+q.n+'_obs']||[]).indexOf(label) !== -1; }).length;
+      var pct = total ? Math.round(count/total*1000)/10 : 0;
+      var warn = total && pct >= 35;
+      return '<td class="'+(warn?'warn':'')+'">'+count+'件（'+pct+'%）</td>';
+    }).join('');
+
+    return '<tr><td>'+q.n+'</td><td class="qtext-cell">'+q.text+'</td>'+pCells+obsCells+'</tr>';
   }).join('');
 
   document.getElementById('aggTableWrap').innerHTML =
@@ -346,20 +407,26 @@ function renderAggregation(){
 document.getElementById('exportBtn').addEventListener('click', function(){
   var rows = currentFiltered();
   var total = rows.length;
-  var sheetData = [['No.','チェック項目','選択肢','件数','割合(%)','35%以上']];
+  var sheetData = [['No.','チェック項目','区分','選択肢','件数','割合(%)','35%以上']];
   QUESTIONS.forEach(function(q){
-    q.opts.forEach(function(o){
-      var count = rows.filter(function(r){ return r['q'+q.n] === o; }).length;
-      var pct = total ? Math.round(count / total * 1000) / 10 : 0;
-      sheetData.push([q.n, q.text, o, count, pct, (total && pct>=35) ? '★' : '']);
+    q.primary.forEach(function(o){
+      var count = rows.filter(function(r){ return r['q'+q.n+'_primary'] === o; }).length;
+      var pct = total ? Math.round(count/total*1000)/10 : 0;
+      sheetData.push([q.n, q.text, '主回答', o, count, pct, (total && pct>=35) ? '★' : '']);
+    });
+    q.obs.forEach(function(o){
+      var count = rows.filter(function(r){ return (r['q'+q.n+'_obs']||[]).indexOf(o) !== -1; }).length;
+      var pct = total ? Math.round(count/total*1000)/10 : 0;
+      sheetData.push([q.n, q.text, '目撃・伝聞', o, count, pct, (total && pct>=35) ? '★' : '']);
     });
   });
   var ws = XLSX.utils.aoa_to_sheet(sheetData);
-  ws['!cols'] = [{wch:5},{wch:50},{wch:20},{wch:8},{wch:10},{wch:8}];
+  ws['!cols'] = [{wch:5},{wch:50},{wch:10},{wch:16},{wch:8},{wch:10},{wch:8}];
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '集計結果');
   var round = document.getElementById('roundFilter').value;
-  var label = round === '__all__' ? '累計' : round;
+  var facility = document.getElementById('facilityFilter').value;
+  var label = (facility==='__all__'?'全施設':facility) + '_' + (round==='__all__'?'累計':round);
   XLSX.writeFile(wb, '虐待の芽チェックリスト集計_' + label + '.xlsx');
 });
 </script>
