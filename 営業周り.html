@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -267,6 +268,9 @@
       <select id="vRep">
         <option value="牧">牧</option>
         <option value="岡野">岡野</option>
+        <option value="岩矢">岩矢</option>
+        <option value="木﨑">木﨑</option>
+        <option value="高田">高田</option>
         <option value="その他">その他</option>
       </select>
     </div>
@@ -538,7 +542,7 @@ function openDetail(facilityId){
   document.getElementById('dAddr').textContent = f.addr;
   document.getElementById('dMapLink').href = 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(f.addr);
   document.getElementById('vDate').value = todayStr();
-  document.getElementById('vRep').value = (f.rep==='牧'||f.rep==='岡野') ? f.rep : 'その他';
+  document.getElementById('vRep').value = ['牧','岡野','岩矢','木﨑','高田'].includes(f.rep) ? f.rep : 'その他';
   document.getElementById('vMemo').value = '';
   document.getElementById('vNext').value = '';
   renderHistory(facilityId);
