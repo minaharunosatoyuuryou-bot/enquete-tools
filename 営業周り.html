@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>営業周り | 大分高齢者紹介センター</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{
+    --bg:#F6F4EE;
+    --paper:#FFFFFF;
+    --line:#E3DECF;
+    --navy:#1F3A54;
+    --navy-deep:#152A3D;
+    --amber:#C9902E;
+    --amber-deep:#A8761F;
+    --text:#2B2A26;
+    --text-soft:#6B6A63;
+    --k-houkatsu:#3B6EA5;
+    --k-kyotaku:#4C8C63;
+    --k-roken:#C9902E;
+    --k-byoin:#B14C4C;
+    --danger:#B14C4C;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:"Noto Sans JP","Hiragino Sans",sans-serif;background:var(--bg);color:var(--text);}
+  h1,h2,h3,.brand,.kpi-num{font-family:"Zen Kaku Gothic New","Noto Sans JP",sans-serif;}
+  button{font-family:inherit;}
+
+  /* ---------- Login ---------- */
+  #loginScreen{
+    min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(160deg,var(--navy-deep) 0%, var(--navy) 55%, #2C4F6E 100%);
+    padding:24px;
+  }
+  .login-card{
+    background:var(--paper);border-radius:20px;padding:36px 28px;width:100%;max-width:360px;
+    box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center;
+  }
+  .login-card .mark{
+    width:56px;height:56px;border-radius:14px;background:var(--amber);margin:0 auto 16px;
+    display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;font-weight:900;
+  }
+  .login-card h1{font-size:20px;margin:0 0 4px;color:var(--navy-deep);}
+  .login-card p{font-size:13px;color:var(--text-soft);margin:0 0 22px;}
+  .login-card input{
+    width:100%;padding:14px 16px;border-radius:10px;border:1.5px solid var(--line);font-size:16px;
+    text-align:center;letter-spacing:4px;margin-bottom:14px;
+  }
+  .login-card button{
+    width:100%;padding:14px;border:none;border-radius:10px;background:var(--amber);color:#fff;
+    font-weight:700;font-size:15px;cursor:pointer;transition:.15s;
+  }
+  .login-card button:hover{background:var(--amber-deep);}
+  .login-err{color:var(--danger);font-size:12px;height:16px;margin-top:8px;}
+
+  /* ---------- App shell ---------- */
+  #app{display:none;min-height:100vh;padding-bottom:70px;}
+  header.top{
+    background:var(--navy-deep);color:#fff;padding:16px 18px 46px;position:relative;
+  }
+  header.top .brand{font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px;}
+  header.top .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--amber);}
+  header.top .brand .pw-gear{
+    margin-left:auto;background:rgba(255,255,255,.12);border:none;color:#fff;width:28px;height:28px;
+    border-radius:8px;font-size:14px;cursor:pointer;
+  }
+  header.top .sub{font-size:11px;color:#B9C6D3;margin-top:2px;}
+
+  .kpi-bar{
+    display:flex;gap:10px;margin:-32px 14px 0;position:relative;z-index:2;
+  }
+  .kpi{
+    flex:1;background:var(--paper);border-radius:var(--radius);padding:12px 10px;text-align:center;
+    box-shadow:0 6px 18px rgba(31,58,84,.10);
+  }
+  .kpi-num{font-size:22px;font-weight:900;color:var(--navy-deep);}
+  .kpi-label{font-size:10.5px;color:var(--text-soft);margin-top:2px;}
+  .kpi.overdue .kpi-num{color:var(--danger);}
+
+  .tabs{display:flex;gap:6px;margin:16px 14px 8px;background:#EAE6D8;border-radius:12px;padding:4px;}
+  .tabs button{
+    flex:1;padding:10px 0;border:none;border-radius:9px;background:transparent;color:var(--text-soft);
+    font-weight:700;font-size:13.5px;cursor:pointer;
+  }
+  .tabs button.active{background:var(--navy-deep);color:#fff;}
+
+  .filters{display:flex;gap:8px;margin:0 14px 10px;flex-wrap:wrap;}
+  .filters select, .filters input[type=text]{
+    padding:9px 10px;border-radius:9px;border:1.3px solid var(--line);background:var(--paper);
+    font-size:12.5px;color:var(--text);flex:1 1 auto;min-width:86px;
+  }
+  .filters input[type=text]{flex:2 1 160px;}
+
+  #listView, #mapView{margin:0 14px;}
+  #mapView{display:none;}
+  #mapEl{height:62vh;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);}
+  .map-hint{font-size:11.5px;color:var(--text-soft);margin:8px 2px 0;}
+
+  .city-group{margin:14px 0 4px;font-size:12.5px;font-weight:700;color:var(--navy);
+    display:flex;align-items:center;gap:8px;}
+  .city-group::after{content:"";flex:1;height:1px;background:var(--line);}
+
+  .card{
+    background:var(--paper);border-radius:var(--radius);padding:13px 14px;margin-bottom:9px;
+    border:1px solid var(--line);cursor:pointer;transition:.12s;
+  }
+  .card:active{transform:scale(.985);}
+  .card.overdue{border-color:var(--danger);background:#FBF1F0;}
+  .card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .badge{
+    font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:20px;color:#fff;white-space:nowrap;
+  }
+  .badge.包括{background:var(--k-houkatsu);}
+  .badge.居宅{background:var(--k-kyotaku);}
+  .badge.老健{background:var(--k-roken);}
+  .badge.病院{background:var(--k-byoin);}
+  .card-name{font-size:14.5px;font-weight:700;margin:6px 0 3px;line-height:1.4;}
+  .card-addr{font-size:12px;color:var(--text-soft);line-height:1.5;}
+  .card-meta{display:flex;justify-content:space-between;margin-top:9px;font-size:11.5px;}
+  .card-meta .rep{color:var(--text-soft);}
+  .card-meta .visit-status{font-weight:700;}
+  .visit-status.none{color:var(--text-soft);}
+  .visit-status.done{color:var(--k-kyotaku);}
+  .visit-status.overdue{color:var(--danger);}
+  .visit-status.upcoming{color:var(--amber-deep);}
+
+  .empty{text-align:center;color:var(--text-soft);font-size:13px;padding:40px 10px;}
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    display:none;position:fixed;inset:0;background:rgba(21,42,61,.55);z-index:50;
+    align-items:flex-end;justify-content:center;
+  }
+  .overlay.show{display:flex;}
+  .sheet{
+    background:var(--paper);width:100%;max-width:480px;border-radius:20px 20px 0 0;
+    max-height:88vh;overflow-y:auto;padding:20px 20px 26px;
+  }
+  .sheet-handle{width:38px;height:4px;background:var(--line);border-radius:3px;margin:0 auto 14px;}
+  .sheet h2{font-size:17px;margin:0 0 2px;}
+  .sheet .addr{font-size:12.5px;color:var(--text-soft);margin-bottom:12px;}
+  .sheet .maplink{font-size:12px;color:var(--navy);text-decoration:none;font-weight:700;}
+  .divider{height:1px;background:var(--line);margin:14px 0;}
+  .hist-item{padding:10px 0;border-bottom:1px dashed var(--line);font-size:12.5px;}
+  .hist-item:last-child{border-bottom:none;}
+  .hist-date{font-weight:700;color:var(--navy-deep);}
+  .hist-rep{color:var(--text-soft);margin-left:6px;}
+  .hist-memo{margin-top:3px;white-space:pre-wrap;}
+  .hist-next{margin-top:4px;font-size:11.5px;color:var(--amber-deep);font-weight:700;}
+  .del-btn{float:right;color:var(--danger);background:none;border:none;font-size:11px;cursor:pointer;}
+
+  .form-row{margin-bottom:12px;}
+  .form-row label{display:block;font-size:11.5px;font-weight:700;color:var(--text-soft);margin-bottom:5px;}
+  .form-row input, .form-row select, .form-row textarea{
+    width:100%;padding:11px 12px;border-radius:9px;border:1.3px solid var(--line);font-size:14px;font-family:inherit;
+  }
+  .form-row textarea{resize:vertical;min-height:70px;}
+  .save-btn{
+    width:100%;padding:14px;background:var(--amber);color:#fff;border:none;border-radius:10px;
+    font-weight:700;font-size:14.5px;cursor:pointer;margin-top:4px;
+  }
+  .save-btn:hover{background:var(--amber-deep);}
+  .save-btn:disabled{background:#C9BFA8;}
+  .close-btn{
+    position:absolute;top:16px;right:18px;background:none;border:none;font-size:20px;color:var(--text-soft);cursor:pointer;
+  }
+  .sheet{position:relative;}
+
+  .geo-toast{
+    position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--navy-deep);color:#fff;
+    padding:9px 16px;border-radius:20px;font-size:11.5px;z-index:60;box-shadow:0 6px 16px rgba(0,0,0,.25);
+    display:none;
+  }
+  .toast{
+    position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--k-kyotaku);color:#fff;
+    padding:10px 20px;border-radius:20px;font-size:12.5px;z-index:70;box-shadow:0 6px 16px rgba(0,0,0,.25);
+    display:none;
+  }
+  .leaflet-popup-content{font-family:"Noto Sans JP",sans-serif;font-size:12.5px;}
+  .popup-title{font-weight:700;margin-bottom:4px;}
+  .popup-btn{
+    margin-top:6px;display:inline-block;background:var(--navy-deep);color:#fff;padding:5px 10px;
+    border-radius:8px;font-size:11px;cursor:pointer;border:none;
+  }
+</style>
+</head>
+<body>
+
+<!-- ログイン画面 -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="mark">診</div>
+    <h1>営業周り</h1>
+    <p>大分高齢者紹介センター 訪問管理</p>
+    <input type="password" id="pwInput" inputmode="numeric" maxlength="8" placeholder="パスワード">
+    <button onclick="tryLogin()">開く</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- メイン画面 -->
+<div id="app">
+  <header class="top">
+    <div class="brand"><span class="dot"></span>営業周り<button class="pw-gear" onclick="openPwChange()" title="パスワードを変更">⚙</button></div>
+    <div class="sub">大分高齢者紹介センター ／ 施設訪問管理</div>
+  </header>
+
+  <div class="kpi-bar">
+    <div class="kpi"><div class="kpi-num" id="kpiTotal">-</div><div class="kpi-label">対象施設</div></div>
+    <div class="kpi"><div class="kpi-num" id="kpiVisited">-</div><div class="kpi-label">今月訪問済</div></div>
+    <div class="kpi overdue"><div class="kpi-num" id="kpiOverdue">-</div><div class="kpi-label">要フォロー</div></div>
+  </div>
+
+  <div class="tabs">
+    <button id="tabList" class="active" onclick="switchTab('list')">一覧</button>
+    <button id="tabMap" onclick="switchTab('map')">地図</button>
+  </div>
+
+  <div class="filters">
+    <input type="text" id="fSearch" placeholder="施設名で検索" oninput="renderAll()">
+    <select id="fCity" onchange="renderAll()"><option value="">市区町村：すべて</option></select>
+    <select id="fKind" onchange="renderAll()">
+      <option value="">種別：すべて</option>
+      <option value="包括">包括</option><option value="居宅">居宅</option>
+      <option value="老健">老健</option><option value="病院">病院</option>
+    </select>
+    <select id="fRep" onchange="renderAll()"><option value="">担当者：すべて</option></select>
+    <select id="fStatus" onchange="renderAll()">
+      <option value="">状態：すべて</option>
+      <option value="overdue">要フォロー</option>
+      <option value="upcoming">次回予定あり</option>
+      <option value="none">未訪問</option>
+    </select>
+  </div>
+
+  <div id="listView"></div>
+
+  <div id="mapView">
+    <div id="mapEl"></div>
+    <div class="map-hint">マーカーの色：<span style="color:var(--k-houkatsu)">●包括</span> <span style="color:var(--k-kyotaku)">●居宅</span> <span style="color:var(--k-roken)">●老健</span> <span style="color:var(--k-byoin)">●病院</span></div>
+  </div>
+</div>
+
+<!-- 詳細/訪問記録モーダル -->
+<div class="overlay" id="detailOverlay">
+  <div class="sheet">
+    <button class="close-btn" onclick="closeDetail()">×</button>
+    <div class="sheet-handle"></div>
+    <span class="badge" id="dKind">-</span>
+    <h2 id="dName">-</h2>
+    <div class="addr" id="dAddr">-</div>
+    <a class="maplink" id="dMapLink" href="#" target="_blank" rel="noopener">Googleマップで開く ›</a>
+
+    <div class="divider"></div>
+    <h3 style="font-size:13.5px;margin:0 0 8px;">訪問記録を追加</h3>
+    <div class="form-row">
+      <label>訪問日</label>
+      <input type="date" id="vDate">
+    </div>
+    <div class="form-row">
+      <label>担当者</label>
+      <select id="vRep">
+        <option value="牧">牧</option>
+        <option value="岡野">岡野</option>
+        <option value="その他">その他</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>メモ</label>
+      <textarea id="vMemo" placeholder="面談内容、相手担当者名、紹介状況など"></textarea>
+    </div>
+    <div class="form-row">
+      <label>次回訪問予定日（任意）</label>
+      <input type="date" id="vNext">
+    </div>
+    <button class="save-btn" id="vSaveBtn" onclick="submitVisit()">この内容で記録する</button>
+
+    <div class="divider"></div>
+    <h3 style="font-size:13.5px;margin:0 0 4px;">訪問履歴</h3>
+    <div id="dHistory"><div class="empty">読み込み中...</div></div>
+  </div>
+</div>
+
+<div class="geo-toast" id="geoToast"></div>
+<div class="toast" id="toast"></div>
+
+<!-- パスワード変更モーダル -->
+<div class="overlay" id="pwOverlay">
+  <div class="sheet">
+    <button class="close-btn" onclick="closePwChange()">×</button>
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;">パスワードを変更</h2>
+    <div class="form-row" style="margin-top:14px;">
+      <label>現在のパスワード</label>
+      <input type="password" id="pwOld">
+    </div>
+    <div class="form-row">
+      <label>新しいパスワード（4文字以上）</label>
+      <input type="password" id="pwNew1">
+    </div>
+    <div class="form-row">
+      <label>新しいパスワード（確認）</label>
+      <input type="password" id="pwNew2">
+    </div>
+    <button class="save-btn" id="pwSaveBtn" onclick="submitPwChange()">変更する</button>
+    <div class="login-err" id="pwErr" style="height:auto;margin-top:8px;"></div>
+  </div>
+</div>
+
+<script>
+/* ============ 設定 ============
+   下記 GAS_URL を、Google Apps Script でデプロイした
+   ウェブアプリのURLに置き換えてください。
+   （Code.gs をスプレッドシートに設置 → デプロイ → URLをコピー）      */
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxYLjGt7vlDkNylFRyD-_0ubXDkO4DCyukmlwsM8XkeHGdIZsMITaCvHpzBcv-s1vtq/exec';
+let currentPassword = null; // ログイン成功時のパスワードを保持（書き込み系リクエストで使用）
+/* ============================== */
+
+let facilities = [];
+let visits = [];
+let currentTab = 'list';
+let currentFacilityId = null;
+let map = null;
+let markerLayer = null;
+const KIND_COLOR = {'包括':'#3B6EA5','居宅':'#4C8C63','老健':'#C9902E','病院':'#B14C4C'};
+
+async function tryLogin(){
+  const v = document.getElementById('pwInput').value;
+  const btn = document.querySelector('.login-card button');
+  const errEl = document.getElementById('loginErr');
+  errEl.textContent = '';
+  if(GAS_URL.indexOf('PASTE_YOUR') === 0){
+    errEl.textContent = 'GAS_URLが未設定です';
+    return;
+  }
+  btn.disabled = true; btn.textContent = '確認中...';
+  try{
+    const res = await fetch(GAS_URL + '?action=checkLogin&pw=' + encodeURIComponent(v));
+    const data = await res.json();
+    if(data.ok){
+      currentPassword = v;
+      document.getElementById('loginScreen').style.display='none';
+      document.getElementById('app').style.display='block';
+      boot();
+    } else {
+      errEl.textContent = 'パスワードが違います';
+    }
+  }catch(err){
+    errEl.textContent = '通信エラーが発生しました';
+    console.error(err);
+  }
+  btn.disabled = false; btn.textContent = '開く';
+}
+document.getElementById('pwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
+
+async function boot(){
+  if(GAS_URL.indexOf('PASTE_YOUR') === 0){
+    document.getElementById('listView').innerHTML =
+      '<div class="empty">⚠ GAS_URL が未設定です。<br>営業周り.html 内の GAS_URL を、デプロイしたウェブアプリURLに書き換えてください。</div>';
+    return;
+  }
+  await loadData();
+  populateFilterOptions();
+  renderAll();
+  processGeocodeQueue();
+}
+
+async function loadData(){
+  try{
+    const res = await fetch(GAS_URL + '?action=getData');
+    const data = await res.json();
+    facilities = data.facilities || [];
+    visits = data.visits || [];
+  }catch(err){
+    showToast('データ取得に失敗しました');
+    console.error(err);
+  }
+}
+
+function populateFilterOptions(){
+  const cities = [...new Set(facilities.map(f=>f.city))];
+  const reps = [...new Set(facilities.map(f=>f.rep))];
+  const cSel = document.getElementById('fCity');
+  cities.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; cSel.appendChild(o); });
+  const rSel = document.getElementById('fRep');
+  reps.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; rSel.appendChild(o); });
+}
+
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function thisMonthPrefix(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+
+function visitsFor(facilityId){
+  return visits.filter(v=>v.facilityId===facilityId).sort((a,b)=> a.visitDate < b.visitDate ? 1 : -1);
+}
+
+function statusFor(facilityId){
+  const vs = visitsFor(facilityId);
+  if(vs.length===0) return {status:'none', last:null, next:null};
+  const last = vs[0];
+  const next = last.nextVisit || null;
+  const today = todayStr();
+  if(next && next < today) return {status:'overdue', last:last.visitDate, next:next};
+  if(next && next >= today) return {status:'upcoming', last:last.visitDate, next:next};
+  return {status:'done', last:last.visitDate, next:null};
+}
+
+function getFiltered(){
+  const search = document.getElementById('fSearch').value.trim();
+  const city = document.getElementById('fCity').value;
+  const kind = document.getElementById('fKind').value;
+  const rep = document.getElementById('fRep').value;
+  const status = document.getElementById('fStatus').value;
+
+  return facilities.filter(f=>{
+    if(search && !f.name.includes(search)) return false;
+    if(city && f.city!==city) return false;
+    if(kind && f.kind!==kind) return false;
+    if(rep && f.rep!==rep) return false;
+    if(status){
+      const st = statusFor(f.id).status;
+      if(status==='overdue' && st!=='overdue') return false;
+      if(status==='upcoming' && st!=='upcoming') return false;
+      if(status==='none' && st!=='none') return false;
+    }
+    return true;
+  });
+}
+
+function renderAll(){
+  renderKpi();
+  if(currentTab==='list') renderList(); else renderMap();
+}
+
+function renderKpi(){
+  const monthPre = thisMonthPrefix();
+  const visitedThisMonth = new Set(
+    visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre)).map(v=>v.facilityId)
+  ).size;
+  const overdueCount = facilities.filter(f=>statusFor(f.id).status==='overdue').length;
+  document.getElementById('kpiTotal').textContent = facilities.length;
+  document.getElementById('kpiVisited').textContent = visitedThisMonth;
+  document.getElementById('kpiOverdue').textContent = overdueCount;
+}
+
+function renderList(){
+  const list = getFiltered();
+  const container = document.getElementById('listView');
+  if(list.length===0){ container.innerHTML = '<div class="empty">該当する施設がありません</div>'; return; }
+
+  const rank = {overdue:0, upcoming:1, none:2, done:3};
+  const byCity = {};
+  list.forEach(f=>{ (byCity[f.city] = byCity[f.city]||[]).push(f); });
+
+  let html = '';
+  Object.keys(byCity).sort().forEach(city=>{
+    const items = byCity[city].slice().sort((a,b)=>{
+      const sa = statusFor(a.id), sb = statusFor(b.id);
+      return rank[sa.status]-rank[sb.status];
+    });
+    html += '<div class="city-group">'+city+'（'+items.length+'）</div>';
+    items.forEach(f=>{
+      const st = statusFor(f.id);
+      let statusLabel = '未訪問';
+      let statusClass = 'none';
+      if(st.status==='done'){ statusLabel='前回 '+st.last; statusClass='done'; }
+      if(st.status==='upcoming'){ statusLabel='次回予定 '+st.next; statusClass='upcoming'; }
+      if(st.status==='overdue'){ statusLabel='期限超過 '+st.next; statusClass='overdue'; }
+      html += '<div class="card '+(st.status==='overdue'?'overdue':'')+'" onclick="openDetail(\''+f.id+'\')">'
+        + '<div class="card-top"><span class="badge '+f.kind+'">'+f.kind+'</span></div>'
+        + '<div class="card-name">'+f.name+'</div>'
+        + '<div class="card-addr">'+f.addr+'</div>'
+        + '<div class="card-meta"><span class="rep">担当：'+f.rep+'</span><span class="visit-status '+statusClass+'">'+statusLabel+'</span></div>'
+        + '</div>';
+    });
+  });
+  container.innerHTML = html;
+}
+
+function switchTab(tab){
+  currentTab = tab;
+  document.getElementById('tabList').classList.toggle('active', tab==='list');
+  document.getElementById('tabMap').classList.toggle('active', tab==='map');
+  document.getElementById('listView').style.display = tab==='list' ? 'block':'none';
+  document.getElementById('mapView').style.display = tab==='map' ? 'block':'none';
+  renderAll();
+  if(tab==='map') setTimeout(()=>{ if(map) map.invalidateSize(); }, 50);
+}
+
+function ensureMap(){
+  if(map) return;
+  map = L.map('mapEl').setView([33.28, 131.5], 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
+  }).addTo(map);
+  markerLayer = L.layerGroup().addTo(map);
+}
+
+function renderMap(){
+  ensureMap();
+  markerLayer.clearLayers();
+  const list = getFiltered().filter(f=>f.lat && f.lng);
+  const bounds = [];
+  list.forEach(f=>{
+    const color = KIND_COLOR[f.kind] || '#666';
+    const marker = L.circleMarker([f.lat, f.lng], {
+      radius:8, color:'#fff', weight:2, fillColor:color, fillOpacity:.95
+    });
+    const st = statusFor(f.id);
+    let statusLabel = st.status==='none' ? '未訪問' : (st.status==='overdue' ? '期限超過 '+st.next : (st.status==='upcoming' ? '次回 '+st.next : '前回 '+st.last));
+    marker.bindPopup(
+      '<div class="popup-title">'+f.name+'</div>'+f.addr+'<br>担当：'+f.rep+' ／ '+statusLabel
+      + '<br><button class="popup-btn" onclick="openDetail(\''+f.id+'\')">詳細を開く</button>'
+    );
+    marker.addTo(markerLayer);
+    bounds.push([f.lat, f.lng]);
+  });
+  if(bounds.length>0) map.fitBounds(bounds, {padding:[24,24]});
+}
+
+function openDetail(facilityId){
+  currentFacilityId = facilityId;
+  const f = facilities.find(x=>x.id===facilityId);
+  if(!f) return;
+  document.getElementById('dKind').textContent = f.kind;
+  document.getElementById('dKind').className = 'badge '+f.kind;
+  document.getElementById('dName').textContent = f.name;
+  document.getElementById('dAddr').textContent = f.addr;
+  document.getElementById('dMapLink').href = 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(f.addr);
+  document.getElementById('vDate').value = todayStr();
+  document.getElementById('vRep').value = (f.rep==='牧'||f.rep==='岡野') ? f.rep : 'その他';
+  document.getElementById('vMemo').value = '';
+  document.getElementById('vNext').value = '';
+  renderHistory(facilityId);
+  document.getElementById('detailOverlay').classList.add('show');
+}
+function closeDetail(){
+  document.getElementById('detailOverlay').classList.remove('show');
+  currentFacilityId = null;
+}
+
+function renderHistory(facilityId){
+  const vs = visitsFor(facilityId);
+  const el = document.getElementById('dHistory');
+  if(vs.length===0){ el.innerHTML = '<div class="empty">まだ訪問記録がありません</div>'; return; }
+  el.innerHTML = vs.map(v=>
+    '<div class="hist-item">'
+    + '<button class="del-btn" onclick="removeVisit(\''+v.id+'\')">削除</button>'
+    + '<span class="hist-date">'+v.visitDate+'</span><span class="hist-rep">'+v.rep+'</span>'
+    + (v.memo ? '<div class="hist-memo">'+escapeHtml(v.memo)+'</div>' : '')
+    + (v.nextVisit ? '<div class="hist-next">次回予定：'+v.nextVisit+'</div>' : '')
+    + '</div>'
+  ).join('');
+}
+
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function submitVisit(){
+  if(!currentFacilityId) return;
+  const f = facilities.find(x=>x.id===currentFacilityId);
+  const date = document.getElementById('vDate').value;
+  if(!date){ showToast('訪問日を入力してください'); return; }
+  const btn = document.getElementById('vSaveBtn');
+  btn.disabled = true; btn.textContent = '保存中...';
+  const payload = {
+    action:'addVisit', password:currentPassword,
+    facilityId: f.id, facilityName: f.name,
+    visitDate: date, rep: document.getElementById('vRep').value,
+    memo: document.getElementById('vMemo').value,
+    nextVisit: document.getElementById('vNext').value
+  };
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify(payload)});
+    const data = await res.json();
+    if(data.ok){
+      visits.push({
+        id:data.id, facilityId:f.id, facilityName:f.name, visitDate:date,
+        rep:payload.rep, memo:payload.memo, nextVisit:payload.nextVisit, createdAt: new Date().toISOString()
+      });
+      renderHistory(f.id);
+      renderAll();
+      showToast('訪問記録を保存しました');
+      document.getElementById('vMemo').value='';
+      document.getElementById('vNext').value='';
+    } else {
+      showToast('保存に失敗しました: '+(data.error||''));
+    }
+  }catch(err){
+    showToast('通信エラーが発生しました');
+    console.error(err);
+  }
+  btn.disabled = false; btn.textContent = 'この内容で記録する';
+}
+
+async function removeVisit(id){
+  if(!confirm('この訪問記録を削除しますか？')) return;
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'deleteVisit', password:currentPassword, id:id})});
+    const data = await res.json();
+    if(data.ok){
+      visits = visits.filter(v=>v.id!==id);
+      renderHistory(currentFacilityId);
+      renderAll();
+      showToast('削除しました');
+    }
+  }catch(err){ console.error(err); }
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display='block';
+  setTimeout(()=>{ t.style.display='none'; }, 2200);
+}
+
+/* ---------- ジオコーディング（住所→緯度経度）：初回のみ・順次キャッシュ ---------- */
+async function processGeocodeQueue(){
+  const queue = facilities.filter(f=>!f.lat || !f.lng);
+  if(queue.length===0) return;
+  const toastEl = document.getElementById('geoToast');
+  toastEl.style.display='block';
+  for(let i=0;i<queue.length;i++){
+    const f = queue[i];
+    toastEl.textContent = '地図情報を準備中 ('+(i+1)+'/'+queue.length+')';
+    try{
+      const q = encodeURIComponent(f.addr + (f.addr.includes('大分県')?'':' 大分県'));
+      const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&q='+q);
+      const arr = await res.json();
+      if(arr && arr[0]){
+        f.lat = parseFloat(arr[0].lat);
+        f.lng = parseFloat(arr[0].lon);
+        fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'updateLatLng', password:currentPassword, facilityId:f.id, lat:f.lat, lng:f.lng})}).catch(()=>{});
+        if(currentTab==='map') renderMap();
+      }
+    }catch(err){ console.error('geocode error', f.name, err); }
+    await new Promise(r=>setTimeout(r, 1100)); // Nominatim利用ポリシー：1req/sec厳守
+  }
+  toastEl.style.display='none';
+}
+/* ---------- パスワード変更 ---------- */
+function openPwChange(){
+  document.getElementById('pwOld').value = '';
+  document.getElementById('pwNew1').value = '';
+  document.getElementById('pwNew2').value = '';
+  document.getElementById('pwErr').textContent = '';
+  document.getElementById('pwOverlay').classList.add('show');
+}
+function closePwChange(){
+  document.getElementById('pwOverlay').classList.remove('show');
+}
+async function submitPwChange(){
+  const oldPw = document.getElementById('pwOld').value;
+  const new1 = document.getElementById('pwNew1').value;
+  const new2 = document.getElementById('pwNew2').value;
+  const errEl = document.getElementById('pwErr');
+  errEl.textContent = '';
+  if(new1.length < 4){ errEl.textContent = '新しいパスワードは4文字以上にしてください'; return; }
+  if(new1 !== new2){ errEl.textContent = '新しいパスワードが一致しません'; return; }
+  const btn = document.getElementById('pwSaveBtn');
+  btn.disabled = true; btn.textContent = '変更中...';
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'changePassword', oldPassword:oldPw, newPassword:new1})});
+    const data = await res.json();
+    if(data.ok){
+      currentPassword = new1;
+      closePwChange();
+      showToast('パスワードを変更しました');
+    } else {
+      errEl.textContent = data.error || '変更に失敗しました';
+    }
+  }catch(err){
+    errEl.textContent = '通信エラーが発生しました';
+    console.error(err);
+  }
+  btn.disabled = false; btn.textContent = '変更する';
+}
+</script>
+</body>
+</html>
