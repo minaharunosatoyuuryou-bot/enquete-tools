@@ -97,6 +97,13 @@
   }
   .filters input[type=text]{flex:2 1 160px;}
 
+  .nearby-btn{
+    padding:9px 14px;border-radius:9px;border:1.3px solid var(--navy);background:var(--paper);
+    color:var(--navy-deep);font-size:12.5px;font-weight:700;cursor:pointer;flex:1 1 auto;
+  }
+  .nearby-btn.active{background:var(--navy-deep);color:#fff;border-color:var(--navy-deep);}
+  .card-dist{color:var(--navy);font-weight:700;}
+
   #listView, #mapView{margin:0 14px;}
   #mapView{display:none;}
   #mapEl{height:62vh;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);}
@@ -239,11 +246,22 @@
     </select>
   </div>
 
+  <div class="filters" id="nearbyBar">
+    <button id="nearbyBtn" class="nearby-btn" onclick="toggleNearby()">📍 現在地から絞り込む</button>
+    <select id="fRadius" onchange="renderAll()" style="display:none;">
+      <option value="3">3km以内</option>
+      <option value="5" selected>5km以内</option>
+      <option value="10">10km以内</option>
+      <option value="30">30km以内</option>
+    </select>
+  </div>
+
   <div id="listView"></div>
 
   <div id="mapView">
     <div id="mapEl"></div>
     <div class="map-hint">マーカーの色：<span style="color:var(--k-houkatsu)">●包括</span> <span style="color:var(--k-kyotaku)">●居宅</span> <span style="color:var(--k-roken)">●老健</span> <span style="color:var(--k-byoin)">●病院</span></div>
+    <button id="locBtn" class="nearby-btn" style="margin-top:8px;width:100%;" onclick="locateOnMap()">📍 現在地を表示</button>
   </div>
 </div>
 
@@ -332,6 +350,78 @@ let currentFacilityId = null;
 let map = null;
 let markerLayer = null;
 const KIND_COLOR = {'包括':'#3B6EA5','居宅':'#4C8C63','老健':'#C9902E','病院':'#B14C4C'};
+let userLoc = null; // {lat, lng}
+let nearbyActive = false;
+let userMarker = null;
+let userCircle = null;
+
+function distanceKm(lat1, lng1, lat2, lng2){
+  const R = 6371;
+  const dLat = (lat2-lat1) * Math.PI/180;
+  const dLng = (lng2-lng1) * Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function getCurrentPosition(){
+  return new Promise((resolve, reject)=>{
+    if(!navigator.geolocation){ reject(new Error('この端末は位置情報に対応していません')); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({lat: pos.coords.latitude, lng: pos.coords.longitude}),
+      err => reject(err),
+      {enableHighAccuracy:true, timeout:10000}
+    );
+  });
+}
+
+async function toggleNearby(){
+  const btn = document.getElementById('nearbyBtn');
+  const radiusSel = document.getElementById('fRadius');
+  if(nearbyActive){
+    nearbyActive = false;
+    btn.classList.remove('active');
+    btn.textContent = '📍 現在地から絞り込む';
+    radiusSel.style.display = 'none';
+    renderAll();
+    return;
+  }
+  btn.textContent = '取得中...';
+  try{
+    userLoc = await getCurrentPosition();
+    nearbyActive = true;
+    btn.classList.add('active');
+    btn.textContent = '📍 現在地から絞り込み中';
+    radiusSel.style.display = 'inline-block';
+    renderAll();
+  }catch(err){
+    showToast('位置情報を取得できませんでした（設定でブラウザの位置情報を許可してください）');
+    btn.textContent = '📍 現在地から絞り込む';
+    console.error(err);
+  }
+}
+
+async function locateOnMap(){
+  const btn = document.getElementById('locBtn');
+  btn.textContent = '取得中...';
+  try{
+    userLoc = await getCurrentPosition();
+    ensureMap();
+    if(userMarker) map.removeLayer(userMarker);
+    if(userCircle) map.removeLayer(userCircle);
+    userMarker = L.circleMarker([userLoc.lat, userLoc.lng], {
+      radius:9, color:'#fff', weight:3, fillColor:'#2E6FE8', fillOpacity:1
+    }).addTo(map).bindPopup('現在地');
+    userCircle = L.circle([userLoc.lat, userLoc.lng], {
+      radius: (nearbyActive ? Number(document.getElementById('fRadius').value) : 5) * 1000,
+      color:'#2E6FE8', weight:1, fillColor:'#2E6FE8', fillOpacity:.06
+    }).addTo(map);
+    map.setView([userLoc.lat, userLoc.lng], 13);
+  }catch(err){
+    showToast('位置情報を取得できませんでした（設定でブラウザの位置情報を許可してください）');
+    console.error(err);
+  }
+  btn.textContent = '📍 現在地を表示';
+}
 
 async function tryLogin(){
   const v = document.getElementById('pwInput').value;
@@ -426,7 +516,7 @@ function getFiltered(){
   const rep = document.getElementById('fRep').value;
   const status = document.getElementById('fStatus').value;
 
-  return facilities.filter(f=>{
+  let result = facilities.filter(f=>{
     if(search && !f.name.includes(search)) return false;
     if(city && f.city!==city) return false;
     if(kind && f.kind!==kind) return false;
@@ -439,6 +529,16 @@ function getFiltered(){
     }
     return true;
   });
+
+  if(nearbyActive && userLoc){
+    const radiusKm = Number(document.getElementById('fRadius').value);
+    result = result
+      .filter(f=>f.lat && f.lng)
+      .map(f=>{ f.__dist = distanceKm(userLoc.lat, userLoc.lng, f.lat, f.lng); return f; })
+      .filter(f=>f.__dist <= radiusKm)
+      .sort((a,b)=>a.__dist-b.__dist);
+  }
+  return result;
 }
 
 function renderAll(){
@@ -460,7 +560,30 @@ function renderKpi(){
 function renderList(){
   const list = getFiltered();
   const container = document.getElementById('listView');
-  if(list.length===0){ container.innerHTML = '<div class="empty">該当する施設がありません</div>'; return; }
+  if(list.length===0){
+    container.innerHTML = '<div class="empty">' + (nearbyActive ? 'この範囲内に施設がありません' : '該当する施設がありません') + '</div>';
+    return;
+  }
+
+  if(nearbyActive){
+    let html = '<div class="city-group">現在地から近い順（'+list.length+'）</div>';
+    list.forEach(f=>{
+      const st = statusFor(f.id);
+      let statusLabel = '未訪問';
+      let statusClass = 'none';
+      if(st.status==='done'){ statusLabel='前回 '+st.last; statusClass='done'; }
+      if(st.status==='upcoming'){ statusLabel='次回予定 '+st.next; statusClass='upcoming'; }
+      if(st.status==='overdue'){ statusLabel='期限超過 '+st.next; statusClass='overdue'; }
+      html += '<div class="card '+(st.status==='overdue'?'overdue':'')+'" onclick="openDetail(\''+f.id+'\')">'
+        + '<div class="card-top"><span class="badge '+f.kind+'">'+f.kind+'</span><span class="card-dist">'+f.__dist.toFixed(1)+'km</span></div>'
+        + '<div class="card-name">'+f.name+'</div>'
+        + '<div class="card-addr">'+f.addr+'</div>'
+        + '<div class="card-meta"><span class="rep">担当：'+f.rep+'</span><span class="visit-status '+statusClass+'">'+statusLabel+'</span></div>'
+        + '</div>';
+    });
+    container.innerHTML = html;
+    return;
+  }
 
   const rank = {overdue:0, upcoming:1, none:2, done:3};
   const byCity = {};
@@ -522,13 +645,28 @@ function renderMap(){
     });
     const st = statusFor(f.id);
     let statusLabel = st.status==='none' ? '未訪問' : (st.status==='overdue' ? '期限超過 '+st.next : (st.status==='upcoming' ? '次回 '+st.next : '前回 '+st.last));
+    const distLabel = (nearbyActive && f.__dist!=null) ? '（'+f.__dist.toFixed(1)+'km）' : '';
     marker.bindPopup(
-      '<div class="popup-title">'+f.name+'</div>'+f.addr+'<br>担当：'+f.rep+' ／ '+statusLabel
+      '<div class="popup-title">'+f.name+distLabel+'</div>'+f.addr+'<br>担当：'+f.rep+' ／ '+statusLabel
       + '<br><button class="popup-btn" onclick="openDetail(\''+f.id+'\')">詳細を開く</button>'
     );
     marker.addTo(markerLayer);
     bounds.push([f.lat, f.lng]);
   });
+
+  if(userMarker) map.removeLayer(userMarker);
+  if(userCircle) map.removeLayer(userCircle);
+  if(nearbyActive && userLoc){
+    const radiusKm = Number(document.getElementById('fRadius').value);
+    userMarker = L.circleMarker([userLoc.lat, userLoc.lng], {
+      radius:9, color:'#fff', weight:3, fillColor:'#2E6FE8', fillOpacity:1
+    }).addTo(map).bindPopup('現在地');
+    userCircle = L.circle([userLoc.lat, userLoc.lng], {
+      radius: radiusKm * 1000, color:'#2E6FE8', weight:1, fillColor:'#2E6FE8', fillOpacity:.06
+    }).addTo(map);
+    bounds.push([userLoc.lat, userLoc.lng]);
+  }
+
   if(bounds.length>0) map.fitBounds(bounds, {padding:[24,24]});
 }
 
