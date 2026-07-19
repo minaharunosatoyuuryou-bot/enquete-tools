@@ -377,6 +377,7 @@
     </div>
 
     <div class="filters" id="actionBar">
+      <button id="addReferralFacilityBtn" class="dl-btn dl-btn-success admin-only-inline" onclick="openFacilityEdit(null, '')">＋ 紹介施設を追加</button>
       <button id="vacancyListBtn" class="nearby-btn" onclick="openVacancyList()">🛏 空床一覧</button>
       <button id="monthlyBtn" class="nearby-btn" onclick="openMonthly()">📊 月別実績を見る</button>
       <button id="scheduleBtn" class="nearby-btn" onclick="openSchedule()">📅 営業予定表</button>
@@ -387,9 +388,12 @@
 
   <!-- ============ 施設管理セクション（管理者のみ） ============ -->
   <div id="facilitySection" style="display:none;">
+    <div class="empty" style="padding:6px 2px 12px;text-align:left;color:var(--text-soft);font-size:12px;">
+      ここには「法人・グループ」欄に入力された施設（現在：悠久福祉会）だけが表示されます。空床管理はこの施設が対象です。
+    </div>
     <div class="filters">
       <input type="text" id="fmSearch" placeholder="施設名で検索" oninput="renderFacilityAdminTable()">
-      <button class="dl-btn dl-btn-success" onclick="openFacilityEdit(null)">＋ 新規施設を追加</button>
+      <button class="dl-btn dl-btn-success" onclick="openFacilityEdit(null, '悠久福祉会')">＋ 悠久福祉会の施設を追加</button>
       <button class="dl-btn dl-btn-outline" onclick="loadData().then(()=>{populateFilterOptions();renderAll();renderFacilityAdminTable();showToast('最新データを取得しました');})">🔄 再読み込み</button>
     </div>
     <div class="dl-table-wrap">
@@ -1321,7 +1325,7 @@ function showToast(msg){
 }
 
 /* ---------- 営業先（施設）を追加 ---------- */
-function openFacilityEdit(id){
+function openFacilityEdit(id, defaultGroup){
   editingFacilityId = id;
   populateTagUI();
   document.getElementById('afErr').textContent = '';
@@ -1331,7 +1335,7 @@ function openFacilityEdit(id){
 
   const f = id ? facilities.find(x=>x.id===id) : null;
   document.getElementById('afTitle').textContent = id ? '施設情報を編集' : '施設を追加';
-  document.getElementById('afGroup').value = f ? (f.group||'') : '';
+  document.getElementById('afGroup').value = f ? (f.group||'') : (defaultGroup||'');
   document.getElementById('afName').value = f ? f.name : '';
   document.getElementById('afCity').value = f ? f.city : '';
   document.getElementById('afKind').value = f ? (f.kind||'') : '';
@@ -1456,12 +1460,8 @@ async function submitDeleteFacility(){
 /* ---------- 施設管理タブ（管理者のみ） ---------- */
 function renderFacilityAdminTable(){
   const q = (document.getElementById('fmSearch').value||'').trim();
-  const list = facilities.filter(f=>!q || f.name.includes(q)).slice().sort((a,b)=>{
-    // 法人グループ（悠久福祉会）を先頭に表示
-    if(a.group && !b.group) return -1;
-    if(!a.group && b.group) return 1;
-    return a.name.localeCompare(b.name,'ja');
-  });
+  const list = facilities.filter(f=>f.group && (!q || f.name.includes(q))).slice()
+    .sort((a,b)=>a.name.localeCompare(b.name,'ja'));
   const tbody = document.getElementById('fm-table-body');
   if(list.length===0){ tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-soft)">該当する施設がありません</td></tr>'; return; }
   tbody.innerHTML = list.map(f=>{
@@ -1469,11 +1469,11 @@ function renderFacilityAdminTable(){
     const st = vacancyStatus(f);
     const stale = isStale(f);
     return '<tr>'
-      + '<td style="font-weight:600;">'+escapeHtml(f.name)+(f.group?'<span class="group-badge">'+escapeHtml(f.group)+'</span>':'')+'</td>'
+      + '<td style="font-weight:600;">'+escapeHtml(f.name)+'<span class="group-badge">'+escapeHtml(f.group)+'</span></td>'
       + '<td><span class="badge '+(f.kind||'')+'">'+(f.kind||'—')+'</span></td>'
       + '<td>'+escapeHtml(f.city||'')+'</td>'
-      + '<td>'+(f.group ? ((f.capacity||'—')+' / '+(f.occupied||'—')+' / '+(vac===null?'—':vac)) : '<span style="color:var(--text-soft);">（対象外）</span>')+'</td>'
-      + '<td>'+(f.group ? '<span class="vacancy-status '+st.cls+'">'+st.label+'</span>'+(stale?'<div class="vacancy-stale">要更新</div>':'') : '—')+'</td>'
+      + '<td>'+((f.capacity||'—')+' / '+(f.occupied||'—')+' / '+(vac===null?'—':vac))+'</td>'
+      + '<td><span class="vacancy-status '+st.cls+'">'+st.label+'</span>'+(stale?'<div class="vacancy-stale">要更新</div>':'')+'</td>'
       + '<td style="font-size:11px;color:var(--text-soft);">'+(f.updatedAt||'—')+'</td>'
       + '<td><button class="dl-btn-icon" title="編集" onclick="openFacilityEdit(\''+f.id+'\')">✏️</button></td>'
       + '</tr>';
