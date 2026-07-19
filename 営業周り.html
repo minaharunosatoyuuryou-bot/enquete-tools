@@ -420,6 +420,7 @@
     </div>
 
     <div class="filters" id="actionBar">
+      <button id="myResultBtn" class="nearby-btn" onclick="openMyResult()">📈 今月の実績</button>
       <button id="addReferralFacilityBtn" class="dl-btn dl-btn-success admin-only-inline" onclick="openFacilityEdit(null, '')">＋ 紹介施設を追加</button>
       <button id="unvisitedBtn" class="nearby-btn" onclick="openUnvisited()">⏰ 未訪問アラート</button>
       <button id="vacancyListBtn" class="nearby-btn" onclick="openVacancyList()">🛏 空床一覧</button>
@@ -636,6 +637,16 @@
     <div class="sheet-handle"></div>
     <h2 style="font-size:16px;">未訪問アラート（30日以上）</h2>
     <div id="unvisitedBody" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<!-- 今月の実績モーダル -->
+<div class="overlay" id="myResultOverlay">
+  <div class="sheet">
+    <button class="close-btn" onclick="closeMyResult()">×</button>
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;" id="myResultTitle">今月の実績</h2>
+    <div id="myResultBody" style="margin-top:14px;"></div>
   </div>
 </div>
 
@@ -892,10 +903,21 @@
     <div class="dl-form-row"><label>希望施設</label><input type="text" id="dl-f-facility" placeholder="例：みなはるの里、悠久の里"></div>
     <div class="dl-form-2col">
       <div class="dl-form-row"><label>ステータス</label>
-        <select id="dl-f-status"><option>商談中</option><option>成約</option><option>失注</option><option>保留</option></select>
+        <select id="dl-f-status" onchange="toggleDealReason()"><option>商談中</option><option>成約</option><option>失注</option><option>保留</option></select>
       </div>
       <div class="dl-form-row"><label>担当者名</label><input type="text" id="dl-f-staff" list="repDatalist" placeholder="例：牧 良子"></div>
       <datalist id="repDatalist"></datalist>
+    </div>
+    <div class="dl-form-row" id="dl-reason-row" style="display:none;">
+      <label>紹介できなかった理由</label>
+      <select id="dl-f-reason">
+        <option value="">選択してください</option>
+        <option value="満床">満床</option>
+        <option value="本人希望">本人希望</option>
+        <option value="家族希望">家族希望</option>
+        <option value="医療対応不可">医療対応不可</option>
+        <option value="その他">その他</option>
+      </select>
     </div>
     <div class="dl-form-row"><label>メモ</label><textarea id="dl-f-memo" placeholder="家族の状況、本人の希望など"></textarea></div>
     <div class="dl-modal-footer">
@@ -1937,6 +1959,30 @@ function renderVacancyList(){
 }
 
 /* ================= 未訪問アラート（30日以上訪問なし） ================= */
+/* ================= 今月の実績（個人サマリー） ================= */
+function openMyResult(){
+  document.getElementById('myResultTitle').textContent = (currentUserName||'あなた') + ' の今月の実績';
+  renderMyResult();
+  document.getElementById('myResultOverlay').classList.add('show');
+}
+function closeMyResult(){
+  document.getElementById('myResultOverlay').classList.remove('show');
+}
+function renderMyResult(){
+  const monthPre = thisMonthPrefix();
+  const myVisits = visits.filter(v=>v.rep===currentUserName && v.visitDate && v.visitDate.startsWith(monthPre));
+  const centerCount = myVisits.filter(v=>(v.purpose||'center')==='center').length;
+  const yukyuCount = myVisits.filter(v=>v.purpose==='yukyu').length;
+  const bothCount = myVisits.filter(v=>v.purpose==='both').length;
+  const total = myVisits.length;
+  const el = document.getElementById('myResultBody');
+  el.innerHTML =
+    '<div class="vlist-row"><span>高齢者紹介センター</span><span class="vlist-count">'+centerCount+'件</span></div>'
+    + '<div class="vlist-row"><span>悠久福祉会</span><span class="vlist-count">'+yukyuCount+'件</span></div>'
+    + '<div class="vlist-row"><span>両方の営業</span><span class="vlist-count">'+bothCount+'件</span></div>'
+    + '<div class="vlist-row" style="border-top:2px solid var(--line);margin-top:6px;padding-top:12px;"><span style="font-weight:700;">合計</span><span class="vlist-count" style="font-size:16px;">'+total+'件</span></div>';
+}
+
 function openUnvisited(){
   renderUnvisited();
   document.getElementById('unvisitedOverlay').classList.add('show');
@@ -2418,7 +2464,7 @@ function dealRender(){
       <td>${r.gender||'—'}</td>
       <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${r.facility||'—'}</td>
       <td>${closeFmt}</td>
-      <td><span class="dl-status ${dealStatusClass(r.status)}" onclick="dealCycleStatus(this.dataset.id)" data-id="${r.id}">${r.status}</span></td>
+      <td><span class="dl-status ${dealStatusClass(r.status)}" onclick="dealCycleStatus(this.dataset.id)" data-id="${r.id}">${r.status}</span>${r.status==='失注' && parseDealReason(r.memo).reason ? '<div style="font-size:10px;color:var(--text-soft);">'+parseDealReason(r.memo).reason+'</div>' : ''}</td>
       <td>${r.staff||'—'}</td>
       <td>${memo}</td>
       <td><div class="dl-action-btns">
@@ -2440,9 +2486,21 @@ async function dealCycleStatus(id){
   catch { dealSetSyncStatus('⚠ 保存エラー', false); }
 }
 
+/** メモ先頭の "[理由：〇〇] " タグから失注理由を取り出す（既存の営業記録バックエンドに列を増やさず、メモに埋め込んで管理） */
+function parseDealReason(memo){
+  const m = String(memo||'').match(/^\[理由：([^\]]+)\]\s*/);
+  if(!m) return {reason:'', cleanMemo: memo||''};
+  return {reason: m[1], cleanMemo: String(memo).slice(m[0].length)};
+}
+function toggleDealReason(){
+  const isLost = document.getElementById('dl-f-status').value === '失注';
+  document.getElementById('dl-reason-row').style.display = isLost ? 'block' : 'none';
+}
+
 function dealOpenModal(id=null){
   dealEditId = id;
   const m = id ? dealRecords.find(r=>String(r.id)===String(id)) : null;
+  const parsed = parseDealReason(m?.memo);
   document.getElementById('dl-modal-title').textContent = id ? '案件を編集' : '新規案件を追加';
   document.getElementById('dl-f-consult').value = m?.consult || new Date().toISOString().slice(0,10);
   document.getElementById('dl-f-close').value = m?.closeDate || '';
@@ -2452,7 +2510,9 @@ function dealOpenModal(id=null){
   document.getElementById('dl-f-facility').value = m?.facility || '';
   document.getElementById('dl-f-status').value = m?.status || '商談中';
   document.getElementById('dl-f-staff').value = m?.staff || '';
-  document.getElementById('dl-f-memo').value = m?.memo || '';
+  document.getElementById('dl-f-reason').value = parsed.reason;
+  document.getElementById('dl-f-memo').value = parsed.cleanMemo;
+  toggleDealReason();
   document.getElementById('dl-modal').classList.add('open');
 }
 
@@ -2462,6 +2522,10 @@ async function dealSaveRecord(){
   const name = document.getElementById('dl-f-name').value.trim();
   const consult = document.getElementById('dl-f-consult').value;
   if (!name || !consult) { alert('相談日と利用者氏名は必須です'); return; }
+  const status = document.getElementById('dl-f-status').value;
+  const reason = document.getElementById('dl-f-reason').value;
+  let memo = document.getElementById('dl-f-memo').value.trim();
+  if(status==='失注' && reason){ memo = '['+'理由：'+reason+'] ' + memo; }
   const data = {
     id: dealEditId || String(Date.now()),
     consult, name,
@@ -2469,9 +2533,9 @@ async function dealSaveRecord(){
     gender: document.getElementById('dl-f-gender').value,
     facility: document.getElementById('dl-f-facility').value.trim(),
     closeDate: document.getElementById('dl-f-close').value,
-    status: document.getElementById('dl-f-status').value,
+    status: status,
     staff: document.getElementById('dl-f-staff').value.trim(),
-    memo: document.getElementById('dl-f-memo').value.trim()
+    memo: memo
   };
   const btn = document.getElementById('dl-save-btn');
   btn.textContent = '保存中...'; btn.disabled = true;
@@ -2510,10 +2574,14 @@ function renderDealMonthly(){
   dealRecords.forEach(r=>{
     const m = dealGetMonth(r);
     if(!m) return;
-    if(!byMonth[m]) byMonth[m] = {total:0, success:0, lost:0};
+    if(!byMonth[m]) byMonth[m] = {total:0, success:0, lost:0, reasons:{}};
     byMonth[m].total++;
     if(r.status==='成約') byMonth[m].success++;
-    if(r.status==='失注') byMonth[m].lost++;
+    if(r.status==='失注'){
+      byMonth[m].lost++;
+      const reason = parseDealReason(r.memo).reason || 'その他';
+      byMonth[m].reasons[reason] = (byMonth[m].reasons[reason]||0) + 1;
+    }
   });
   const months = Object.keys(byMonth).sort().reverse();
   const el = document.getElementById('dl-monthly-compare');
@@ -2527,12 +2595,16 @@ function renderDealMonthly(){
     const d = byMonth[m];
     const rate = d.total ? Math.round(d.success/d.total*100) : 0;
     const [y,mo] = m.split('-');
+    const reasonDetail = Object.entries(d.reasons).map(([r,n])=>r+' '+n+'件').join('、');
     html += '<tr style="border-bottom:1px solid var(--dl-border);">'
       + '<td style="padding:6px 8px;">'+y+'年'+parseInt(mo)+'月</td>'
       + '<td style="padding:6px 8px;text-align:center;">'+d.total+'</td>'
       + '<td style="padding:6px 8px;text-align:center;color:var(--dl-green);font-weight:700;">'+d.success+'</td>'
       + '<td style="padding:6px 8px;text-align:center;color:var(--dl-red);">'+d.lost+'</td>'
       + '<td style="padding:6px 8px;text-align:center;font-weight:700;">'+rate+'%</td></tr>';
+    if(reasonDetail){
+      html += '<tr style="border-bottom:1px solid var(--dl-border);"><td colspan="5" style="padding:2px 8px 8px;font-size:10.5px;color:var(--text-soft);">紹介できなかった理由：'+reasonDetail+'</td></tr>';
+    }
   });
   html += '</tbody></table>';
   el.innerHTML = html;
