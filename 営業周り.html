@@ -114,6 +114,14 @@
   .attr-tag.on{background:var(--navy-deep);color:#fff;border-color:var(--navy-deep);}
   .fm-edit-btn{margin-top:8px;width:100%;padding:9px;border-radius:9px;border:1.3px solid var(--navy);background:var(--paper);color:var(--navy-deep);font-weight:700;font-size:12.5px;cursor:pointer;}
   .vacancy-quick-update{background:var(--bg);border-radius:10px;padding:10px 12px;margin-top:8px;}
+  .v-activity-list{display:flex;flex-direction:column;gap:2px;}
+  .v-activity-row{
+    display:grid !important;grid-template-columns:22px 1fr !important;align-items:center !important;
+    gap:8px !important;font-size:13.5px !important;text-align:left !important;padding:6px 2px;
+    width:100%;box-sizing:border-box;
+  }
+  .v-activity-row input[type=checkbox]{width:16px;height:16px;flex:none;margin:0;}
+  .v-activity-row span{text-align:left !important;white-space:normal;}
   .vlist-section{margin-bottom:16px;}
   .vlist-heading{font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid var(--line);}
   .vlist-heading.full{color:var(--danger);}
@@ -549,14 +557,14 @@
     </div>
     <div class="form-row">
       <label>営業内容（複数選択可）</label>
-      <div style="display:flex;flex-direction:column;gap:6px;">
-        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" class="v-activity" value="パンフレットのお渡し">パンフレットのお渡し</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" class="v-activity" value="空床のご案内">空床のご案内</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" class="v-activity" value="新規紹介のお願い">新規紹介のお願い</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" class="v-activity" value="利用者相談あり">利用者相談あり</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" class="v-activity" value="見学のご案内">見学のご案内</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" class="v-activity" value="入居の相談あり">入居の相談あり</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" class="v-activity" value="その他">その他</label>
+      <div class="v-activity-list">
+        <label class="v-activity-row"><input type="checkbox" class="v-activity" value="パンフレットのお渡し"><span>パンフレットのお渡し</span></label>
+        <label class="v-activity-row"><input type="checkbox" class="v-activity" value="空床のご案内"><span>空床のご案内</span></label>
+        <label class="v-activity-row"><input type="checkbox" class="v-activity" value="新規紹介のお願い"><span>新規紹介のお願い</span></label>
+        <label class="v-activity-row"><input type="checkbox" class="v-activity" value="利用者相談あり"><span>利用者相談あり</span></label>
+        <label class="v-activity-row"><input type="checkbox" class="v-activity" value="見学のご案内"><span>見学のご案内</span></label>
+        <label class="v-activity-row"><input type="checkbox" class="v-activity" value="入居の相談あり"><span>入居の相談あり</span></label>
+        <label class="v-activity-row"><input type="checkbox" class="v-activity" value="その他"><span>その他</span></label>
       </div>
     </div>
     <div class="form-row">
