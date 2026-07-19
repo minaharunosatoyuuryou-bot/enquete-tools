@@ -342,26 +342,30 @@
     <div class="filters">
       <input type="text" id="fSearch" placeholder="施設名で検索" oninput="renderAll()">
       <select id="fCity" onchange="renderAll()"><option value="">市区町村：すべて</option></select>
-      <select id="fKind" onchange="renderAll()">
-        <option value="">種別：すべて</option>
-        <option value="包括">包括</option><option value="居宅">居宅</option>
-        <option value="老健">老健</option><option value="病院">病院</option>
-      </select>
       <select id="fRep" onchange="renderAll()"><option value="">担当者：すべて</option></select>
-      <select id="fStatus" onchange="renderAll()">
-        <option value="">状態：すべて</option>
-        <option value="overdue">要フォロー</option>
-        <option value="upcoming">次回予定あり</option>
-        <option value="none">未訪問</option>
-      </select>
-    </div>
-
-    <div class="filters">
       <select id="fVacancy" onchange="renderAll()">
         <option value="">空床状況：すべて</option>
         <option value="available">空床あり</option>
         <option value="few">残りわずか</option>
         <option value="full">満床</option>
+      </select>
+    </div>
+
+    <div class="filters">
+      <button type="button" class="nearby-btn" style="flex:none;" onclick="toggleDetailedFilters()" id="detailedFilterToggleBtn">🔍 詳細検索</button>
+    </div>
+
+    <div class="filters" id="detailedFilters" style="display:none;">
+      <select id="fKind" onchange="renderAll()">
+        <option value="">種別：すべて</option>
+        <option value="包括">包括</option><option value="居宅">居宅</option>
+        <option value="老健">老健</option><option value="病院">病院</option>
+      </select>
+      <select id="fStatus" onchange="renderAll()">
+        <option value="">状態：すべて</option>
+        <option value="overdue">要フォロー</option>
+        <option value="upcoming">次回予定あり</option>
+        <option value="none">未訪問</option>
       </select>
       <select id="fGender" onchange="renderAll()">
         <option value="">性別条件：すべて</option>
@@ -380,6 +384,7 @@
 
     <div class="filters" id="actionBar">
       <button id="addReferralFacilityBtn" class="dl-btn dl-btn-success admin-only-inline" onclick="openFacilityEdit(null, '')">＋ 紹介施設を追加</button>
+      <button id="unvisitedBtn" class="nearby-btn" onclick="openUnvisited()">⏰ 未訪問アラート</button>
       <button id="vacancyListBtn" class="nearby-btn" onclick="openVacancyList()">🛏 空床一覧</button>
       <button id="monthlyBtn" class="nearby-btn" onclick="openMonthly()">📊 月別実績を見る</button>
       <button id="scheduleBtn" class="nearby-btn" onclick="openSchedule()">📅 営業予定表</button>
@@ -547,6 +552,16 @@
     <div class="sheet-handle"></div>
     <h2 style="font-size:16px;">空床一覧</h2>
     <div id="vacancyListBody" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<!-- 未訪問アラートモーダル -->
+<div class="overlay" id="unvisitedOverlay">
+  <div class="sheet">
+    <button class="close-btn" onclick="closeUnvisited()">×</button>
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;">未訪問アラート（30日以上）</h2>
+    <div id="unvisitedBody" style="margin-top:14px;"></div>
   </div>
 </div>
 
@@ -843,6 +858,14 @@ const FACILITY_TAGS = [
 ];
 let mainTab = 'visit';
 let dealLoaded = false;
+
+function toggleDetailedFilters(){
+  const el = document.getElementById('detailedFilters');
+  const btn = document.getElementById('detailedFilterToggleBtn');
+  const show = el.style.display === 'none';
+  el.style.display = show ? 'flex' : 'none';
+  btn.textContent = show ? '🔍 詳細検索を閉じる' : '🔍 詳細検索';
+}
 
 function switchMainTab(tab){
   if((tab==='facility') && !isAdmin()){
@@ -1683,39 +1706,53 @@ function renderVacancyList(){
     el.innerHTML = '<div class="empty">空床管理対象の施設が登録されていません（施設管理タブの「法人・グループ」欄に入力すると対象になります）</div>';
     return;
   }
-  const available = [];
-  const few = [];
-  const full = [];
-  const unset = [];
-  managed.forEach(f=>{
+  el.innerHTML = managed.map(f=>{
     const vac = vacancyOf(f);
-    if(vac===null){ unset.push(f); return; }
-    if(vac<=0) full.push(f);
-    else if(vac<=2) few.push({f, vac});
-    else available.push({f, vac});
-  });
-  let html = '';
-  if(available.length || few.length){
-    html += '<div class="vlist-section"><div class="vlist-heading">空床あり</div>';
-    [...few, ...available].sort((a,b)=>a.vac-b.vac).forEach(({f,vac})=>{
-      html += '<div class="vlist-row" onclick="closeVacancyList();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span><span class="vlist-count">空床'+vac+'</span></div>';
-    });
-    html += '</div>';
+    const st = vacancyStatus(f);
+    const numLine = (f.capacity && f.occupied!=='') ? (f.capacity+'/'+(f.occupied||0)) : '';
+    const statusLabel = vac===null ? '未登録' : (vac<=0 ? '満床' : '空床'+vac);
+    return '<div class="vlist-row" onclick="closeVacancyList();openDetail(\''+f.id+'\')">'
+      + '<span>○ '+escapeHtml(f.name)+(numLine?'<div style="font-size:11px;color:var(--text-soft);">'+numLine+'</div>':'')+'</span>'
+      + '<span class="vlist-count '+(st.cls==='full'?'full':'')+'">'+statusLabel+'</span>'
+      + '</div>';
+  }).join('');
+}
+
+/* ================= 未訪問アラート（30日以上訪問なし） ================= */
+function openUnvisited(){
+  renderUnvisited();
+  document.getElementById('unvisitedOverlay').classList.add('show');
+}
+function closeUnvisited(){
+  document.getElementById('unvisitedOverlay').classList.remove('show');
+}
+function renderUnvisited(){
+  const THRESHOLD = 30;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const targets = facilities.filter(f=>!f.group).map(f=>{
+    const vs = visitsFor(f.id);
+    let days;
+    if(vs.length===0){ days = Infinity; }
+    else {
+      const d = new Date(vs[0].visitDate); d.setHours(0,0,0,0);
+      days = Math.floor((today-d)/86400000);
+    }
+    return {f, days};
+  }).filter(x=>x.days>=THRESHOLD).sort((a,b)=>b.days-a.days);
+
+  const el = document.getElementById('unvisitedBody');
+  if(targets.length===0){
+    el.innerHTML = '<div class="empty">30日以上訪問していない施設はありません👍</div>';
+    return;
   }
-  if(full.length){
-    html += '<div class="vlist-section"><div class="vlist-heading full">満床</div>';
-    full.forEach(f=>{
-      html += '<div class="vlist-row" onclick="closeVacancyList();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span><span class="vlist-count full">満床</span></div>';
-    });
-    html += '</div>';
-  }
-  if(unset.length){
-    html += '<div class="vlist-section"><div class="vlist-heading">定員・入居人数 未登録</div>';
-    unset.forEach(f=>{
-      html += '<div class="vlist-row" onclick="closeVacancyList();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span><span style="color:var(--text-soft);font-size:12px;">未登録</span></div>';
-    });
-    html += '</div>';
-  }
+  let html = targets.map(({f,days})=>{
+    const label = days===Infinity ? 'まだ訪問記録がありません' : days+'日未訪問';
+    return '<div class="vlist-row" onclick="closeUnvisited();openDetail(\''+f.id+'\')">'
+      + '<span>○ '+escapeHtml(f.name)+'</span>'
+      + '<span class="vlist-count full">'+label+'</span>'
+      + '</div>';
+  }).join('');
+  html += '<div style="text-align:center;font-size:12.5px;color:var(--text-soft);margin-top:12px;">'+targets.length+'件あります</div>';
   el.innerHTML = html;
 }
 
