@@ -197,11 +197,6 @@
   .month-bar-fill{height:100%;background:var(--navy);border-radius:6px;}
   .month-bar-value{width:120px;flex-shrink:0;text-align:right;font-weight:700;color:var(--navy-deep);white-space:nowrap;}
 
-  .geo-toast{
-    position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--navy-deep);color:#fff;
-    padding:9px 16px;border-radius:20px;font-size:11.5px;z-index:60;box-shadow:0 6px 16px rgba(0,0,0,.25);
-    display:none;
-  }
   .toast{
     position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--k-kyotaku);color:#fff;
     padding:10px 20px;border-radius:20px;font-size:12.5px;z-index:70;box-shadow:0 6px 16px rgba(0,0,0,.25);
@@ -319,14 +314,8 @@
       </select>
     </div>
 
-    <div class="filters" id="nearbyBar">
-      <button id="nearbyBtn" class="nearby-btn" onclick="toggleNearby()">📍 現在地から絞り込む</button>
-      <select id="fRadius" onchange="renderAll()" style="display:none;">
-        <option value="3">3km以内</option>
-        <option value="5" selected>5km以内</option>
-        <option value="10">10km以内</option>
-        <option value="30">30km以内</option>
-      </select>
+    <div class="filters" id="actionBar">
+      <button id="addFacilityBtn" class="nearby-btn" onclick="openAddFacility()">＋ 営業先を追加</button>
       <button id="monthlyBtn" class="nearby-btn" onclick="openMonthly()">📊 月別実績を見る</button>
     </div>
 
@@ -413,7 +402,6 @@
   </div>
 </div>
 
-<div class="geo-toast" id="geoToast"></div>
 <div class="toast" id="toast"></div>
 
 <!-- 月別訪問実績モーダル -->
@@ -423,6 +411,42 @@
     <div class="sheet-handle"></div>
     <h2 style="font-size:16px;">月別訪問実績</h2>
     <div id="monthlyList" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<!-- 営業先（施設）追加モーダル -->
+<div class="overlay" id="addFacilityOverlay">
+  <div class="sheet">
+    <button class="close-btn" onclick="closeAddFacility()">×</button>
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;">営業先を追加</h2>
+    <div class="form-row" style="margin-top:14px;">
+      <label>市区町村</label>
+      <input type="text" id="afCity" placeholder="例：大分市">
+    </div>
+    <div class="form-row">
+      <label>種別</label>
+      <select id="afKind">
+        <option value="居宅">居宅</option>
+        <option value="病院">病院</option>
+        <option value="老健">老健</option>
+        <option value="包括">包括</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>施設名 *</label>
+      <input type="text" id="afName" placeholder="例：〇〇居宅介護支援事業所">
+    </div>
+    <div class="form-row">
+      <label>担当者</label>
+      <select id="afRep"></select>
+    </div>
+    <div class="form-row">
+      <label>住所 *</label>
+      <input type="text" id="afAddr" placeholder="例：大分県大分市〇〇1丁目1番1号">
+    </div>
+    <button class="save-btn" id="afSaveBtn" onclick="submitAddFacility()">この内容で追加する</button>
+    <div class="login-err" id="afErr" style="height:auto;margin-top:8px;"></div>
   </div>
 </div>
 
@@ -507,55 +531,8 @@ let repList = [];
 let repListDraft = [];
 let currentFacilityId = null;
 const KIND_COLOR = {'包括':'#3B6EA5','居宅':'#4C8C63','老健':'#C9902E','病院':'#B14C4C'};
-let userLoc = null; // {lat, lng}
-let nearbyActive = false;
 let mainTab = 'visit';
 let dealLoaded = false;
-
-function distanceKm(lat1, lng1, lat2, lng2){
-  const R = 6371;
-  const dLat = (lat2-lat1) * Math.PI/180;
-  const dLng = (lng2-lng1) * Math.PI/180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-function getCurrentPosition(){
-  return new Promise((resolve, reject)=>{
-    if(!navigator.geolocation){ reject(new Error('この端末は位置情報に対応していません')); return; }
-    navigator.geolocation.getCurrentPosition(
-      pos => resolve({lat: pos.coords.latitude, lng: pos.coords.longitude}),
-      err => reject(err),
-      {enableHighAccuracy:true, timeout:10000}
-    );
-  });
-}
-
-async function toggleNearby(){
-  const btn = document.getElementById('nearbyBtn');
-  const radiusSel = document.getElementById('fRadius');
-  if(nearbyActive){
-    nearbyActive = false;
-    btn.classList.remove('active');
-    btn.textContent = '📍 現在地から絞り込む';
-    radiusSel.style.display = 'none';
-    renderAll();
-    return;
-  }
-  btn.textContent = '取得中...';
-  try{
-    userLoc = await getCurrentPosition();
-    nearbyActive = true;
-    btn.classList.add('active');
-    btn.textContent = '📍 現在地から絞り込み中';
-    radiusSel.style.display = 'inline-block';
-    renderAll();
-  }catch(err){
-    showToast('位置情報を取得できませんでした（設定でブラウザの位置情報を許可してください）');
-    btn.textContent = '📍 現在地から絞り込む';
-    console.error(err);
-  }
-}
 
 function switchMainTab(tab){
   mainTab = tab;
@@ -608,7 +585,6 @@ async function boot(){
   await loadData();
   populateFilterOptions();
   renderAll();
-  processGeocodeQueue();
 }
 
 async function loadData(){
@@ -628,8 +604,10 @@ function populateFilterOptions(){
   const cities = [...new Set(facilities.map(f=>f.city))];
   const repsFromFacilities = [...new Set(facilities.map(f=>f.rep))];
   const cSel = document.getElementById('fCity');
+  cSel.innerHTML = '<option value="">市区町村：すべて</option>';
   cities.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; cSel.appendChild(o); });
   const rSel = document.getElementById('fRep');
+  rSel.innerHTML = '<option value="">担当者：すべて</option>';
   repsFromFacilities.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; rSel.appendChild(o); });
   populateVRepSelect();
   populateDealStaffOptions();
@@ -680,7 +658,7 @@ function getFiltered(){
   const rep = document.getElementById('fRep').value;
   const status = document.getElementById('fStatus').value;
 
-  let result = facilities.filter(f=>{
+  return facilities.filter(f=>{
     if(search && !f.name.includes(search)) return false;
     if(city && f.city!==city) return false;
     if(kind && f.kind!==kind) return false;
@@ -693,16 +671,6 @@ function getFiltered(){
     }
     return true;
   });
-
-  if(nearbyActive && userLoc){
-    const radiusKm = Number(document.getElementById('fRadius').value);
-    result = result
-      .filter(f=>f.lat && f.lng)
-      .map(f=>{ f.__dist = distanceKm(userLoc.lat, userLoc.lng, f.lat, f.lng); return f; })
-      .filter(f=>f.__dist <= radiusKm)
-      .sort((a,b)=>a.__dist-b.__dist);
-  }
-  return result;
 }
 
 function renderAll(){
@@ -725,27 +693,7 @@ function renderList(){
   const list = getFiltered();
   const container = document.getElementById('listView');
   if(list.length===0){
-    container.innerHTML = '<div class="empty">' + (nearbyActive ? 'この範囲内に施設がありません' : '該当する施設がありません') + '</div>';
-    return;
-  }
-
-  if(nearbyActive){
-    let html = '<div class="city-group">現在地から近い順（'+list.length+'）</div>';
-    list.forEach(f=>{
-      const st = statusFor(f.id);
-      let statusLabel = '未訪問';
-      let statusClass = 'none';
-      if(st.status==='done'){ statusLabel='前回 '+st.last; statusClass='done'; }
-      if(st.status==='upcoming'){ statusLabel='次回予定 '+st.next; statusClass='upcoming'; }
-      if(st.status==='overdue'){ statusLabel='期限超過 '+st.next; statusClass='overdue'; }
-      html += '<div class="card '+(st.status==='overdue'?'overdue':'')+'" onclick="openDetail(\''+f.id+'\')">'
-        + '<div class="card-top"><span class="badge '+f.kind+'">'+f.kind+'</span><span class="card-dist">'+f.__dist.toFixed(1)+'km</span></div>'
-        + '<div class="card-name">'+f.name+'</div>'
-        + '<div class="card-addr">'+f.addr+'</div>'
-        + '<div class="card-meta"><span class="rep">担当：'+f.rep+'</span><span class="visit-status '+statusClass+'">'+statusLabel+'</span></div>'
-        + '</div>';
-    });
-    container.innerHTML = html;
+    container.innerHTML = '<div class="empty">該当する施設がありません</div>';
     return;
   }
 
@@ -874,29 +822,54 @@ function showToast(msg){
   setTimeout(()=>{ t.style.display='none'; }, 2200);
 }
 
-/* ---------- ジオコーディング（住所→緯度経度）：初回のみ・順次キャッシュ（現在地から絞り込む機能のために利用） ---------- */
-async function processGeocodeQueue(){
-  const queue = facilities.filter(f=>!f.lat || !f.lng);
-  if(queue.length===0) return;
-  const toastEl = document.getElementById('geoToast');
-  toastEl.style.display='block';
-  for(let i=0;i<queue.length;i++){
-    const f = queue[i];
-    toastEl.textContent = '位置情報を準備中 ('+(i+1)+'/'+queue.length+')';
-    try{
-      const q = encodeURIComponent(f.addr + (f.addr.includes('大分県')?'':' 大分県'));
-      const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&q='+q);
-      const arr = await res.json();
-      if(arr && arr[0]){
-        f.lat = parseFloat(arr[0].lat);
-        f.lng = parseFloat(arr[0].lon);
-        fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'updateLatLng', password:currentPassword, facilityId:f.id, lat:f.lat, lng:f.lng})}).catch(()=>{});
-      }
-    }catch(err){ console.error('geocode error', f.name, err); }
-    await new Promise(r=>setTimeout(r, 1100)); // Nominatim利用ポリシー：1req/sec厳守
-  }
-  toastEl.style.display='none';
+/* ---------- 営業先（施設）を追加 ---------- */
+function openAddFacility(){
+  document.getElementById('afCity').value = '';
+  document.getElementById('afKind').value = '居宅';
+  document.getElementById('afName').value = '';
+  document.getElementById('afAddr').value = '';
+  document.getElementById('afErr').textContent = '';
+  const repSel = document.getElementById('afRep');
+  repSel.innerHTML = '';
+  repList.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; repSel.appendChild(o); });
+  document.getElementById('addFacilityOverlay').classList.add('show');
 }
+function closeAddFacility(){
+  document.getElementById('addFacilityOverlay').classList.remove('show');
+}
+async function submitAddFacility(){
+  const city = document.getElementById('afCity').value.trim();
+  const kind = document.getElementById('afKind').value;
+  const name = document.getElementById('afName').value.trim();
+  const rep = document.getElementById('afRep').value;
+  const addr = document.getElementById('afAddr').value.trim();
+  const errEl = document.getElementById('afErr');
+  errEl.textContent = '';
+  if(!name || !addr){ errEl.textContent = '施設名と住所は必須です'; return; }
+  const btn = document.getElementById('afSaveBtn');
+  btn.disabled = true; btn.textContent = '追加中...';
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({
+      action:'addFacility', password:currentPassword,
+      city, kind, name, rep, addr
+    })});
+    const data = await res.json();
+    if(data.ok){
+      facilities.push({ id:data.id, city, kind, name, rep, addr, lat:'', lng:'' });
+      populateFilterOptions();
+      renderAll();
+      closeAddFacility();
+      showToast('営業先を追加しました');
+    } else {
+      errEl.textContent = data.error || '追加に失敗しました';
+    }
+  }catch(err){
+    errEl.textContent = '通信エラーが発生しました';
+    console.error(err);
+  }
+  btn.disabled = false; btn.textContent = 'この内容で追加する';
+}
+
 /* ---------- 月別訪問実績 ---------- */
 function openMonthly(){
   renderMonthly();
