@@ -109,6 +109,13 @@
   .attr-tag.on{background:var(--navy-deep);color:#fff;border-color:var(--navy-deep);}
   .fm-edit-btn{margin-top:8px;width:100%;padding:9px;border-radius:9px;border:1.3px solid var(--navy);background:var(--paper);color:var(--navy-deep);font-weight:700;font-size:12.5px;cursor:pointer;}
   .vacancy-quick-update{background:var(--bg);border-radius:10px;padding:10px 12px;margin-top:8px;}
+  .vlist-section{margin-bottom:16px;}
+  .vlist-heading{font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid var(--line);}
+  .vlist-heading.full{color:var(--danger);}
+  .vlist-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px dashed var(--line);font-size:13.5px;cursor:pointer;}
+  .vlist-row:last-child{border-bottom:none;}
+  .vlist-count{font-weight:900;color:var(--k-kyotaku);}
+  .vlist-count.full{color:var(--danger);}
 
   .filters{display:flex;gap:8px;margin:0 14px 10px;flex-wrap:wrap;}
   .filters select, .filters input[type=text]{
@@ -370,6 +377,7 @@
     </div>
 
     <div class="filters" id="actionBar">
+      <button id="vacancyListBtn" class="nearby-btn" onclick="openVacancyList()">🛏 空床一覧</button>
       <button id="monthlyBtn" class="nearby-btn" onclick="openMonthly()">📊 月別実績を見る</button>
       <button id="scheduleBtn" class="nearby-btn" onclick="openSchedule()">📅 営業予定表</button>
     </div>
@@ -517,6 +525,16 @@
     <div class="sheet-handle"></div>
     <h2 style="font-size:16px;">営業予定表</h2>
     <div id="scheduleList" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<!-- 空床一覧モーダル -->
+<div class="overlay" id="vacancyListOverlay">
+  <div class="sheet">
+    <button class="close-btn" onclick="closeVacancyList()">×</button>
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;">空床一覧</h2>
+    <div id="vacancyListBody" style="margin-top:14px;"></div>
   </div>
 </div>
 
@@ -1094,15 +1112,21 @@ function renderList(){
 
   const rank = {overdue:0, upcoming:1, none:2, done:3};
   const byCity = {};
-  list.forEach(f=>{ (byCity[f.city] = byCity[f.city]||[]).push(f); });
+  list.forEach(f=>{ const key = f.group ? '★'+f.group : f.city; (byCity[key] = byCity[key]||[]).push(f); });
 
   let html = '';
-  Object.keys(byCity).sort().forEach(city=>{
-    const items = byCity[city].slice().sort((a,b)=>{
+  Object.keys(byCity).sort((a,b)=>{
+    // ★グループ（悠久福祉会など自法人）を先頭に表示
+    if(a.startsWith('★') && !b.startsWith('★')) return -1;
+    if(!a.startsWith('★') && b.startsWith('★')) return 1;
+    return a.localeCompare(b,'ja');
+  }).forEach(cityKey=>{
+    const items = byCity[cityKey].slice().sort((a,b)=>{
       const sa = statusFor(a.id), sb = statusFor(b.id);
       return rank[sa.status]-rank[sb.status];
     });
-    html += '<div class="city-group">'+city+'（'+items.length+'）</div>';
+    const label = cityKey.startsWith('★') ? cityKey.slice(1) : cityKey;
+    html += '<div class="city-group">'+label+'（'+items.length+'）</div>';
     items.forEach(f=>{
       const st = statusFor(f.id);
       let statusLabel = '未訪問';
@@ -1115,7 +1139,7 @@ function renderList(){
       const vacBadge = vac===null ? '' : '<span class="visit-status '+vst.cls+'">'+vst.label+(vac>=0?'（空床'+vac+'）':'')+'</span>';
       const staleBadge = isStale(f) ? '<div class="vacancy-stale">⚠ 空床情報の要更新</div>' : '';
       html += '<div class="card '+(st.status==='overdue'?'overdue':'')+'" onclick="openDetail(\''+f.id+'\')">'
-        + '<div class="card-top"><span class="badge '+f.kind+'">'+f.kind+'</span>'+vacBadge+'</div>'
+        + '<div class="card-top"><span class="badge '+f.kind+'">'+(f.kind||'施設')+'</span>'+vacBadge+'</div>'
         + '<div class="card-name">'+f.name+'</div>'
         + '<div class="card-addr">'+f.addr+'</div>'
         + '<div class="card-meta"><span class="rep">担当：'+f.rep+'</span><span class="visit-status '+statusClass+'">'+statusLabel+'</span></div>'
@@ -1130,37 +1154,49 @@ function openDetail(facilityId){
   currentFacilityId = facilityId;
   const f = facilities.find(x=>x.id===facilityId);
   if(!f) return;
-  document.getElementById('dKind').textContent = f.kind;
-  document.getElementById('dKind').className = 'badge '+f.kind;
+  document.getElementById('dKind').textContent = (f.kind||'施設')+(f.group?'（'+f.group+'）':'');
+  document.getElementById('dKind').className = 'badge '+(f.kind||'');
   document.getElementById('dName').textContent = f.name;
   document.getElementById('dAddr').textContent = f.addr;
   document.getElementById('dMapLink').href = 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(f.addr);
 
-  const vac = vacancyOf(f);
-  const vst = vacancyStatus(f);
   const tags = [...careLevelLabels(f.careLevels), ...(String(f.tags||'').split(',').filter(t=>t))];
   const genderTags = [];
   if(f.acceptMale==='○') genderTags.push('男性のみ');
   if(f.acceptFemale==='○') genderTags.push('女性のみ');
-  let vBoxHtml = '<div class="vacancy-box">';
-  if(vac!==null){
-    vBoxHtml += '<div class="vacancy-row"><span>定員 '+(f.capacity||'—')+'名 ／ 現在 '+(f.occupied||0)+'名</span><span class="vacancy-status '+vst.cls+'">空床 '+Math.max(vac,0)+'（'+vst.label+'）</span></div>';
+  let vBoxHtml = '';
+
+  if(f.group){
+    const vac = vacancyOf(f);
+    const vst = vacancyStatus(f);
+    vBoxHtml += '<div class="vacancy-box">';
+    if(vac!==null){
+      vBoxHtml += '<div class="vacancy-row"><span>定員 '+(f.capacity||'—')+'名 ／ 現在 '+(f.occupied||0)+'名</span><span class="vacancy-status '+vst.cls+'">空床 '+Math.max(vac,0)+'（'+vst.label+'）</span></div>';
+    } else {
+      vBoxHtml += '<div class="vacancy-row"><span>空床情報：未登録</span></div>';
+    }
+    if(f.tel) vBoxHtml += '<div class="vacancy-row"><span>電話</span><span>'+escapeHtml(f.tel)+'</span></div>';
+    if(f.updatedAt) vBoxHtml += '<div class="vacancy-row"><span>更新日</span><span>'+f.updatedAt+(f.updatedBy?'（'+escapeHtml(f.updatedBy)+'）':'')+'</span></div>';
+    if(isStale(f)) vBoxHtml += '<div class="vacancy-stale">⚠ 3日以上更新されていません。空床情報の確認をお願いします</div>';
+    if(genderTags.length || tags.length){
+      vBoxHtml += '<div class="attr-tags">'+[...genderTags,...tags].map(t=>'<span class="attr-tag on">'+escapeHtml(t)+'</span>').join('')+'</div>';
+    }
+    vBoxHtml += '</div>';
+    vBoxHtml += '<div class="vacancy-quick-update">'
+      + '<label style="font-size:11.5px;color:var(--text-soft);display:block;margin-bottom:5px;">現在の入居人数を更新（誰でも更新できます）</label>'
+      + '<div style="display:flex;gap:8px;">'
+      + '<input type="number" id="dQuickOccupied" min="0" value="'+(f.occupied||'')+'" style="flex:1;padding:9px 10px;border-radius:9px;border:1.3px solid var(--line);font-size:14px;">'
+      + '<button class="fm-edit-btn" style="width:auto;padding:0 16px;margin-top:0;" onclick="submitQuickVacancy(\''+f.id+'\')">更新</button>'
+      + '</div></div>';
   } else {
-    vBoxHtml += '<div class="vacancy-row"><span>空床情報：未登録</span></div>';
+    vBoxHtml += '<div class="vacancy-box">';
+    vBoxHtml += '<div class="vacancy-row"><span style="color:var(--text-soft);">紹介施設（空床管理の対象外）</span></div>';
+    if(f.tel) vBoxHtml += '<div class="vacancy-row"><span>電話</span><span>'+escapeHtml(f.tel)+'</span></div>';
+    if(genderTags.length || tags.length){
+      vBoxHtml += '<div class="attr-tags">'+[...genderTags,...tags].map(t=>'<span class="attr-tag on">'+escapeHtml(t)+'</span>').join('')+'</div>';
+    }
+    vBoxHtml += '</div>';
   }
-  if(f.tel) vBoxHtml += '<div class="vacancy-row"><span>電話</span><span>'+escapeHtml(f.tel)+'</span></div>';
-  if(f.updatedAt) vBoxHtml += '<div class="vacancy-row"><span>更新日</span><span>'+f.updatedAt+(f.updatedBy?'（'+escapeHtml(f.updatedBy)+'）':'')+'</span></div>';
-  if(isStale(f)) vBoxHtml += '<div class="vacancy-stale">⚠ 3日以上更新されていません。空床情報の確認をお願いします</div>';
-  if(genderTags.length || tags.length){
-    vBoxHtml += '<div class="attr-tags">'+[...genderTags,...tags].map(t=>'<span class="attr-tag on">'+escapeHtml(t)+'</span>').join('')+'</div>';
-  }
-  vBoxHtml += '</div>';
-  vBoxHtml += '<div class="vacancy-quick-update">'
-    + '<label style="font-size:11.5px;color:var(--text-soft);display:block;margin-bottom:5px;">現在の入居人数を更新（誰でも更新できます）</label>'
-    + '<div style="display:flex;gap:8px;">'
-    + '<input type="number" id="dQuickOccupied" min="0" value="'+(f.occupied||'')+'" style="flex:1;padding:9px 10px;border-radius:9px;border:1.3px solid var(--line);font-size:14px;">'
-    + '<button class="fm-edit-btn" style="width:auto;padding:0 16px;margin-top:0;" onclick="submitQuickVacancy(\''+f.id+'\')">更新</button>'
-    + '</div></div>';
   if(isAdmin()){
     vBoxHtml += '<button class="fm-edit-btn" onclick="closeDetail();switchMainTab(\'facility\');openFacilityEdit(\''+f.id+'\')">この施設の情報を編集する（管理者）</button>';
   }
@@ -1332,6 +1368,7 @@ async function submitAddFacility(){
   const name = document.getElementById('afName').value.trim();
   const city = document.getElementById('afCity').value.trim();
   const kind = document.getElementById('afKind').value;
+  const group = document.getElementById('afGroup').value.trim();
   const addr = document.getElementById('afAddr').value.trim();
   const tel = document.getElementById('afTel').value.trim();
   const fax = document.getElementById('afFax').value.trim();
@@ -1349,7 +1386,7 @@ async function submitAddFacility(){
   if(!name || !addr){ errEl.textContent = '施設名と住所は必須です'; return; }
   const btn = document.getElementById('afSaveBtn');
   btn.disabled = true; btn.textContent = '保存中...';
-  const fields = { city, kind, name, rep, addr, tel, fax, mobile, capacity, occupied, acceptMale, acceptFemale, careLevels, tags, memo, updatedBy: currentUserName||'' };
+  const fields = { city, kind, group, name, rep, addr, tel, fax, mobile, capacity, occupied, acceptMale, acceptFemale, careLevels, tags, memo, updatedBy: currentUserName||'' };
   try{
     const action = editingFacilityId ? 'updateFacility' : 'addFacility';
     const body = editingFacilityId ? {action, ...authPayload(), id: editingFacilityId, ...fields} : {action, ...authPayload(), ...fields};
@@ -1360,12 +1397,12 @@ async function submitAddFacility(){
       if(editingFacilityId){
         const idx = facilities.findIndex(x=>x.id===editingFacilityId);
         if(idx>-1) facilities[idx] = { ...facilities[idx],
-          city, kind, name, rep, addr, tel, fax, mobile, capacity, occupied,
+          city, kind, group, name, rep, addr, tel, fax, mobile, capacity, occupied,
           acceptMale: acceptMale?'○':'', acceptFemale: acceptFemale?'○':'',
           careLevels, tags, memo, updatedAt: today, updatedBy: currentUserName||''
         };
       } else {
-        facilities.push({ id:data.id, city, kind, name, rep, addr, lat:'', lng:'',
+        facilities.push({ id:data.id, city, kind, group, name, rep, addr, lat:'', lng:'',
           tel, fax, mobile, capacity, occupied,
           acceptMale: acceptMale?'○':'', acceptFemale: acceptFemale?'○':'',
           careLevels, tags, memo, updatedAt: today, updatedBy: currentUserName||''
@@ -1416,7 +1453,12 @@ async function submitDeleteFacility(){
 /* ---------- 施設管理タブ（管理者のみ） ---------- */
 function renderFacilityAdminTable(){
   const q = (document.getElementById('fmSearch').value||'').trim();
-  const list = facilities.filter(f=>!q || f.name.includes(q)).slice().sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+  const list = facilities.filter(f=>!q || f.name.includes(q)).slice().sort((a,b)=>{
+    // 法人グループ（悠久福祉会）を先頭に表示
+    if(a.group && !b.group) return -1;
+    if(!a.group && b.group) return 1;
+    return a.name.localeCompare(b.name,'ja');
+  });
   const tbody = document.getElementById('fm-table-body');
   if(list.length===0){ tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-soft)">該当する施設がありません</td></tr>'; return; }
   tbody.innerHTML = list.map(f=>{
@@ -1424,11 +1466,11 @@ function renderFacilityAdminTable(){
     const st = vacancyStatus(f);
     const stale = isStale(f);
     return '<tr>'
-      + '<td style="font-weight:600;">'+escapeHtml(f.name)+'</td>'
-      + '<td><span class="badge '+f.kind+'">'+f.kind+'</span></td>'
+      + '<td style="font-weight:600;">'+escapeHtml(f.name)+(f.group?'<span class="group-badge">'+escapeHtml(f.group)+'</span>':'')+'</td>'
+      + '<td><span class="badge '+(f.kind||'')+'">'+(f.kind||'—')+'</span></td>'
       + '<td>'+escapeHtml(f.city||'')+'</td>'
-      + '<td>'+(f.capacity||'—')+' / '+(f.occupied||'—')+' / '+(vac===null?'—':vac)+'</td>'
-      + '<td><span class="vacancy-status '+st.cls+'">'+st.label+'</span>'+(stale?'<div class="vacancy-stale">要更新</div>':'')+'</td>'
+      + '<td>'+(f.group ? ((f.capacity||'—')+' / '+(f.occupied||'—')+' / '+(vac===null?'—':vac)) : '<span style="color:var(--text-soft);">（対象外）</span>')+'</td>'
+      + '<td>'+(f.group ? '<span class="vacancy-status '+st.cls+'">'+st.label+'</span>'+(stale?'<div class="vacancy-stale">要更新</div>':'') : '—')+'</td>'
       + '<td style="font-size:11px;color:var(--text-soft);">'+(f.updatedAt||'—')+'</td>'
       + '<td><button class="dl-btn-icon" title="編集" onclick="openFacilityEdit(\''+f.id+'\')">✏️</button></td>'
       + '</tr>';
@@ -1550,6 +1592,57 @@ async function submitDeleteReferral(){
 }
 
 /* ================= 営業予定表 ================= */
+/* ================= 空床一覧（悠久福祉会＝空床管理対象施設のみ） ================= */
+function openVacancyList(){
+  renderVacancyList();
+  document.getElementById('vacancyListOverlay').classList.add('show');
+}
+function closeVacancyList(){
+  document.getElementById('vacancyListOverlay').classList.remove('show');
+}
+function renderVacancyList(){
+  const managed = facilities.filter(f=>f.group);
+  const el = document.getElementById('vacancyListBody');
+  if(managed.length===0){
+    el.innerHTML = '<div class="empty">空床管理対象の施設が登録されていません（施設管理タブの「法人・グループ」欄に入力すると対象になります）</div>';
+    return;
+  }
+  const available = [];
+  const few = [];
+  const full = [];
+  const unset = [];
+  managed.forEach(f=>{
+    const vac = vacancyOf(f);
+    if(vac===null){ unset.push(f); return; }
+    if(vac<=0) full.push(f);
+    else if(vac<=2) few.push({f, vac});
+    else available.push({f, vac});
+  });
+  let html = '';
+  if(available.length || few.length){
+    html += '<div class="vlist-section"><div class="vlist-heading">空床あり</div>';
+    [...few, ...available].sort((a,b)=>a.vac-b.vac).forEach(({f,vac})=>{
+      html += '<div class="vlist-row" onclick="closeVacancyList();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span><span class="vlist-count">空床'+vac+'</span></div>';
+    });
+    html += '</div>';
+  }
+  if(full.length){
+    html += '<div class="vlist-section"><div class="vlist-heading full">満床</div>';
+    full.forEach(f=>{
+      html += '<div class="vlist-row" onclick="closeVacancyList();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span><span class="vlist-count full">満床</span></div>';
+    });
+    html += '</div>';
+  }
+  if(unset.length){
+    html += '<div class="vlist-section"><div class="vlist-heading">定員・入居人数 未登録</div>';
+    unset.forEach(f=>{
+      html += '<div class="vlist-row" onclick="closeVacancyList();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span><span style="color:var(--text-soft);font-size:12px;">未登録</span></div>';
+    });
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+
 function openSchedule(){
   renderSchedule();
   document.getElementById('scheduleOverlay').classList.add('show');
