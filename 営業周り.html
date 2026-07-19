@@ -2970,6 +2970,24 @@ async function dealCycleStatus(id){
   catch { dealSetSyncStatus('⚠ 保存エラー', false); }
 }
 
+/** メモ内の埋め込みタグ（[紹介ID:...] [理由：...]）をまとめて解析する */
+function parseDealMemoTags(memo){
+  let text = String(memo||'');
+  let refId = '', reason = '';
+  const refMatch = text.match(/\[紹介ID:([^\]]+)\]\s*/);
+  if(refMatch){ refId = refMatch[1]; text = text.replace(refMatch[0], ''); }
+  const reasonMatch = text.match(/^\[理由：([^\]]+)\]\s*/);
+  if(reasonMatch){ reason = reasonMatch[1]; text = text.slice(reasonMatch[0].length); }
+  return {refId, reason, cleanMemo: text};
+}
+/** [紹介ID:...] [理由：...] タグを組み立ててメモ本文の先頭に付与する */
+function buildDealMemo(refId, reason, freeText){
+  let tags = '';
+  if(refId) tags += '['+'紹介ID:'+refId+'] ';
+  if(reason) tags += '['+'理由：'+reason+'] ';
+  return tags + (freeText||'');
+}
+
 /** メモ先頭の "[理由：〇〇] " タグからキャンセル理由を取り出す（既存の営業記録バックエンドに列を増やさず、メモに埋め込んで管理） */
 function parseDealReason(memo){
   const m = String(memo||'').match(/^\[理由：([^\]]+)\]\s*/);
