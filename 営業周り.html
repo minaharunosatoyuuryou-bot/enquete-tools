@@ -324,7 +324,7 @@
     <h1>どちらで利用しますか？</h1>
     <p>あとからいつでも切り替えられます</p>
     <button onclick="selectMode('center')" style="margin-bottom:10px;">大分高齢者紹介センター<br><span style="font-weight:400;font-size:11.5px;opacity:.85;">施設訪問・紹介管理・案件管理</span></button>
-    <button onclick="selectMode('yukyu')" style="background:var(--navy-deep);">悠久福祉会<br><span style="font-weight:400;font-size:11.5px;opacity:.85;">空床管理・入居実績</span></button>
+    <button onclick="selectMode('yukyu')" style="background:var(--navy-deep);">悠久福祉会<br><span style="font-weight:400;font-size:11.5px;opacity:.85;">施設訪問・空床管理・入居実績</span></button>
   </div>
 </div>
 
@@ -333,7 +333,7 @@
   <header class="top">
     <div class="brand"><span class="dot"></span>営業周り<button class="pw-gear" onclick="openPwChange()" title="設定">⚙</button></div>
     <div class="sub">
-      <span id="modeLabel">大分高齢者紹介センター</span> ／ 施設訪問・案件管理<span id="loginWhoami"></span>
+      <span id="modeLabel">大分高齢者紹介センター</span> ／ <span id="modeSubLabel">施設訪問・紹介管理・案件管理</span><span id="loginWhoami"></span>
       <a href="#" onclick="switchModePrompt();return false;" style="color:#B9C6D3;text-decoration:underline;margin-left:8px;">切替</a>
     </div>
   </header>
@@ -995,9 +995,10 @@ function selectMode(mode){
   document.getElementById('modeSelectScreen').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('modeLabel').textContent = mode==='center' ? '大分高齢者紹介センター' : '悠久福祉会';
+  document.getElementById('modeSubLabel').textContent = mode==='center' ? '施設訪問・紹介管理・案件管理' : '施設訪問（自法人）・空床管理';
   applyModeVisibility();
   if(!dataLoaded){ dataLoaded = true; boot(); }
-  else { switchMainTab(mode==='center' ? 'visit' : 'facility'); }
+  else { switchMainTab('visit'); }
 }
 
 function switchModePrompt(){
@@ -1006,10 +1007,24 @@ function switchModePrompt(){
 }
 
 function applyModeVisibility(){
-  const centerOnly = ['mainTabVisit','mainTabReferral','mainTabDeal'];
+  // 施設訪問（営業活動）は両モード共通。紹介管理・案件管理は大分高齢者紹介センターのみ
+  const centerOnly = ['mainTabReferral','mainTabDeal'];
   centerOnly.forEach(id=>{ document.getElementById(id).style.display = appMode==='center' ? '' : 'none'; });
-  // 施設管理（悠久福祉会の空床管理）は、悠久福祉会モードのときだけ表示（かつ管理者のみ。admin-onlyクラスに委ねる）
+  // 施設管理（空床管理）は悠久福祉会のときだけ表示（かつ管理者のみ。admin-onlyクラスに委ねる）
   document.getElementById('mainTabFacility').style.display = appMode==='yukyu' ? '' : 'none';
+  // 施設訪問タブ内のボタンも、大分高齢者紹介センター専用のものは悠久福祉会モードで隠す
+  const addReferralBtn = document.getElementById('addReferralFacilityBtn');
+  if(addReferralBtn) addReferralBtn.style.display = appMode==='center' ? '' : 'none';
+  const monthlyBtnEl = document.getElementById('monthlyBtn');
+  if(monthlyBtnEl) monthlyBtnEl.style.display = appMode==='center' ? '' : 'none';
+  renderAll();
+}
+
+/** 現在のモードで「施設訪問（営業）」の対象となる施設一覧を返す
+ *  ・大分高齢者紹介センター モード → 紹介先施設（法人グループ未設定）
+ *  ・悠久福祉会 モード → 悠久福祉会グループの施設（法人グループ設定あり） */
+function visitTargetFacilities(){
+  return appMode==='yukyu' ? facilities.filter(f=>f.group) : facilities.filter(f=>!f.group);
 }
 
 async function boot(){
@@ -1022,7 +1037,7 @@ async function boot(){
   populateFilterOptions();
   populateReferralFacilitySelect();
   renderAll();
-  switchMainTab(appMode==='center' ? 'visit' : 'facility');
+  switchMainTab('visit');
 }
 
 async function loadData(){
@@ -1047,7 +1062,7 @@ async function loadData(){
 }
 
 function populateFilterOptions(){
-  const visitTargets = facilities.filter(f=>!f.group);
+  const visitTargets = visitTargetFacilities();
   const cities = [...new Set(visitTargets.map(f=>f.city).filter(c=>c))];
   const repsFromFacilities = [...new Set(visitTargets.map(f=>f.rep).filter(r=>r))];
   const cSel = document.getElementById('fCity');
@@ -1166,8 +1181,7 @@ function getFiltered(){
   const care = document.getElementById('fCare') ? document.getElementById('fCare').value : '';
   const tag = document.getElementById('fTag') ? document.getElementById('fTag').value : '';
 
-  return facilities.filter(f=>{
-    if(f.group) return false; // 悠久福祉会など自法人の施設は施設訪問（営業先訪問）の対象外。施設管理タブでのみ扱う
+  return visitTargetFacilities().filter(f=>{
     if(search && !f.name.includes(search)) return false;
     if(city && f.city!==city) return false;
     if(kind && f.kind!==kind) return false;
@@ -1194,9 +1208,10 @@ function renderAll(){
 
 function renderKpi(){
   const monthPre = thisMonthPrefix();
-  const visitTargets = facilities.filter(f=>!f.group);
+  const visitTargets = visitTargetFacilities();
+  const targetIds = new Set(visitTargets.map(f=>f.id));
   const visitedThisMonth = new Set(
-    visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre)).map(v=>v.facilityId)
+    visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre) && targetIds.has(v.facilityId)).map(v=>v.facilityId)
   ).size;
   const overdueCount = visitTargets.filter(f=>statusFor(f.id).status==='overdue').length;
   document.getElementById('kpiTotal').textContent = visitTargets.length;
@@ -1795,7 +1810,7 @@ function closeUnvisited(){
 function renderUnvisited(){
   const THRESHOLD = 30;
   const today = new Date(); today.setHours(0,0,0,0);
-  const targets = facilities.filter(f=>!f.group).map(f=>{
+  const targets = visitTargetFacilities().map(f=>{
     const vs = visitsFor(f.id);
     let days;
     if(vs.length===0){ days = Infinity; }
@@ -1895,9 +1910,10 @@ function closeMonthly(){
   document.getElementById('monthlyOverlay').classList.remove('show');
 }
 function renderMonthly(){
+  const centerFacilityIds = new Set(facilities.filter(f=>!f.group).map(f=>f.id));
   const counts = {};
   visits.forEach(v=>{
-    if(!v.visitDate) return;
+    if(!v.visitDate || !centerFacilityIds.has(v.facilityId)) return;
     const m = v.visitDate.slice(0,7);
     if(!counts[m]) counts[m] = {total:0, facilities:new Set(), consult:0, moveIn:0};
     counts[m].total++;
