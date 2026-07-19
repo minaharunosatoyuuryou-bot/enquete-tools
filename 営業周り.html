@@ -7,6 +7,7 @@
 <title>営業周り | 大分高齢者紹介センター</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
     --bg:#F6F4EE;
@@ -81,12 +82,33 @@
   .kpi-label{font-size:10.5px;color:var(--text-soft);margin-top:2px;}
   .kpi.overdue .kpi-num{color:var(--danger);}
 
-  .tabs{display:flex;gap:6px;margin:16px 14px 8px;background:#EAE6D8;border-radius:12px;padding:4px;}
+  .tabs{display:flex;gap:6px;margin:16px 14px 8px;background:#EAE6D8;border-radius:12px;padding:4px;overflow-x:auto;}
   .tabs button{
-    flex:1;padding:10px 0;border:none;border-radius:9px;background:transparent;color:var(--text-soft);
-    font-weight:700;font-size:13.5px;cursor:pointer;
+    flex:1;padding:10px 4px;border:none;border-radius:9px;background:transparent;color:var(--text-soft);
+    font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap;
   }
   .tabs button.active{background:var(--navy-deep);color:#fff;}
+  #loginWhoami{margin-left:8px;opacity:.85;}
+  .admin-only{display:none;}
+  body.is-admin .admin-only{display:block;}
+  .admin-only-inline{display:none;}
+  body.is-admin .admin-only-inline{display:inline-block;}
+  .admin-only-flex{display:none;}
+  body.is-admin .admin-only-flex{display:flex;}
+  .gsi-note{font-size:11px;color:var(--text-soft);text-align:center;margin-top:6px;}
+
+  .vacancy-box{background:var(--bg);border-radius:10px;padding:10px 12px;font-size:12.5px;}
+  .vacancy-row{display:flex;justify-content:space-between;margin-bottom:4px;}
+  .vacancy-status{font-weight:900;font-size:14px;padding:2px 0;}
+  .vacancy-status.full{color:var(--danger);}
+  .vacancy-status.few{color:var(--amber-deep);}
+  .vacancy-status.available{color:var(--k-kyotaku);}
+  .vacancy-stale{color:var(--danger);font-weight:700;font-size:11.5px;margin-top:4px;}
+  .attr-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+  .attr-tag{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:2px 8px;font-size:11px;color:var(--text-soft);}
+  .attr-tag.on{background:var(--navy-deep);color:#fff;border-color:var(--navy-deep);}
+  .fm-edit-btn{margin-top:8px;width:100%;padding:9px;border-radius:9px;border:1.3px solid var(--navy);background:var(--paper);color:var(--navy-deep);font-weight:700;font-size:12.5px;cursor:pointer;}
+  .vacancy-quick-update{background:var(--bg);border-radius:10px;padding:10px 12px;margin-top:8px;}
 
   .filters{display:flex;gap:8px;margin:0 14px 10px;flex-wrap:wrap;}
   .filters select, .filters input[type=text]{
@@ -195,7 +217,7 @@
   .month-bar-label{width:76px;flex-shrink:0;color:var(--text-soft);}
   .month-bar-track{flex:1;background:var(--bg);border-radius:6px;height:14px;overflow:hidden;}
   .month-bar-fill{height:100%;background:var(--navy);border-radius:6px;}
-  .month-bar-value{width:120px;flex-shrink:0;text-align:right;font-weight:700;color:var(--navy-deep);white-space:nowrap;}
+  .month-bar-value{width:170px;flex-shrink:0;text-align:right;font-weight:700;color:var(--navy-deep);white-space:nowrap;font-size:11.5px;}
 
   .toast{
     position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--k-kyotaku);color:#fff;
@@ -271,8 +293,13 @@
     <div class="mark">診</div>
     <h1>営業周り</h1>
     <p>大分高齢者紹介センター 訪問管理</p>
-    <input type="password" id="pwInput" inputmode="numeric" maxlength="8" placeholder="パスワード">
-    <button onclick="tryLogin()">開く</button>
+    <div id="googleLoginArea" style="display:none;margin-bottom:16px;">
+      <div id="gsiButton" style="display:flex;justify-content:center;"></div>
+    </div>
+    <div id="legacyLoginArea">
+      <input type="password" id="pwInput" inputmode="numeric" maxlength="8" placeholder="パスワード">
+      <button onclick="tryLogin()">開く</button>
+    </div>
     <div class="login-err" id="loginErr"></div>
   </div>
 </div>
@@ -280,8 +307,8 @@
 <!-- メイン画面 -->
 <div id="app">
   <header class="top">
-    <div class="brand"><span class="dot"></span>営業周り<button class="pw-gear" onclick="openPwChange()" title="パスワードを変更">⚙</button></div>
-    <div class="sub">大分高齢者紹介センター ／ 施設訪問・案件管理</div>
+    <div class="brand"><span class="dot"></span>営業周り<button class="pw-gear" onclick="openPwChange()" title="設定">⚙</button></div>
+    <div class="sub">大分高齢者紹介センター ／ 施設訪問・案件管理<span id="loginWhoami"></span></div>
   </header>
 
   <div class="kpi-bar" id="visitKpiBar">
@@ -292,6 +319,8 @@
 
   <div class="tabs">
     <button id="mainTabVisit" class="active" onclick="switchMainTab('visit')">施設訪問</button>
+    <button id="mainTabFacility" class="admin-only" onclick="switchMainTab('facility')">施設管理</button>
+    <button id="mainTabReferral" onclick="switchMainTab('referral')">紹介管理</button>
     <button id="mainTabDeal" onclick="switchMainTab('deal')">案件管理</button>
   </div>
 
@@ -314,12 +343,74 @@
       </select>
     </div>
 
+    <div class="filters">
+      <select id="fVacancy" onchange="renderAll()">
+        <option value="">空床状況：すべて</option>
+        <option value="available">空床あり</option>
+        <option value="few">残りわずか</option>
+        <option value="full">満床</option>
+      </select>
+      <select id="fGender" onchange="renderAll()">
+        <option value="">性別条件：すべて</option>
+        <option value="male">男性のみ</option>
+        <option value="female">女性のみ</option>
+      </select>
+      <select id="fCare" onchange="renderAll()">
+        <option value="">要介護度：すべて</option>
+        <option value="1">要介護1</option><option value="2">要介護2</option><option value="3">要介護3</option>
+        <option value="4">要介護4</option><option value="5">要介護5</option>
+      </select>
+      <select id="fTag" onchange="renderAll()">
+        <option value="">対応項目：すべて</option>
+      </select>
+    </div>
+
     <div class="filters" id="actionBar">
-      <button id="addFacilityBtn" class="nearby-btn" onclick="openAddFacility()">＋ 営業先を追加</button>
       <button id="monthlyBtn" class="nearby-btn" onclick="openMonthly()">📊 月別実績を見る</button>
+      <button id="scheduleBtn" class="nearby-btn" onclick="openSchedule()">📅 営業予定表</button>
     </div>
 
     <div id="listView"></div>
+  </div>
+
+  <!-- ============ 施設管理セクション（管理者のみ） ============ -->
+  <div id="facilitySection" style="display:none;">
+    <div class="filters">
+      <input type="text" id="fmSearch" placeholder="施設名で検索" oninput="renderFacilityAdminTable()">
+      <button class="dl-btn dl-btn-success" onclick="openFacilityEdit(null)">＋ 新規施設を追加</button>
+      <button class="dl-btn dl-btn-outline" onclick="loadData().then(()=>{populateFilterOptions();renderAll();renderFacilityAdminTable();showToast('最新データを取得しました');})">🔄 再読み込み</button>
+    </div>
+    <div class="dl-table-wrap">
+      <table>
+        <thead>
+          <tr><th>施設名</th><th>種別</th><th>市区町村</th><th>定員/現在/空床</th><th>状態</th><th>更新日</th><th>操作</th></tr>
+        </thead>
+        <tbody id="fm-table-body"><tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-soft)">読み込み中...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ 紹介管理セクション ============ -->
+  <div id="referralSection" style="display:none;">
+    <div class="filters">
+      <input type="text" id="refSearch" placeholder="利用者名・施設名で検索" oninput="renderReferralList()">
+      <select id="refStatus" onchange="renderReferralList()">
+        <option value="">状態：すべて</option>
+        <option value="相談中">相談中</option>
+        <option value="見学予定">見学予定</option>
+        <option value="入居決定">入居決定</option>
+        <option value="キャンセル">キャンセル</option>
+      </select>
+      <button class="dl-btn dl-btn-success" onclick="openReferralEdit(null)">＋ 紹介を記録</button>
+    </div>
+    <div class="dl-table-wrap">
+      <table>
+        <thead>
+          <tr><th>相談日</th><th>利用者名</th><th>紹介施設</th><th>見学日</th><th>入居日</th><th>状態</th><th>担当者</th><th>操作</th></tr>
+        </thead>
+        <tbody id="ref-table-body"><tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-soft)">読み込み中...</td></tr></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- ============ 案件管理セクション ============ -->
@@ -375,6 +466,7 @@
     <h2 id="dName">-</h2>
     <div class="addr" id="dAddr">-</div>
     <a class="maplink" id="dMapLink" href="#" target="_blank" rel="noopener">Googleマップで開く ›</a>
+    <div id="dVacancyBox" style="margin-top:12px;"></div>
 
     <div class="divider"></div>
     <h3 style="font-size:13.5px;margin:0 0 8px;">訪問記録を追加</h3>
@@ -409,18 +501,32 @@
   <div class="sheet">
     <button class="close-btn" onclick="closeMonthly()">×</button>
     <div class="sheet-handle"></div>
-    <h2 style="font-size:16px;">月別訪問実績</h2>
+    <h2 style="font-size:16px;">月別実績（訪問・紹介・入居）</h2>
     <div id="monthlyList" style="margin-top:14px;"></div>
   </div>
 </div>
 
-<!-- 営業先（施設）追加モーダル -->
+<!-- 営業予定表モーダル -->
+<div class="overlay" id="scheduleOverlay">
+  <div class="sheet">
+    <button class="close-btn" onclick="closeSchedule()">×</button>
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;">営業予定表</h2>
+    <div id="scheduleList" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<!-- 施設 新規追加/編集モーダル（管理者のみ） -->
 <div class="overlay" id="addFacilityOverlay">
   <div class="sheet">
     <button class="close-btn" onclick="closeAddFacility()">×</button>
     <div class="sheet-handle"></div>
-    <h2 style="font-size:16px;">営業先を追加</h2>
+    <h2 style="font-size:16px;" id="afTitle">施設を追加</h2>
     <div class="form-row" style="margin-top:14px;">
+      <label>施設名 *</label>
+      <input type="text" id="afName" placeholder="例：〇〇居宅介護支援事業所">
+    </div>
+    <div class="form-row">
       <label>市区町村</label>
       <input type="text" id="afCity" placeholder="例：大分市">
     </div>
@@ -434,18 +540,53 @@
       </select>
     </div>
     <div class="form-row">
-      <label>施設名 *</label>
-      <input type="text" id="afName" placeholder="例：〇〇居宅介護支援事業所">
+      <label>住所 *</label>
+      <input type="text" id="afAddr" placeholder="例：大分県大分市〇〇1丁目1番1号">
+    </div>
+    <div class="form-row">
+      <label>電話番号</label>
+      <input type="text" id="afTel" placeholder="例：097-000-0000">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-row"><label>FAX</label><input type="text" id="afFax" placeholder="例：097-000-0001"></div>
+      <div class="form-row"><label>携帯番号</label><input type="text" id="afMobile" placeholder="例：090-0000-0000"></div>
     </div>
     <div class="form-row">
       <label>担当者</label>
       <select id="afRep"></select>
     </div>
-    <div class="form-row">
-      <label>住所 *</label>
-      <input type="text" id="afAddr" placeholder="例：大分県大分市〇〇1丁目1番1号">
+    <div class="divider"></div>
+    <h3 style="font-size:13px;margin:0 0 10px;color:var(--navy-deep);">空床・受入情報</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-row"><label>定員</label><input type="number" id="afCapacity" min="0" oninput="updateAfVacancyPreview()"></div>
+      <div class="form-row"><label>現在の入居人数</label><input type="number" id="afOccupied" min="0" oninput="updateAfVacancyPreview()"></div>
     </div>
-    <button class="save-btn" id="afSaveBtn" onclick="submitAddFacility()">この内容で追加する</button>
+    <div class="vacancy-box" id="afVacancyPreview" style="margin-bottom:12px;">定員と現在人数を入力すると空床数が自動計算されます</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" id="afMale">男性のみ受入</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" id="afFemale">女性のみ受入</label>
+    </div>
+    <div class="form-row" style="margin-top:10px;">
+      <label>対応可能な要介護度</label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <label style="font-size:12.5px;"><input type="checkbox" class="af-care" value="0">要支援</label>
+        <label style="font-size:12.5px;"><input type="checkbox" class="af-care" value="1">要介護1</label>
+        <label style="font-size:12.5px;"><input type="checkbox" class="af-care" value="2">要介護2</label>
+        <label style="font-size:12.5px;"><input type="checkbox" class="af-care" value="3">要介護3</label>
+        <label style="font-size:12.5px;"><input type="checkbox" class="af-care" value="4">要介護4</label>
+        <label style="font-size:12.5px;"><input type="checkbox" class="af-care" value="5">要介護5</label>
+      </div>
+    </div>
+    <div class="form-row" style="margin-top:10px;">
+      <label>対応項目（増やしたい項目は管理者が後から自由に追加できます）</label>
+      <div id="afTagList" style="display:flex;gap:8px 12px;flex-wrap:wrap;font-size:12.5px;"></div>
+    </div>
+    <div class="form-row" style="margin-top:10px;">
+      <label>備考</label>
+      <textarea id="afMemo" placeholder="その他特記事項"></textarea>
+    </div>
+    <button class="save-btn" id="afSaveBtn" onclick="submitAddFacility()">この内容で保存する</button>
+    <button class="save-btn" id="afDeleteBtn" style="background:var(--danger);display:none;" onclick="submitDeleteFacility()">この施設を削除する</button>
     <div class="login-err" id="afErr" style="height:auto;margin-top:8px;"></div>
   </div>
 </div>
@@ -480,6 +621,96 @@
     </div>
     <button class="save-btn" id="repSaveBtn" onclick="submitReps()" style="margin-top:10px;">この内容で保存する</button>
     <div class="login-err" id="repErr" style="height:auto;margin-top:8px;"></div>
+
+    <div class="divider admin-only"></div>
+    <div class="admin-only">
+      <h3 style="font-size:13.5px;margin:0 0 8px;">許可するGoogleアカウント（管理者のみ）</h3>
+      <div id="accountChips" style="margin-bottom:10px;"></div>
+      <div class="rep-add-row" style="margin-bottom:8px;">
+        <input type="text" id="accNewEmail" placeholder="メールアドレス" style="flex:1.3;">
+        <input type="text" id="accNewName" placeholder="表示名" style="flex:1;">
+      </div>
+      <div class="rep-add-row">
+        <select id="accNewRole" style="flex:1;padding:10px;border-radius:9px;border:1.3px solid var(--line);">
+          <option value="rep">営業担当</option>
+          <option value="admin">管理者</option>
+        </select>
+        <button class="rep-add-btn" onclick="addAccountLocal()">＋追加</button>
+      </div>
+      <button class="save-btn" id="accSaveBtn" onclick="submitAccounts()" style="margin-top:10px;">この内容で保存する</button>
+      <div class="login-err" id="accErr" style="height:auto;margin-top:8px;"></div>
+    </div>
+
+    <div class="divider admin-only"></div>
+    <div class="admin-only">
+      <h3 style="font-size:13.5px;margin:0 0 8px;">管理者ツール</h3>
+      <button class="save-btn" style="background:var(--navy-deep);margin-bottom:8px;" onclick="openLoginHistory()">ログイン履歴を見る</button>
+      <button class="save-btn" style="background:var(--navy-deep);" onclick="runBackupNow()">今すぐバックアップを作成</button>
+      <div class="login-err" id="adminToolErr" style="height:auto;margin-top:8px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ログイン履歴モーダル（管理者のみ） -->
+<div class="overlay" id="loginHistoryOverlay">
+  <div class="sheet">
+    <button class="close-btn" onclick="closeLoginHistory()">×</button>
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;">ログイン履歴</h2>
+    <div id="loginHistoryList" style="margin-top:14px;font-size:12.5px;"></div>
+  </div>
+</div>
+
+<!-- 紹介 新規追加/編集モーダル -->
+<div class="overlay" id="referralOverlay">
+  <div class="sheet">
+    <button class="close-btn" onclick="closeReferralEdit()">×</button>
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;" id="refTitle">紹介を記録</h2>
+    <div class="form-row" style="margin-top:14px;">
+      <label>相談日 *</label>
+      <input type="date" id="refConsultDate">
+    </div>
+    <div class="form-row">
+      <label>利用者名</label>
+      <input type="text" id="refUserName" placeholder="例：山田 花子">
+    </div>
+    <div class="form-row">
+      <label>紹介施設 *</label>
+      <select id="refFacility"></select>
+    </div>
+    <div class="form-row">
+      <label>見学日（任意）</label>
+      <input type="date" id="refVisitDate">
+    </div>
+    <div class="form-row">
+      <label>入居日（任意）</label>
+      <input type="date" id="refMoveInDate">
+    </div>
+    <div class="form-row">
+      <label>キャンセル日（任意）</label>
+      <input type="date" id="refCancelDate">
+    </div>
+    <div class="form-row">
+      <label>状態</label>
+      <select id="refStatusSelect">
+        <option value="相談中">相談中</option>
+        <option value="見学予定">見学予定</option>
+        <option value="入居決定">入居決定</option>
+        <option value="キャンセル">キャンセル</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>担当者</label>
+      <select id="refRep"></select>
+    </div>
+    <div class="form-row">
+      <label>メモ</label>
+      <textarea id="refMemo" placeholder="紹介の経緯、状況など"></textarea>
+    </div>
+    <button class="save-btn" id="refSaveBtn" onclick="submitReferral()">この内容で保存する</button>
+    <button class="save-btn" id="refDeleteBtn" style="background:var(--danger);display:none;" onclick="submitDeleteReferral()">この紹介記録を削除する</button>
+    <div class="login-err" id="refErr" style="height:auto;margin-top:8px;"></div>
   </div>
 </div>
 
@@ -522,34 +753,102 @@
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbxYLjGt7vlDkNylFRyD-_0ubXDkO4DCyukmlwsM8XkeHGdIZsMITaCvHpzBcv-s1vtq/exec';
 /* 案件管理データ用 GAS（既存の「営業記録」バックエンド。変更なしでそのまま利用） */
 const DEAL_GAS_URL = 'https://script.google.com/macros/s/AKfycbzvfCyfMX-xd862m77B1jNhJMQkDc6nv0iBd8UVGvyblooyL8UwtNR5yF2U87ZhZRzd/exec';
-let currentPassword = null; // ログイン成功時のパスワードを保持（書き込み系リクエストで使用）
+/* Google Sign-In クライアントID。Google Cloud Consoleで発行後、ここに貼り替えてください。
+   未設定（PASTE_YOUR...のまま）の間は、従来の共通パスワードでログインできます。 */
+const GOOGLE_CLIENT_ID = 'PASTE_YOUR_GOOGLE_CLIENT_ID_HERE';
 /* ============================== */
+
+let currentPassword = null;   // 旧・共通パスワード方式でログインした場合に保持
+let currentSessionToken = null; // Googleログイン方式でログインした場合に保持
+let currentUserName = '';
+let currentUserRole = 'legacy'; // 'admin' | 'rep' | 'legacy'
+
+function authPayload(){
+  return currentSessionToken ? {sessionToken: currentSessionToken} : {password: currentPassword};
+}
+function isAdmin(){
+  return currentUserRole === 'admin' || currentUserRole === 'legacy';
+}
 
 let facilities = [];
 let visits = [];
+let referrals = [];
 let repList = [];
 let repListDraft = [];
+let allowedAccounts = [];
+let allowedAccountsDraft = [];
 let currentFacilityId = null;
+let currentReferralId = null;
+let editingFacilityId = null;
 const KIND_COLOR = {'包括':'#3B6EA5','居宅':'#4C8C63','老健':'#C9902E','病院':'#B14C4C'};
+/* 施設の「対応項目」タグ一覧。ここに追加・削除するだけで、検索フィルターと施設編集フォームの両方に反映されます。
+   （施設マスタの列を増やす必要はありません＝拡張しやすい設計） */
+const FACILITY_TAGS = [
+  '生活保護','認知症','看取り','インスリン','胃ろう','バルーン','ストマ','透析',
+  '在宅酸素','吸引','経管栄養','定期巡回対応','ショート利用可','夫婦部屋あり'
+];
 let mainTab = 'visit';
 let dealLoaded = false;
 
 function switchMainTab(tab){
+  if((tab==='facility') && !isAdmin()){
+    showToast('施設管理は管理者のみ利用できます');
+    return;
+  }
   mainTab = tab;
   document.getElementById('mainTabVisit').classList.toggle('active', tab==='visit');
+  document.getElementById('mainTabFacility').classList.toggle('active', tab==='facility');
+  document.getElementById('mainTabReferral').classList.toggle('active', tab==='referral');
   document.getElementById('mainTabDeal').classList.toggle('active', tab==='deal');
   document.getElementById('visitKpiBar').style.display = tab==='visit' ? 'flex':'none';
   document.getElementById('visitSection').style.display = tab==='visit' ? 'block':'none';
+  document.getElementById('facilitySection').style.display = tab==='facility' ? 'block':'none';
+  document.getElementById('referralSection').style.display = tab==='referral' ? 'block':'none';
   document.getElementById('dealSection').style.display = tab==='deal' ? 'block':'none';
+  if(tab==='facility') renderFacilityAdminTable();
+  if(tab==='referral') renderReferralList();
   if(tab==='deal' && !dealLoaded){
     dealLoaded = true;
     dealLoadAll();
   }
 }
 
+/* ---------- ログイン（Google / 旧パスワード） ---------- */
+window.addEventListener('DOMContentLoaded', () => {
+  if(GOOGLE_CLIENT_ID.indexOf('PASTE_YOUR') !== 0 && window.google && window.google.accounts){
+    document.getElementById('googleLoginArea').style.display = 'block';
+    document.getElementById('legacyLoginArea').style.display = 'none';
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: handleGoogleCredential
+    });
+    google.accounts.id.renderButton(document.getElementById('gsiButton'), {theme:'outline', size:'large', width:260, text:'signin_with'});
+  }
+});
+
+async function handleGoogleCredential(response){
+  const errEl = document.getElementById('loginErr');
+  errEl.textContent = '';
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'googleLogin', idToken: response.credential})});
+    const data = await res.json();
+    if(data.ok){
+      currentSessionToken = data.sessionToken;
+      currentUserName = data.name;
+      currentUserRole = data.role;
+      finishLogin();
+    } else {
+      errEl.textContent = data.error || 'ログインできませんでした';
+    }
+  }catch(err){
+    errEl.textContent = '通信エラーが発生しました';
+    console.error(err);
+  }
+}
+
 async function tryLogin(){
   const v = document.getElementById('pwInput').value;
-  const btn = document.querySelector('.login-card button');
+  const btn = document.querySelector('#legacyLoginArea button');
   const errEl = document.getElementById('loginErr');
   errEl.textContent = '';
   if(GAS_URL.indexOf('PASTE_YOUR') === 0){
@@ -562,9 +861,9 @@ async function tryLogin(){
     const data = await res.json();
     if(data.ok){
       currentPassword = v;
-      document.getElementById('loginScreen').style.display='none';
-      document.getElementById('app').style.display='block';
-      boot();
+      currentUserRole = 'legacy';
+      currentUserName = '';
+      finishLogin();
     } else {
       errEl.textContent = 'パスワードが違います';
     }
@@ -576,6 +875,14 @@ async function tryLogin(){
 }
 document.getElementById('pwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
 
+function finishLogin(){
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.body.classList.toggle('is-admin', isAdmin());
+  document.getElementById('loginWhoami').textContent = currentUserName ? '（' + currentUserName + '）' : '';
+  boot();
+}
+
 async function boot(){
   if(GAS_URL.indexOf('PASTE_YOUR') === 0){
     document.getElementById('listView').innerHTML =
@@ -584,6 +891,7 @@ async function boot(){
   }
   await loadData();
   populateFilterOptions();
+  populateReferralFacilitySelect();
   renderAll();
 }
 
@@ -593,10 +901,18 @@ async function loadData(){
     const data = await res.json();
     facilities = data.facilities || [];
     visits = data.visits || [];
+    referrals = data.referrals || [];
     repList = data.reps && data.reps.length ? data.reps : ['牧','岡野','岩矢','木﨑','高田'];
   }catch(err){
     showToast('データ取得に失敗しました');
     console.error(err);
+  }
+  if(isAdmin()){
+    try{
+      const res2 = await fetch(GAS_URL + '?action=getAllowedAccounts');
+      const data2 = await res2.json();
+      allowedAccounts = data2.accounts || [];
+    }catch(err){ console.error(err); }
   }
 }
 
@@ -611,20 +927,48 @@ function populateFilterOptions(){
   repsFromFacilities.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; rSel.appendChild(o); });
   populateVRepSelect();
   populateDealStaffOptions();
+  populateTagUI();
+}
+
+function populateTagUI(){
+  const tagSel = document.getElementById('fTag');
+  if(tagSel && tagSel.options.length <= 1){
+    FACILITY_TAGS.forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; tagSel.appendChild(o); });
+  }
+  const tagList = document.getElementById('afTagList');
+  if(tagList && tagList.children.length === 0){
+    tagList.innerHTML = FACILITY_TAGS.map(t=>
+      '<label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="af-tag" value="'+escapeHtml(t)+'">'+escapeHtml(t)+'</label>'
+    ).join('');
+  }
 }
 
 function populateVRepSelect(){
-  const sel = document.getElementById('vRep');
-  sel.innerHTML = '';
-  repList.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; sel.appendChild(o); });
-  const other = document.createElement('option'); other.value='その他'; other.textContent='その他';
-  sel.appendChild(other);
+  ['vRep','afRep','refRep'].forEach(id=>{
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    sel.innerHTML = '';
+    repList.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; sel.appendChild(o); });
+    if(id==='vRep'){ const other=document.createElement('option'); other.value='その他'; other.textContent='その他'; sel.appendChild(other); }
+  });
 }
 
 function populateDealStaffOptions(){
   const dl = document.getElementById('repDatalist');
   if(!dl) return;
   dl.innerHTML = repList.map(r=>'<option value="'+escapeHtml(r)+'">').join('');
+}
+
+function populateReferralFacilitySelect(){
+  const sel = document.getElementById('refFacility');
+  if(!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '';
+  facilities.slice().sort((a,b)=>a.name.localeCompare(b.name,'ja')).forEach(f=>{
+    const o = document.createElement('option'); o.value = f.id; o.textContent = f.name + '（'+f.city+'）';
+    sel.appendChild(o);
+  });
+  if(current) sel.value = current;
 }
 
 function todayStr(){
@@ -634,6 +978,35 @@ function todayStr(){
 function thisMonthPrefix(){
   const d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+function daysBetween(dateStr){
+  if(!dateStr) return Infinity;
+  const d = new Date(dateStr); d.setHours(0,0,0,0);
+  const today = new Date(); today.setHours(0,0,0,0);
+  return Math.floor((today-d)/86400000);
+}
+
+/* ---------- 空床（定員/現在人数）関連ヘルパー ---------- */
+function vacancyOf(f){
+  const cap = Number(f.capacity), occ = Number(f.occupied);
+  if(!cap || isNaN(cap)) return null;
+  const vac = cap - (isNaN(occ)?0:occ);
+  return vac;
+}
+function vacancyStatus(f){
+  const vac = vacancyOf(f);
+  if(vac===null) return {label:'未登録', cls:''};
+  if(vac<=0) return {label:'満床', cls:'full'};
+  if(vac<=2) return {label:'残りわずか', cls:'few'};
+  return {label:'空床あり', cls:'available'};
+}
+function isStale(f){
+  return f.updatedAt && daysBetween(f.updatedAt) >= 3;
+}
+function careLevelLabels(codes){
+  const map = {'0':'要支援','1':'要介護1','2':'要介護2','3':'要介護3','4':'要介護4','5':'要介護5'};
+  if(!codes) return [];
+  return String(codes).split(',').filter(c=>c).map(c=>map[c]||c);
 }
 
 function visitsFor(facilityId){
@@ -657,6 +1030,10 @@ function getFiltered(){
   const kind = document.getElementById('fKind').value;
   const rep = document.getElementById('fRep').value;
   const status = document.getElementById('fStatus').value;
+  const vac = document.getElementById('fVacancy') ? document.getElementById('fVacancy').value : '';
+  const gender = document.getElementById('fGender') ? document.getElementById('fGender').value : '';
+  const care = document.getElementById('fCare') ? document.getElementById('fCare').value : '';
+  const tag = document.getElementById('fTag') ? document.getElementById('fTag').value : '';
 
   return facilities.filter(f=>{
     if(search && !f.name.includes(search)) return false;
@@ -669,6 +1046,11 @@ function getFiltered(){
       if(status==='upcoming' && st!=='upcoming') return false;
       if(status==='none' && st!=='none') return false;
     }
+    if(vac && vacancyStatus(f).cls !== vac) return false;
+    if(gender==='male' && f.acceptMale!=='○') return false;
+    if(gender==='female' && f.acceptFemale!=='○') return false;
+    if(care && !String(f.careLevels||'').split(',').includes(care)) return false;
+    if(tag && !String(f.tags||'').split(',').includes(tag)) return false;
     return true;
   });
 }
@@ -715,11 +1097,16 @@ function renderList(){
       if(st.status==='done'){ statusLabel='前回 '+st.last; statusClass='done'; }
       if(st.status==='upcoming'){ statusLabel='次回予定 '+st.next; statusClass='upcoming'; }
       if(st.status==='overdue'){ statusLabel='期限超過 '+st.next; statusClass='overdue'; }
+      const vst = vacancyStatus(f);
+      const vac = vacancyOf(f);
+      const vacBadge = vac===null ? '' : '<span class="visit-status '+vst.cls+'">'+vst.label+(vac>=0?'（空床'+vac+'）':'')+'</span>';
+      const staleBadge = isStale(f) ? '<div class="vacancy-stale">⚠ 空床情報の要更新</div>' : '';
       html += '<div class="card '+(st.status==='overdue'?'overdue':'')+'" onclick="openDetail(\''+f.id+'\')">'
-        + '<div class="card-top"><span class="badge '+f.kind+'">'+f.kind+'</span></div>'
+        + '<div class="card-top"><span class="badge '+f.kind+'">'+f.kind+'</span>'+vacBadge+'</div>'
         + '<div class="card-name">'+f.name+'</div>'
         + '<div class="card-addr">'+f.addr+'</div>'
         + '<div class="card-meta"><span class="rep">担当：'+f.rep+'</span><span class="visit-status '+statusClass+'">'+statusLabel+'</span></div>'
+        + staleBadge
         + '</div>';
     });
   });
@@ -735,6 +1122,37 @@ function openDetail(facilityId){
   document.getElementById('dName').textContent = f.name;
   document.getElementById('dAddr').textContent = f.addr;
   document.getElementById('dMapLink').href = 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(f.addr);
+
+  const vac = vacancyOf(f);
+  const vst = vacancyStatus(f);
+  const tags = [...careLevelLabels(f.careLevels), ...(String(f.tags||'').split(',').filter(t=>t))];
+  const genderTags = [];
+  if(f.acceptMale==='○') genderTags.push('男性のみ');
+  if(f.acceptFemale==='○') genderTags.push('女性のみ');
+  let vBoxHtml = '<div class="vacancy-box">';
+  if(vac!==null){
+    vBoxHtml += '<div class="vacancy-row"><span>定員 '+(f.capacity||'—')+'名 ／ 現在 '+(f.occupied||0)+'名</span><span class="vacancy-status '+vst.cls+'">空床 '+Math.max(vac,0)+'（'+vst.label+'）</span></div>';
+  } else {
+    vBoxHtml += '<div class="vacancy-row"><span>空床情報：未登録</span></div>';
+  }
+  if(f.tel) vBoxHtml += '<div class="vacancy-row"><span>電話</span><span>'+escapeHtml(f.tel)+'</span></div>';
+  if(f.updatedAt) vBoxHtml += '<div class="vacancy-row"><span>更新日</span><span>'+f.updatedAt+(f.updatedBy?'（'+escapeHtml(f.updatedBy)+'）':'')+'</span></div>';
+  if(isStale(f)) vBoxHtml += '<div class="vacancy-stale">⚠ 3日以上更新されていません。空床情報の確認をお願いします</div>';
+  if(genderTags.length || tags.length){
+    vBoxHtml += '<div class="attr-tags">'+[...genderTags,...tags].map(t=>'<span class="attr-tag on">'+escapeHtml(t)+'</span>').join('')+'</div>';
+  }
+  vBoxHtml += '</div>';
+  vBoxHtml += '<div class="vacancy-quick-update">'
+    + '<label style="font-size:11.5px;color:var(--text-soft);display:block;margin-bottom:5px;">現在の入居人数を更新（誰でも更新できます）</label>'
+    + '<div style="display:flex;gap:8px;">'
+    + '<input type="number" id="dQuickOccupied" min="0" value="'+(f.occupied||'')+'" style="flex:1;padding:9px 10px;border-radius:9px;border:1.3px solid var(--line);font-size:14px;">'
+    + '<button class="fm-edit-btn" style="width:auto;padding:0 16px;margin-top:0;" onclick="submitQuickVacancy(\''+f.id+'\')">更新</button>'
+    + '</div></div>';
+  if(isAdmin()){
+    vBoxHtml += '<button class="fm-edit-btn" onclick="closeDetail();switchMainTab(\'facility\');openFacilityEdit(\''+f.id+'\')">この施設の情報を編集する（管理者）</button>';
+  }
+  document.getElementById('dVacancyBox').innerHTML = vBoxHtml;
+
   document.getElementById('vDate').value = todayStr();
   document.getElementById('vRep').value = repList.includes(f.rep) ? f.rep : 'その他';
   document.getElementById('vMemo').value = '';
@@ -742,6 +1160,34 @@ function openDetail(facilityId){
   renderHistory(facilityId);
   document.getElementById('detailOverlay').classList.add('show');
 }
+async function submitQuickVacancy(facilityId){
+  const val = document.getElementById('dQuickOccupied').value;
+  if(val==='') { showToast('人数を入力してください'); return; }
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({
+      action:'updateVacancy', ...authPayload(), id: facilityId, occupied: val, updatedBy: currentUserName||''
+    })});
+    const data = await res.json();
+    if(data.ok){
+      const idx = facilities.findIndex(f=>f.id===facilityId);
+      if(idx>-1){
+        facilities[idx].occupied = val;
+        facilities[idx].updatedAt = todayStr();
+        facilities[idx].updatedBy = currentUserName||'';
+      }
+      renderAll();
+      if(mainTab==='facility') renderFacilityAdminTable();
+      openDetail(facilityId); // 表示を最新状態に更新
+      showToast('空床情報を更新しました');
+    } else {
+      showToast('更新に失敗しました: '+(data.error||''));
+    }
+  }catch(err){
+    showToast('通信エラーが発生しました');
+    console.error(err);
+  }
+}
+
 function closeDetail(){
   document.getElementById('detailOverlay').classList.remove('show');
   currentFacilityId = null;
@@ -773,7 +1219,7 @@ async function submitVisit(){
   const btn = document.getElementById('vSaveBtn');
   btn.disabled = true; btn.textContent = '保存中...';
   const payload = {
-    action:'addVisit', password:currentPassword,
+    action:'addVisit', ...authPayload(),
     facilityId: f.id, facilityName: f.name,
     visitDate: date, rep: document.getElementById('vRep').value,
     memo: document.getElementById('vMemo').value,
@@ -805,7 +1251,7 @@ async function submitVisit(){
 async function removeVisit(id){
   if(!confirm('この訪問記録を削除しますか？')) return;
   try{
-    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'deleteVisit', password:currentPassword, id:id})});
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'deleteVisit', ...authPayload(), id:id})});
     const data = await res.json();
     if(data.ok){
       visits = visits.filter(v=>v.id!==id);
@@ -823,51 +1269,301 @@ function showToast(msg){
 }
 
 /* ---------- 営業先（施設）を追加 ---------- */
-function openAddFacility(){
-  document.getElementById('afCity').value = '';
-  document.getElementById('afKind').value = '居宅';
-  document.getElementById('afName').value = '';
-  document.getElementById('afAddr').value = '';
+function openFacilityEdit(id){
+  editingFacilityId = id;
+  populateTagUI();
   document.getElementById('afErr').textContent = '';
   const repSel = document.getElementById('afRep');
   repSel.innerHTML = '';
   repList.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; repSel.appendChild(o); });
+
+  const f = id ? facilities.find(x=>x.id===id) : null;
+  document.getElementById('afTitle').textContent = id ? '施設情報を編集' : '施設を追加';
+  document.getElementById('afName').value = f ? f.name : '';
+  document.getElementById('afCity').value = f ? f.city : '';
+  document.getElementById('afKind').value = f ? f.kind : '居宅';
+  document.getElementById('afAddr').value = f ? f.addr : '';
+  document.getElementById('afTel').value = f ? (f.tel||'') : '';
+  document.getElementById('afFax').value = f ? (f.fax||'') : '';
+  document.getElementById('afMobile').value = f ? (f.mobile||'') : '';
+  if(repSel.querySelector('option[value="'+(f?f.rep:'')+'"]')) repSel.value = f ? f.rep : repList[0];
+  document.getElementById('afCapacity').value = f ? (f.capacity||'') : '';
+  document.getElementById('afOccupied').value = f ? (f.occupied||'') : '';
+  document.getElementById('afMale').checked = f ? f.acceptMale==='○' : false;
+  document.getElementById('afFemale').checked = f ? f.acceptFemale==='○' : false;
+  document.getElementById('afMemo').value = f ? (f.memo||'') : '';
+  const careArr = f ? String(f.careLevels||'').split(',').filter(c=>c) : [];
+  document.querySelectorAll('.af-care').forEach(cb=>{ cb.checked = careArr.includes(cb.value); });
+  const tagArr = f ? String(f.tags||'').split(',').filter(t=>t) : [];
+  document.querySelectorAll('.af-tag').forEach(cb=>{ cb.checked = tagArr.includes(cb.value); });
+  document.getElementById('afDeleteBtn').style.display = id ? 'block' : 'none';
+  updateAfVacancyPreview();
   document.getElementById('addFacilityOverlay').classList.add('show');
 }
 function closeAddFacility(){
   document.getElementById('addFacilityOverlay').classList.remove('show');
+  editingFacilityId = null;
 }
+function updateAfVacancyPreview(){
+  const cap = Number(document.getElementById('afCapacity').value);
+  const occ = Number(document.getElementById('afOccupied').value);
+  const box = document.getElementById('afVacancyPreview');
+  if(!cap){ box.innerHTML = '定員と現在人数を入力すると空床数が自動計算されます'; return; }
+  const vac = cap - (isNaN(occ)?0:occ);
+  const st = vac<=0 ? {label:'満床',cls:'full'} : (vac<=2 ? {label:'残りわずか',cls:'few'} : {label:'空床あり',cls:'available'});
+  box.innerHTML = '<div class="vacancy-row"><span>定員 '+cap+'名 ／ 現在 '+(isNaN(occ)?0:occ)+'名</span><span class="vacancy-status '+st.cls+'">空床 '+Math.max(vac,0)+'（'+st.label+'）</span></div>';
+}
+
 async function submitAddFacility(){
+  const name = document.getElementById('afName').value.trim();
   const city = document.getElementById('afCity').value.trim();
   const kind = document.getElementById('afKind').value;
-  const name = document.getElementById('afName').value.trim();
-  const rep = document.getElementById('afRep').value;
   const addr = document.getElementById('afAddr').value.trim();
+  const tel = document.getElementById('afTel').value.trim();
+  const fax = document.getElementById('afFax').value.trim();
+  const mobile = document.getElementById('afMobile').value.trim();
+  const rep = document.getElementById('afRep').value;
+  const capacity = document.getElementById('afCapacity').value;
+  const occupied = document.getElementById('afOccupied').value;
+  const acceptMale = document.getElementById('afMale').checked;
+  const acceptFemale = document.getElementById('afFemale').checked;
+  const careLevels = Array.from(document.querySelectorAll('.af-care:checked')).map(cb=>cb.value).join(',');
+  const tags = Array.from(document.querySelectorAll('.af-tag:checked')).map(cb=>cb.value).join(',');
+  const memo = document.getElementById('afMemo').value.trim();
   const errEl = document.getElementById('afErr');
   errEl.textContent = '';
   if(!name || !addr){ errEl.textContent = '施設名と住所は必須です'; return; }
   const btn = document.getElementById('afSaveBtn');
-  btn.disabled = true; btn.textContent = '追加中...';
+  btn.disabled = true; btn.textContent = '保存中...';
+  const fields = { city, kind, name, rep, addr, tel, fax, mobile, capacity, occupied, acceptMale, acceptFemale, careLevels, tags, memo, updatedBy: currentUserName||'' };
   try{
-    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({
-      action:'addFacility', password:currentPassword,
-      city, kind, name, rep, addr
-    })});
+    const action = editingFacilityId ? 'updateFacility' : 'addFacility';
+    const body = editingFacilityId ? {action, ...authPayload(), id: editingFacilityId, ...fields} : {action, ...authPayload(), ...fields};
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify(body)});
     const data = await res.json();
     if(data.ok){
-      facilities.push({ id:data.id, city, kind, name, rep, addr, lat:'', lng:'' });
+      const today = todayStr();
+      if(editingFacilityId){
+        const idx = facilities.findIndex(x=>x.id===editingFacilityId);
+        if(idx>-1) facilities[idx] = { ...facilities[idx],
+          city, kind, name, rep, addr, tel, fax, mobile, capacity, occupied,
+          acceptMale: acceptMale?'○':'', acceptFemale: acceptFemale?'○':'',
+          careLevels, tags, memo, updatedAt: today, updatedBy: currentUserName||''
+        };
+      } else {
+        facilities.push({ id:data.id, city, kind, name, rep, addr, lat:'', lng:'',
+          tel, fax, mobile, capacity, occupied,
+          acceptMale: acceptMale?'○':'', acceptFemale: acceptFemale?'○':'',
+          careLevels, tags, memo, updatedAt: today, updatedBy: currentUserName||''
+        });
+      }
       populateFilterOptions();
+      populateReferralFacilitySelect();
       renderAll();
+      if(mainTab==='facility') renderFacilityAdminTable();
       closeAddFacility();
-      showToast('営業先を追加しました');
+      showToast(editingFacilityId ? '施設情報を更新しました' : '施設を追加しました');
     } else {
-      errEl.textContent = data.error || '追加に失敗しました';
+      errEl.textContent = data.error || '保存に失敗しました';
     }
   }catch(err){
     errEl.textContent = '通信エラーが発生しました';
     console.error(err);
   }
-  btn.disabled = false; btn.textContent = 'この内容で追加する';
+  btn.disabled = false; btn.textContent = 'この内容で保存する';
+}
+
+async function submitDeleteFacility(){
+  if(!editingFacilityId) return;
+  if(!confirm('この施設を削除しますか？（訪問記録・紹介記録は残ります）')) return;
+  const btn = document.getElementById('afDeleteBtn');
+  btn.disabled = true; btn.textContent = '削除中...';
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'deleteFacility', ...authPayload(), id: editingFacilityId})});
+    const data = await res.json();
+    if(data.ok){
+      facilities = facilities.filter(f=>f.id!==editingFacilityId);
+      populateFilterOptions();
+      populateReferralFacilitySelect();
+      renderAll();
+      renderFacilityAdminTable();
+      closeAddFacility();
+      showToast('施設を削除しました');
+    } else {
+      showToast('削除に失敗しました: '+(data.error||''));
+    }
+  }catch(err){
+    showToast('通信エラーが発生しました');
+    console.error(err);
+  }
+  btn.disabled = false; btn.textContent = 'この施設を削除する';
+}
+
+/* ---------- 施設管理タブ（管理者のみ） ---------- */
+function renderFacilityAdminTable(){
+  const q = (document.getElementById('fmSearch').value||'').trim();
+  const list = facilities.filter(f=>!q || f.name.includes(q)).slice().sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+  const tbody = document.getElementById('fm-table-body');
+  if(list.length===0){ tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-soft)">該当する施設がありません</td></tr>'; return; }
+  tbody.innerHTML = list.map(f=>{
+    const vac = vacancyOf(f);
+    const st = vacancyStatus(f);
+    const stale = isStale(f);
+    return '<tr>'
+      + '<td style="font-weight:600;">'+escapeHtml(f.name)+'</td>'
+      + '<td><span class="badge '+f.kind+'">'+f.kind+'</span></td>'
+      + '<td>'+escapeHtml(f.city||'')+'</td>'
+      + '<td>'+(f.capacity||'—')+' / '+(f.occupied||'—')+' / '+(vac===null?'—':vac)+'</td>'
+      + '<td><span class="vacancy-status '+st.cls+'">'+st.label+'</span>'+(stale?'<div class="vacancy-stale">要更新</div>':'')+'</td>'
+      + '<td style="font-size:11px;color:var(--text-soft);">'+(f.updatedAt||'—')+'</td>'
+      + '<td><button class="dl-btn-icon" title="編集" onclick="openFacilityEdit(\''+f.id+'\')">✏️</button></td>'
+      + '</tr>';
+  }).join('');
+}
+
+/* ---------- 施設訪問タブでの空床表示 ---------- */
+function vacancyBadgeHtml(f){
+  const st = vacancyStatus(f);
+  if(st.cls===''){
+    return '';
+  }
+  return '<span class="visit-status '+st.cls+'">'+st.label+'</span>';
+}
+
+/* ================= 紹介管理 ================= */
+function renderReferralList(){
+  populateReferralFacilitySelect();
+  const q = (document.getElementById('refSearch').value||'').trim();
+  const statusF = document.getElementById('refStatus').value;
+  const list = referrals.filter(r=>{
+    if(statusF && r.status!==statusF) return false;
+    if(q && !((r.userName||'').includes(q) || (r.facilityName||'').includes(q))) return false;
+    return true;
+  }).slice().sort((a,b)=> (b.consultDate||'').localeCompare(a.consultDate||''));
+  const tbody = document.getElementById('ref-table-body');
+  if(list.length===0){ tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-soft)">該当する紹介記録がありません</td></tr>'; return; }
+  const statusColor = {'相談中':'upcoming','見学予定':'upcoming','入居決定':'done','キャンセル':'overdue'};
+  tbody.innerHTML = list.map(r=>
+    '<tr>'
+    + '<td>'+(r.consultDate||'—')+'</td>'
+    + '<td style="font-weight:600;">'+escapeHtml(r.userName||'—')+'</td>'
+    + '<td>'+escapeHtml(r.facilityName||'—')+'</td>'
+    + '<td>'+(r.visitDate||'—')+'</td>'
+    + '<td>'+(r.moveInDate||'—')+'</td>'
+    + '<td><span class="visit-status '+(statusColor[r.status]||'none')+'">'+escapeHtml(r.status||'')+'</span></td>'
+    + '<td>'+escapeHtml(r.rep||'—')+'</td>'
+    + '<td><button class="dl-btn-icon" title="編集" onclick="openReferralEdit(\''+r.id+'\')">✏️</button></td>'
+    + '</tr>'
+  ).join('');
+}
+
+function openReferralEdit(id){
+  currentReferralId = id;
+  populateReferralFacilitySelect();
+  const r = id ? referrals.find(x=>x.id===id) : null;
+  document.getElementById('refTitle').textContent = id ? '紹介記録を編集' : '紹介を記録';
+  document.getElementById('refConsultDate').value = r ? r.consultDate : todayStr();
+  document.getElementById('refUserName').value = r ? (r.userName||'') : '';
+  if(r && r.facilityId) document.getElementById('refFacility').value = r.facilityId;
+  document.getElementById('refVisitDate').value = r ? (r.visitDate||'') : '';
+  document.getElementById('refMoveInDate').value = r ? (r.moveInDate||'') : '';
+  document.getElementById('refCancelDate').value = r ? (r.cancelDate||'') : '';
+  document.getElementById('refStatusSelect').value = r ? r.status : '相談中';
+  document.getElementById('refRep').value = r && repList.includes(r.rep) ? r.rep : repList[0];
+  document.getElementById('refMemo').value = r ? (r.memo||'') : '';
+  document.getElementById('refErr').textContent = '';
+  document.getElementById('refDeleteBtn').style.display = id ? 'block' : 'none';
+  document.getElementById('referralOverlay').classList.add('show');
+}
+function closeReferralEdit(){
+  document.getElementById('referralOverlay').classList.remove('show');
+  currentReferralId = null;
+}
+async function submitReferral(){
+  const consultDate = document.getElementById('refConsultDate').value;
+  const userName = document.getElementById('refUserName').value.trim();
+  const facilityId = document.getElementById('refFacility').value;
+  const facility = facilities.find(f=>f.id===facilityId);
+  const visitDate = document.getElementById('refVisitDate').value;
+  const moveInDate = document.getElementById('refMoveInDate').value;
+  const cancelDate = document.getElementById('refCancelDate').value;
+  const status = document.getElementById('refStatusSelect').value;
+  const rep = document.getElementById('refRep').value;
+  const memo = document.getElementById('refMemo').value.trim();
+  const errEl = document.getElementById('refErr');
+  errEl.textContent = '';
+  if(!consultDate || !facilityId){ errEl.textContent = '相談日と紹介施設は必須です'; return; }
+  const btn = document.getElementById('refSaveBtn');
+  btn.disabled = true; btn.textContent = '保存中...';
+  const fields = { consultDate, userName, facilityId, facilityName: facility?facility.name:'', visitDate, moveInDate, cancelDate, status, rep, memo };
+  try{
+    const action = currentReferralId ? 'updateReferral' : 'addReferral';
+    const body = currentReferralId ? {action, ...authPayload(), id:currentReferralId, ...fields} : {action, ...authPayload(), ...fields};
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify(body)});
+    const data = await res.json();
+    if(data.ok){
+      if(currentReferralId){
+        const idx = referrals.findIndex(x=>x.id===currentReferralId);
+        if(idx>-1) referrals[idx] = {...referrals[idx], ...fields};
+      } else {
+        referrals.push({ id:data.id, ...fields, createdAt: new Date().toISOString() });
+      }
+      renderReferralList();
+      closeReferralEdit();
+      showToast('紹介記録を保存しました');
+    } else {
+      errEl.textContent = data.error || '保存に失敗しました';
+    }
+  }catch(err){
+    errEl.textContent = '通信エラーが発生しました';
+    console.error(err);
+  }
+  btn.disabled = false; btn.textContent = 'この内容で保存する';
+}
+async function submitDeleteReferral(){
+  if(!currentReferralId) return;
+  if(!confirm('この紹介記録を削除しますか？')) return;
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'deleteReferral', ...authPayload(), id:currentReferralId})});
+    const data = await res.json();
+    if(data.ok){
+      referrals = referrals.filter(r=>r.id!==currentReferralId);
+      renderReferralList();
+      closeReferralEdit();
+      showToast('削除しました');
+    }
+  }catch(err){ console.error(err); }
+}
+
+/* ================= 営業予定表 ================= */
+function openSchedule(){
+  renderSchedule();
+  document.getElementById('scheduleOverlay').classList.add('show');
+}
+function closeSchedule(){
+  document.getElementById('scheduleOverlay').classList.remove('show');
+}
+function renderSchedule(){
+  const today = todayStr();
+  const items = [];
+  visits.filter(v=>v.nextVisit && v.nextVisit>=today).forEach(v=>{
+    items.push({date:v.nextVisit, type:'訪問予定', label:v.facilityName, sub:'担当：'+v.rep, cls: v.nextVisit===today?'overdue':'upcoming'});
+  });
+  referrals.filter(r=>r.visitDate && r.visitDate>=today && r.status!=='キャンセル' && r.status!=='入居決定').forEach(r=>{
+    items.push({date:r.visitDate, type:'見学予定', label:(r.userName||'利用者未記入')+' → '+r.facilityName, sub:'担当：'+r.rep, cls:'upcoming'});
+  });
+  referrals.filter(r=>r.moveInDate && r.moveInDate>=today && r.status!=='キャンセル').forEach(r=>{
+    items.push({date:r.moveInDate, type:'入居予定', label:(r.userName||'利用者未記入')+' → '+r.facilityName, sub:'担当：'+r.rep, cls:'done'});
+  });
+  items.sort((a,b)=> a.date.localeCompare(b.date));
+  const el = document.getElementById('scheduleList');
+  if(items.length===0){ el.innerHTML = '<div class="empty">今後の予定はありません</div>'; return; }
+  el.innerHTML = items.map(it=>
+    '<div class="hist-item"><span class="hist-date">'+it.date+'</span> '
+    + '<span class="visit-status '+it.cls+'" style="margin-left:6px;">'+it.type+'</span>'
+    + '<div class="hist-memo">'+escapeHtml(it.label)+'</div>'
+    + '<div style="font-size:11px;color:var(--text-soft);">'+it.sub+'</div></div>'
+  ).join('');
 }
 
 /* ---------- 月別訪問実績 ---------- */
@@ -883,13 +1579,25 @@ function renderMonthly(){
   visits.forEach(v=>{
     if(!v.visitDate) return;
     const m = v.visitDate.slice(0,7);
-    if(!counts[m]) counts[m] = {total:0, facilities:new Set()};
+    if(!counts[m]) counts[m] = {total:0, facilities:new Set(), consult:0, moveIn:0};
     counts[m].total++;
     counts[m].facilities.add(v.facilityId);
   });
+  referrals.forEach(r=>{
+    if(r.consultDate){
+      const m = r.consultDate.slice(0,7);
+      if(!counts[m]) counts[m] = {total:0, facilities:new Set(), consult:0, moveIn:0};
+      counts[m].consult++;
+    }
+    if(r.moveInDate){
+      const m = r.moveInDate.slice(0,7);
+      if(!counts[m]) counts[m] = {total:0, facilities:new Set(), consult:0, moveIn:0};
+      counts[m].moveIn++;
+    }
+  });
   const months = Object.keys(counts).sort().reverse().slice(0,12);
   const el = document.getElementById('monthlyList');
-  if(months.length===0){ el.innerHTML = '<div class="empty">まだ訪問記録がありません</div>'; return; }
+  if(months.length===0){ el.innerHTML = '<div class="empty">まだ実績データがありません</div>'; return; }
   const maxCount = Math.max(1, ...months.map(m=>counts[m].total));
   el.innerHTML = months.map(m=>{
     const c = counts[m];
@@ -898,7 +1606,7 @@ function renderMonthly(){
     return '<div class="month-bar-row">'
       + '<div class="month-bar-label">'+y+'年'+parseInt(mo)+'月</div>'
       + '<div class="month-bar-track"><div class="month-bar-fill" style="width:'+pct+'%"></div></div>'
-      + '<div class="month-bar-value">'+c.total+'件（'+c.facilities.size+'施設）</div>'
+      + '<div class="month-bar-value">訪問'+c.total+'件・紹介'+c.consult+'件・入居'+c.moveIn+'件</div>'
       + '</div>';
   }).join('');
 }
@@ -913,6 +1621,13 @@ function openPwChange(){
   document.getElementById('repNewName').value = '';
   repListDraft = repList.slice();
   renderRepChips();
+  if(isAdmin()){
+    allowedAccountsDraft = allowedAccounts.slice();
+    document.getElementById('accErr').textContent = '';
+    document.getElementById('accNewEmail').value = '';
+    document.getElementById('accNewName').value = '';
+    renderAccountChips();
+  }
   document.getElementById('pwOverlay').classList.add('show');
 }
 function closePwChange(){
@@ -974,7 +1689,7 @@ async function submitReps(){
   const btn = document.getElementById('repSaveBtn');
   btn.disabled = true; btn.textContent = '保存中...';
   try{
-    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'saveReps', password:currentPassword, reps:repListDraft})});
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'saveReps', ...authPayload(), reps:repListDraft})});
     const data = await res.json();
     if(data.ok){
       repList = repListDraft.slice();
@@ -989,6 +1704,97 @@ async function submitReps(){
     console.error(err);
   }
   btn.disabled = false; btn.textContent = 'この内容で保存する';
+}
+
+/* ---------- 許可アカウント管理（管理者のみ） ---------- */
+function renderAccountChips(){
+  const el = document.getElementById('accountChips');
+  if(!el) return;
+  if(allowedAccountsDraft.length===0){ el.innerHTML = '<span style="color:var(--text-soft);font-size:12px;">許可アカウントが登録されていません</span>'; return; }
+  el.innerHTML = allowedAccountsDraft.map((a,i) =>
+    '<div class="rep-chip" style="width:100%;justify-content:space-between;margin-bottom:6px;">'
+    + '<span>'+escapeHtml(a.name||a.email)+'（'+escapeHtml(a.email)+'／'+(a.role==='admin'?'管理者':'営業担当')+'）</span>'
+    + '<button onclick="removeAccountLocal('+i+')">×</button></div>'
+  ).join('');
+}
+function addAccountLocal(){
+  const email = document.getElementById('accNewEmail').value.trim().toLowerCase();
+  const name = document.getElementById('accNewName').value.trim();
+  const role = document.getElementById('accNewRole').value;
+  const errEl = document.getElementById('accErr');
+  if(!email || email.indexOf('@')===-1){ errEl.textContent = '正しいメールアドレスを入力してください'; return; }
+  if(allowedAccountsDraft.some(a=>a.email===email)){ errEl.textContent = 'すでに登録されています'; return; }
+  allowedAccountsDraft.push({email, name, role});
+  document.getElementById('accNewEmail').value = '';
+  document.getElementById('accNewName').value = '';
+  errEl.textContent = '';
+  renderAccountChips();
+}
+function removeAccountLocal(i){
+  allowedAccountsDraft.splice(i,1);
+  renderAccountChips();
+}
+async function submitAccounts(){
+  const errEl = document.getElementById('accErr');
+  errEl.textContent = '';
+  const btn = document.getElementById('accSaveBtn');
+  btn.disabled = true; btn.textContent = '保存中...';
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'saveAllowedAccounts', ...authPayload(), accounts:allowedAccountsDraft})});
+    const data = await res.json();
+    if(data.ok){
+      allowedAccounts = allowedAccountsDraft.slice();
+      showToast('許可アカウントを更新しました');
+    } else {
+      errEl.textContent = data.error || '保存に失敗しました';
+    }
+  }catch(err){
+    errEl.textContent = '通信エラーが発生しました';
+    console.error(err);
+  }
+  btn.disabled = false; btn.textContent = 'この内容で保存する';
+}
+
+/* ---------- ログイン履歴・バックアップ（管理者のみ） ---------- */
+async function openLoginHistory(){
+  document.getElementById('loginHistoryOverlay').classList.add('show');
+  const el = document.getElementById('loginHistoryList');
+  el.innerHTML = '<div class="empty">読み込み中...</div>';
+  try{
+    const qs = currentSessionToken ? 'sessionToken='+encodeURIComponent(currentSessionToken) : 'password='+encodeURIComponent(currentPassword);
+    const res = await fetch(GAS_URL + '?action=getLoginHistory&' + qs);
+    const data = await res.json();
+    if(data.error){ el.innerHTML = '<div class="empty">'+escapeHtml(data.error)+'</div>'; return; }
+    const list = data.history || [];
+    if(list.length===0){ el.innerHTML = '<div class="empty">ログイン履歴がありません</div>'; return; }
+    el.innerHTML = list.map(h=>
+      '<div class="hist-item"><span class="hist-date">'+h.datetime+'</span> '
+      + '<span class="hist-rep">'+escapeHtml(h.name||h.email)+'（'+(h.role==='admin'?'管理者':h.role==='legacy'?'共通パスワード':'営業担当')+'）</span></div>'
+    ).join('');
+  }catch(err){
+    el.innerHTML = '<div class="empty">読み込みに失敗しました</div>';
+    console.error(err);
+  }
+}
+function closeLoginHistory(){
+  document.getElementById('loginHistoryOverlay').classList.remove('show');
+}
+async function runBackupNow(){
+  const errEl = document.getElementById('adminToolErr');
+  errEl.textContent = '';
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'runBackup', ...authPayload()})});
+    const data = await res.json();
+    if(data.ok){
+      showToast('バックアップを作成しました');
+      errEl.innerHTML = '作成しました：<a href="'+data.url+'" target="_blank" rel="noopener" style="color:var(--navy);">'+escapeHtml(data.name)+'</a>';
+    } else {
+      errEl.textContent = data.error || 'バックアップに失敗しました';
+    }
+  }catch(err){
+    errEl.textContent = '通信エラーが発生しました';
+    console.error(err);
+  }
 }
 
 /* ================= 案件管理（元 営業記録.html を移植） ================= */
