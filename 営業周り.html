@@ -1,2185 +1,998 @@
+/**
+ * 営業周りアプリ 用 Google Apps Script バックエンド
+ *
+ * 【セットアップ手順】
+ * 1. 新規に Google スプレッドシートを作成する（例：営業周り管理）
+ * 2. 「拡張機能」→「Apps Script」を開く
+ * 3. デフォルトの Code.gs の中身を全て削除し、このファイルの内容を貼り付ける
+ * 4. 上部の関数選択ドロップダウンから setup を選び、実行（初回のみ権限承認が必要）
+ *    → 「施設マスタ」シートに267件の施設データが自動投入されます
+ *    （すでに setup 済みで施設マスタにデータがある場合は、代わりに resetFacilities を実行すると
+ *      最新の INITIAL_FACILITIES で施設マスタを丸ごと更新できます。訪問記録シートは消えません）
+ * 5. 右上「デプロイ」→「新しいデプロイ」→種類「ウェブアプリ」
+ *    - 実行ユーザー：自分
+ *    - アクセスできるユーザー：全員
+ * 6. 発行された ウェブアプリURL をコピーし、営業周り.html 側の GAS_URL に貼り付ける
+ *
+ * パスワードは「設定」シートのB1セルで管理（初期値 "2408"）。
+ * アプリ内の「パスワードを変更」からも変更可能。
+ * ※コード変更後は必ず「デプロイを管理」→ 編集(鉛筆)→ バージョン「新バージョン」→ デプロイ、を行うこと。
+ *   （保存しただけでは公開中のウェブアプリには反映されません）
+ */
 
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>営業周り | 大分高齢者紹介センター</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-<style>
-  :root{
-    --bg:#F6F4EE;
-    --paper:#FFFFFF;
-    --line:#E3DECF;
-    --navy:#1F3A54;
-    --navy-deep:#152A3D;
-    --amber:#C9902E;
-    --amber-deep:#A8761F;
-    --text:#2B2A26;
-    --text-soft:#6B6A63;
-    --k-houkatsu:#3B6EA5;
-    --k-kyotaku:#4C8C63;
-    --k-roken:#C9902E;
-    --k-byoin:#B14C4C;
-    --danger:#B14C4C;
-    --radius:14px;
-  }
-  *{box-sizing:border-box;}
-  body{margin:0;font-family:"Noto Sans JP","Hiragino Sans",sans-serif;background:var(--bg);color:var(--text);}
-  h1,h2,h3,.brand,.kpi-num{font-family:"Zen Kaku Gothic New","Noto Sans JP",sans-serif;}
-  button{font-family:inherit;}
+const SHEET_FACILITY = '施設マスタ';
+const SHEET_VISIT = '訪問記録';
+const SHEET_SETTINGS = '設定';
+const SHEET_REFERRAL = '紹介記録';
+const SHEET_LOGIN_LOG = 'ログイン履歴';
+const DEFAULT_PASSWORD = '2408';
+const DEFAULT_REPS = ['牧', '岡野', '岩矢', '木﨑', '高田'];
 
-  /* ---------- Login ---------- */
-  #loginScreen{
-    min-height:100vh;display:flex;align-items:center;justify-content:center;
-    background:linear-gradient(160deg,var(--navy-deep) 0%, var(--navy) 55%, #2C4F6E 100%);
-    padding:24px;
-  }
-  .login-card{
-    background:var(--paper);border-radius:20px;padding:36px 28px;width:100%;max-width:360px;
-    box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center;
-  }
-  .login-card .mark{
-    width:56px;height:56px;border-radius:14px;background:var(--amber);margin:0 auto 16px;
-    display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;font-weight:900;
-  }
-  .login-card h1{font-size:20px;margin:0 0 4px;color:var(--navy-deep);}
-  .login-card p{font-size:13px;color:var(--text-soft);margin:0 0 22px;}
-  .login-card input{
-    width:100%;padding:14px 16px;border-radius:10px;border:1.5px solid var(--line);font-size:16px;
-    text-align:center;letter-spacing:4px;margin-bottom:14px;
-  }
-  .login-card button{
-    width:100%;padding:14px;border:none;border-radius:10px;background:var(--amber);color:#fff;
-    font-weight:700;font-size:15px;cursor:pointer;transition:.15s;
-  }
-  .login-card button:hover{background:var(--amber-deep);}
-  .login-err{color:var(--danger);font-size:12px;height:16px;margin-top:8px;}
-
-  /* ---------- App shell ---------- */
-  #app{display:none;min-height:100vh;padding-bottom:70px;}
-  header.top{
-    background:var(--navy-deep);color:#fff;padding:16px 18px 46px;position:relative;
-  }
-  header.top .brand{font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px;}
-  header.top .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--amber);}
-  header.top .brand .pw-gear{
-    margin-left:auto;background:rgba(255,255,255,.12);border:none;color:#fff;width:28px;height:28px;
-    border-radius:8px;font-size:14px;cursor:pointer;
-  }
-  header.top .sub{font-size:11px;color:#B9C6D3;margin-top:2px;}
-
-  .kpi-bar{
-    display:flex;gap:10px;margin:-32px 14px 0;position:relative;z-index:2;
-  }
-  .kpi{
-    flex:1;background:var(--paper);border-radius:var(--radius);padding:12px 10px;text-align:center;
-    box-shadow:0 6px 18px rgba(31,58,84,.10);
-  }
-  .kpi-num{font-size:22px;font-weight:900;color:var(--navy-deep);}
-  .kpi-label{font-size:10.5px;color:var(--text-soft);margin-top:2px;}
-  .kpi.overdue .kpi-num{color:var(--danger);}
-
-  .tabs{display:flex;gap:6px;margin:16px 14px 8px;background:#EAE6D8;border-radius:12px;padding:4px;overflow-x:auto;}
-  .tabs button{
-    flex:1;padding:10px 4px;border:none;border-radius:9px;background:transparent;color:var(--text-soft);
-    font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap;
-  }
-  .tabs button.active{background:var(--navy-deep);color:#fff;}
-  #loginWhoami{margin-left:8px;opacity:.85;}
-  .admin-only{display:none;}
-  body.is-admin .admin-only{display:block;}
-  .admin-only-inline{display:none;}
-  body.is-admin .admin-only-inline{display:inline-block;}
-  .admin-only-flex{display:none;}
-  body.is-admin .admin-only-flex{display:flex;}
-  .gsi-note{font-size:11px;color:var(--text-soft);text-align:center;margin-top:6px;}
-
-  .vacancy-box{background:var(--bg);border-radius:10px;padding:10px 12px;font-size:12.5px;}
-  .vacancy-row{display:flex;justify-content:space-between;margin-bottom:4px;}
-  .vacancy-status{font-weight:900;font-size:14px;padding:2px 0;}
-  .vacancy-status.full{color:var(--danger);}
-  .vacancy-status.few{color:var(--amber-deep);}
-  .vacancy-status.available{color:var(--k-kyotaku);}
-  .vacancy-stale{color:var(--danger);font-weight:700;font-size:11.5px;margin-top:4px;}
-  .attr-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
-  .attr-tag{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:2px 8px;font-size:11px;color:var(--text-soft);}
-  .attr-tag.on{background:var(--navy-deep);color:#fff;border-color:var(--navy-deep);}
-  .fm-edit-btn{margin-top:8px;width:100%;padding:9px;border-radius:9px;border:1.3px solid var(--navy);background:var(--paper);color:var(--navy-deep);font-weight:700;font-size:12.5px;cursor:pointer;}
-  .vacancy-quick-update{background:var(--bg);border-radius:10px;padding:10px 12px;margin-top:8px;}
-  .vlist-section{margin-bottom:16px;}
-  .vlist-heading{font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid var(--line);}
-  .vlist-heading.full{color:var(--danger);}
-  .vlist-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px dashed var(--line);font-size:13.5px;cursor:pointer;}
-  .vlist-row:last-child{border-bottom:none;}
-  .vlist-count{font-weight:900;color:var(--k-kyotaku);}
-  .vlist-count.full{color:var(--danger);}
-
-  .filters{display:flex;gap:8px;margin:0 14px 10px;flex-wrap:wrap;}
-  .filters select, .filters input[type=text]{
-    padding:9px 10px;border-radius:9px;border:1.3px solid var(--line);background:var(--paper);
-    font-size:12.5px;color:var(--text);flex:1 1 auto;min-width:86px;
-  }
-  .filters input[type=text]{flex:2 1 160px;}
-
-  .nearby-btn{
-    padding:9px 14px;border-radius:9px;border:1.3px solid var(--navy);background:var(--paper);
-    color:var(--navy-deep);font-size:12.5px;font-weight:700;cursor:pointer;flex:1 1 auto;
-  }
-  .nearby-btn.active{background:var(--navy-deep);color:#fff;border-color:var(--navy-deep);}
-  .card-dist{color:var(--navy);font-weight:700;}
-
-  #listView{margin:0 14px;}
-
-  .city-group{margin:14px 0 4px;font-size:12.5px;font-weight:700;color:var(--navy);
-    display:flex;align-items:center;gap:8px;}
-  .city-group::after{content:"";flex:1;height:1px;background:var(--line);}
-
-  .card{
-    background:var(--paper);border-radius:var(--radius);padding:13px 14px;margin-bottom:9px;
-    border:1px solid var(--line);cursor:pointer;transition:.12s;
-  }
-  .card:active{transform:scale(.985);}
-  .card.overdue{border-color:var(--danger);background:#FBF1F0;}
-  .card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
-  .badge{
-    font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:20px;color:#fff;white-space:nowrap;
-  }
-  .badge.包括{background:var(--k-houkatsu);}
-  .badge.居宅{background:var(--k-kyotaku);}
-  .badge.老健{background:var(--k-roken);}
-  .badge.病院{background:var(--k-byoin);}
-  .badge.特養{background:#7A5FBF;}
-  .badge.有料{background:#2E8C8C;}
-  .badge.ショート{background:#C97A3E;}
-  .group-badge{display:inline-block;background:var(--navy-deep);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px;}
-  .card-name{font-size:14.5px;font-weight:700;margin:6px 0 3px;line-height:1.4;}
-  .card-addr{font-size:12px;color:var(--text-soft);line-height:1.5;}
-  .card-meta{display:flex;justify-content:space-between;margin-top:9px;font-size:11.5px;}
-  .card-meta .rep{color:var(--text-soft);}
-  .card-meta .visit-status{font-weight:700;}
-  .visit-status.none{color:var(--text-soft);}
-  .visit-status.done{color:var(--k-kyotaku);}
-  .visit-status.overdue{color:var(--danger);}
-  .visit-status.upcoming{color:var(--amber-deep);}
-
-  .empty{text-align:center;color:var(--text-soft);font-size:13px;padding:40px 10px;}
-
-  /* ---------- Modal (施設訪問側) ---------- */
-  .overlay{
-    display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:50;
-    align-items:flex-end;justify-content:center;
-  }
-  .overlay.show{display:flex;}
-  .sheet{
-    background:var(--paper);width:100%;max-width:480px;border-radius:20px 20px 0 0;
-    max-height:88vh;overflow-y:auto;padding:20px 20px 26px;position:relative;
-  }
-  .sheet-handle{width:38px;height:4px;background:var(--line);border-radius:3px;margin:0 auto 14px;}
-  .sheet h2{font-size:17px;margin:0 0 2px;}
-  .sheet .addr{font-size:12.5px;color:var(--text-soft);margin-bottom:12px;}
-  .sheet .maplink{font-size:12px;color:var(--navy);text-decoration:none;font-weight:700;}
-  .divider{height:1px;background:var(--line);margin:14px 0;}
-  .hist-item{padding:10px 0;border-bottom:1px dashed var(--line);font-size:12.5px;}
-  .hist-item:last-child{border-bottom:none;}
-  .hist-date{font-weight:700;color:var(--navy-deep);}
-  .hist-rep{color:var(--text-soft);margin-left:6px;}
-  .hist-memo{margin-top:3px;white-space:pre-wrap;}
-  .hist-next{margin-top:4px;font-size:11.5px;color:var(--amber-deep);font-weight:700;}
-  .del-btn{float:right;color:var(--danger);background:none;border:none;font-size:11px;cursor:pointer;}
-
-  .form-row{margin-bottom:12px;}
-  .form-row label{display:block;font-size:11.5px;font-weight:700;color:var(--text-soft);margin-bottom:5px;}
-  .form-row input, .form-row select, .form-row textarea{
-    width:100%;padding:11px 12px;border-radius:9px;border:1.3px solid var(--line);font-size:14px;font-family:inherit;
-  }
-  .form-row textarea{resize:vertical;min-height:70px;}
-  .save-btn{
-    width:100%;padding:14px;background:var(--amber);color:#fff;border:none;border-radius:10px;
-    font-weight:700;font-size:14.5px;cursor:pointer;margin-top:4px;
-  }
-  .save-btn:hover{background:var(--amber-deep);}
-  .save-btn:disabled{background:#C9BFA8;}
-  .close-btn{
-    position:absolute;top:16px;right:18px;background:none;border:none;font-size:20px;color:var(--text-soft);cursor:pointer;
-  }
-
-  .rep-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
-  .rep-chip{
-    display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--line);
-    border-radius:20px;padding:5px 8px 5px 12px;font-size:12.5px;color:var(--text);
-  }
-  .rep-chip button{
-    background:var(--line);border:none;border-radius:50%;width:18px;height:18px;color:var(--text);
-    font-size:11px;cursor:pointer;line-height:1;
-  }
-  .rep-add-row{display:flex;gap:8px;}
-  .rep-add-row input{
-    flex:1;padding:10px 12px;border-radius:9px;border:1.3px solid var(--line);font-size:13.5px;
-  }
-  .rep-add-btn{
-    padding:0 16px;border-radius:9px;border:none;background:var(--navy-deep);color:#fff;font-weight:700;
-    font-size:13px;cursor:pointer;
-  }
-
-  .month-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:11px;font-size:12.5px;}
-  .month-bar-label{width:76px;flex-shrink:0;color:var(--text-soft);}
-  .month-bar-track{flex:1;background:var(--bg);border-radius:6px;height:14px;overflow:hidden;}
-  .month-bar-fill{height:100%;background:var(--navy);border-radius:6px;}
-  .month-bar-value{width:170px;flex-shrink:0;text-align:right;font-weight:700;color:var(--navy-deep);white-space:nowrap;font-size:11.5px;}
-
-  .toast{
-    position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--k-kyotaku);color:#fff;
-    padding:10px 20px;border-radius:20px;font-size:12.5px;z-index:70;box-shadow:0 6px 16px rgba(0,0,0,.25);
-    display:none;
-  }
-
-  :root{
-    --dl-accent:#2563c4; --dl-accent-light:#dbeafe; --dl-green:#16a34a; --dl-green-light:#dcfce7;
-    --dl-red:#dc2626; --dl-yellow:#d97706; --dl-yellow-light:#fef3c7; --dl-gray-light:#e5e7eb;
-    --dl-surface:#ffffff; --dl-surface2:#f7f9fc; --dl-border:#dde3ec; --dl-shadow:0 1px 4px rgba(0,0,0,0.08);
-  }
-  /* ================= 案件管理セクション（元 営業記録.html を移植・dl- プレフィックス） ================= */
-  #dealSection{
-    padding:0 14px 20px; font-size:13px;
-  }
-  .dl-summary{ display:flex; gap:10px; margin:14px 0 12px; flex-wrap:wrap; }
-  .dl-card{ background:var(--dl-surface); border-radius:10px; padding:12px 10px; box-shadow:var(--dl-shadow); flex:1; min-width:88px; text-align:center; }
-  .dl-card .dl-num{ font-size:20px; font-weight:700; color:var(--navy-deep); }
-  .dl-card .dl-label{ font-size:10.5px; color:var(--text-soft); margin-top:2px; }
-  .dl-card.dl-alert .dl-num{ color:var(--dl-red); }
-  .dl-card.dl-success .dl-num{ color:var(--dl-green); }
-  .dl-card.dl-warn .dl-num{ color:var(--dl-yellow); }
-  .dl-sync-row{ font-size:11px; color:var(--text-soft); margin-bottom:10px; text-align:right; }
-  .dl-month-tabs-wrap{ background:var(--dl-surface); border-radius:10px; box-shadow:var(--dl-shadow); margin-bottom:10px; padding:8px 10px 0; overflow-x:auto; }
-  .dl-month-tabs{ display:flex; gap:4px; min-width:max-content; border-bottom:2px solid var(--dl-border); }
-  .dl-month-tab{ padding:7px 12px; font-size:12px; font-weight:600; cursor:pointer; border:none; background:none; color:var(--text-soft); border-bottom:3px solid transparent; margin-bottom:-2px; white-space:nowrap; }
-  .dl-month-tab.active{ color:var(--dl-accent); border-bottom-color:var(--dl-accent); }
-  .dl-month-tab .dl-tab-cnt{ display:inline-block; background:var(--dl-gray-light); color:var(--text-soft); font-size:10px; font-weight:700; padding:1px 5px; border-radius:8px; margin-left:4px; }
-  .dl-month-tab.active .dl-tab-cnt{ background:var(--dl-accent-light); color:var(--dl-accent); }
-  .dl-toolbar{ background:var(--dl-surface); border-radius:10px; padding:10px 12px; box-shadow:var(--dl-shadow); margin-bottom:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-  .dl-toolbar input, .dl-toolbar select{ border:1px solid var(--dl-border); border-radius:6px; padding:6px 9px; font-size:12px; background:var(--dl-surface2); color:var(--text); height:32px; }
-  .dl-toolbar input{ flex:1; min-width:140px; }
-  .dl-btn{ padding:6px 13px; border-radius:6px; border:none; cursor:pointer; font-size:12px; font-weight:600; height:32px; white-space:nowrap; }
-  .dl-btn-primary{ background:var(--dl-accent); color:#fff; }
-  .dl-btn-success{ background:var(--dl-green); color:#fff; }
-  .dl-btn-outline{ background:transparent; border:1px solid var(--dl-border); color:var(--text-soft); }
-  .dl-table-wrap{ background:var(--dl-surface); border-radius:10px; box-shadow:var(--dl-shadow); overflow:auto; }
-  .dl-table-wrap table{ width:100%; border-collapse:collapse; }
-  .dl-table-wrap thead th{ background:var(--dl-accent); color:#fff; padding:8px 9px; font-size:11px; font-weight:600; text-align:left; white-space:nowrap; position:sticky; top:0; }
-  .dl-table-wrap tbody tr{ border-bottom:1px solid var(--dl-border); }
-  .dl-table-wrap tbody tr:hover{ background:#f0f6ff; }
-  .dl-table-wrap td{ padding:8px 9px; vertical-align:middle; white-space:nowrap; }
-  .dl-alert-row{ background:#fff5f5 !important; }
-  .dl-alert-row:hover{ background:#ffe4e4 !important; }
-  .dl-alert-badge{ display:inline-block; background:var(--dl-red); color:#fff; font-size:10px; font-weight:700; padding:2px 6px; border-radius:10px; margin-left:4px; }
-  .dl-status{ display:inline-block; padding:3px 8px; border-radius:10px; font-size:11px; font-weight:600; cursor:pointer; }
-  .dl-s-active{ background:var(--dl-accent-light); color:var(--dl-accent); }
-  .dl-s-success{ background:var(--dl-green-light); color:var(--dl-green); }
-  .dl-s-lost{ background:var(--dl-gray-light); color:var(--text-soft); }
-  .dl-s-hold{ background:var(--dl-yellow-light); color:var(--dl-yellow); }
-  .dl-care{ display:inline-block; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:700; background:#e0e7ff; color:#3730a3; }
-  .dl-date-overdue{ color:var(--dl-red); font-weight:700; }
-  .dl-action-btns{ display:flex; gap:4px; }
-  .dl-btn-icon{ border:none; background:none; cursor:pointer; padding:4px 6px; border-radius:4px; font-size:13px; line-height:1; }
-  .dl-btn-icon:hover{ background:var(--dl-surface2); }
-  .dl-modal-bg{ display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.82); z-index:100; align-items:center; justify-content:center; }
-  .dl-modal-bg.open{ display:flex; }
-  .dl-modal{ background:var(--dl-surface); border-radius:12px; padding:22px; width:480px; max-width:92vw; max-height:88vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.18); }
-  .dl-modal h2{ font-size:15px; margin-bottom:14px; color:var(--dl-accent); }
-  .dl-form-row{ margin-bottom:11px; }
-  .dl-form-row label{ display:block; font-size:11px; font-weight:600; color:var(--text-soft); margin-bottom:4px; }
-  .dl-form-row input, .dl-form-row select, .dl-form-row textarea{ width:100%; border:1px solid var(--dl-border); border-radius:6px; padding:7px 9px; font-size:13px; background:var(--dl-surface2); color:var(--text); font-family:inherit; }
-  .dl-form-row textarea{ resize:vertical; min-height:56px; }
-  .dl-form-2col{ display:grid; grid-template-columns:1fr 1fr; gap:9px; }
-  .dl-modal-footer{ display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
-  .dl-empty{ text-align:center; padding:36px; color:var(--text-soft); }
-</style>
-</head>
-<body>
-
-<!-- ログイン画面 -->
-<div id="loginScreen">
-  <div class="login-card">
-    <div class="mark">診</div>
-    <h1>営業周り</h1>
-    <p>大分高齢者紹介センター 訪問管理</p>
-    <div id="googleLoginArea" style="display:none;margin-bottom:16px;">
-      <div id="gsiButton" style="display:flex;justify-content:center;"></div>
-    </div>
-    <div id="legacyLoginArea">
-      <input type="password" id="pwInput" inputmode="numeric" maxlength="8" placeholder="パスワード">
-      <button onclick="tryLogin()">開く</button>
-    </div>
-    <div class="login-err" id="loginErr"></div>
-  </div>
-</div>
-
-<!-- メイン画面 -->
-<div id="app">
-  <header class="top">
-    <div class="brand"><span class="dot"></span>営業周り<button class="pw-gear" onclick="openPwChange()" title="設定">⚙</button></div>
-    <div class="sub">大分高齢者紹介センター ／ 施設訪問・案件管理<span id="loginWhoami"></span></div>
-  </header>
-
-  <div class="kpi-bar" id="visitKpiBar">
-    <div class="kpi"><div class="kpi-num" id="kpiTotal">-</div><div class="kpi-label">対象施設</div></div>
-    <div class="kpi"><div class="kpi-num" id="kpiVisited">-</div><div class="kpi-label">今月訪問済</div></div>
-    <div class="kpi overdue"><div class="kpi-num" id="kpiOverdue">-</div><div class="kpi-label">要フォロー</div></div>
-  </div>
-
-  <div class="tabs">
-    <button id="mainTabVisit" class="active" onclick="switchMainTab('visit')">施設訪問</button>
-    <button id="mainTabFacility" class="admin-only" onclick="switchMainTab('facility')">施設管理</button>
-    <button id="mainTabReferral" onclick="switchMainTab('referral')">紹介管理</button>
-    <button id="mainTabDeal" onclick="switchMainTab('deal')">案件管理</button>
-  </div>
-
-  <!-- ============ 施設訪問セクション ============ -->
-  <div id="visitSection">
-    <div class="filters">
-      <input type="text" id="fSearch" placeholder="施設名で検索" oninput="renderAll()">
-      <select id="fCity" onchange="renderAll()"><option value="">市区町村：すべて</option></select>
-      <select id="fKind" onchange="renderAll()">
-        <option value="">種別：すべて</option>
-        <option value="包括">包括</option><option value="居宅">居宅</option>
-        <option value="老健">老健</option><option value="病院">病院</option>
-      </select>
-      <select id="fRep" onchange="renderAll()"><option value="">担当者：すべて</option></select>
-      <select id="fStatus" onchange="renderAll()">
-        <option value="">状態：すべて</option>
-        <option value="overdue">要フォロー</option>
-        <option value="upcoming">次回予定あり</option>
-        <option value="none">未訪問</option>
-      </select>
-    </div>
-
-    <div class="filters">
-      <select id="fVacancy" onchange="renderAll()">
-        <option value="">空床状況：すべて</option>
-        <option value="available">空床あり</option>
-        <option value="few">残りわずか</option>
-        <option value="full">満床</option>
-      </select>
-      <select id="fGender" onchange="renderAll()">
-        <option value="">性別条件：すべて</option>
-        <option value="male">男性のみ</option>
-        <option value="female">女性のみ</option>
-      </select>
-      <select id="fCare" onchange="renderAll()">
-        <option value="">要介護度：すべて</option>
-        <option value="1">要介護1</option><option value="2">要介護2</option><option value="3">要介護3</option>
-        <option value="4">要介護4</option><option value="5">要介護5</option>
-      </select>
-      <select id="fTag" onchange="renderAll()">
-        <option value="">対応項目：すべて</option>
-      </select>
-    </div>
-
-    <div class="filters" id="actionBar">
-      <button id="addReferralFacilityBtn" class="dl-btn dl-btn-success admin-only-inline" onclick="openFacilityEdit(null, '')">＋ 紹介施設を追加</button>
-      <button id="vacancyListBtn" class="nearby-btn" onclick="openVacancyList()">🛏 空床一覧</button>
-      <button id="monthlyBtn" class="nearby-btn" onclick="openMonthly()">📊 月別実績を見る</button>
-      <button id="scheduleBtn" class="nearby-btn" onclick="openSchedule()">📅 営業予定表</button>
-    </div>
-
-    <div id="listView"></div>
-  </div>
-
-  <!-- ============ 施設管理セクション（管理者のみ） ============ -->
-  <div id="facilitySection" style="display:none;">
-    <div class="empty" style="padding:6px 2px 12px;text-align:left;color:var(--text-soft);font-size:12px;">
-      ここには「法人・グループ」欄に入力された施設（現在：悠久福祉会）だけが表示されます。空床管理はこの施設が対象です。
-    </div>
-    <div class="filters">
-      <input type="text" id="fmSearch" placeholder="施設名で検索" oninput="renderFacilityAdminTable()">
-      <button class="dl-btn dl-btn-success" onclick="openFacilityEdit(null, '悠久福祉会')">＋ 悠久福祉会の施設を追加</button>
-      <button class="dl-btn dl-btn-outline" onclick="loadData().then(()=>{populateFilterOptions();renderAll();renderFacilityAdminTable();showToast('最新データを取得しました');})">🔄 再読み込み</button>
-    </div>
-    <div class="dl-table-wrap">
-      <table>
-        <thead>
-          <tr><th>施設名</th><th>種別</th><th>市区町村</th><th>定員/現在/空床</th><th>状態</th><th>更新日</th><th>操作</th></tr>
-        </thead>
-        <tbody id="fm-table-body"><tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-soft)">読み込み中...</td></tr></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- ============ 紹介管理セクション ============ -->
-  <div id="referralSection" style="display:none;">
-    <div class="filters">
-      <input type="text" id="refSearch" placeholder="利用者名・施設名で検索" oninput="renderReferralList()">
-      <select id="refStatus" onchange="renderReferralList()">
-        <option value="">状態：すべて</option>
-        <option value="相談中">相談中</option>
-        <option value="見学予定">見学予定</option>
-        <option value="入居決定">入居決定</option>
-        <option value="キャンセル">キャンセル</option>
-      </select>
-      <button class="dl-btn dl-btn-success" onclick="openReferralEdit(null)">＋ 紹介を記録</button>
-    </div>
-    <div class="dl-table-wrap">
-      <table>
-        <thead>
-          <tr><th>相談日</th><th>利用者名</th><th>紹介施設</th><th>見学日</th><th>入居日</th><th>状態</th><th>担当者</th><th>操作</th></tr>
-        </thead>
-        <tbody id="ref-table-body"><tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-soft)">読み込み中...</td></tr></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- ============ 案件管理セクション ============ -->
-  <div id="dealSection" style="display:none;">
-    <div class="dl-sync-row" id="dl-sync-status">読み込み中...</div>
-    <div class="dl-summary">
-      <div class="dl-card"><div class="dl-num" id="dl-cnt-all">—</div><div class="dl-label">総件数</div></div>
-      <div class="dl-card dl-warn"><div class="dl-num" id="dl-cnt-active">—</div><div class="dl-label">商談中</div></div>
-      <div class="dl-card dl-alert"><div class="dl-num" id="dl-cnt-alert">—</div><div class="dl-label">⚠未対応7日超</div></div>
-      <div class="dl-card dl-success"><div class="dl-num" id="dl-cnt-success">—</div><div class="dl-label">成約</div></div>
-      <div class="dl-card"><div class="dl-num" id="dl-cnt-lost">—</div><div class="dl-label">失注</div></div>
-    </div>
-    <div class="dl-month-tabs-wrap"><div class="dl-month-tabs" id="dl-month-tabs"></div></div>
-    <div class="dl-toolbar">
-      <input type="text" id="dl-search" placeholder="🔍 氏名・施設・担当者で検索">
-      <select id="dl-filter-status">
-        <option value="">ステータス 全て</option>
-        <option value="商談中">商談中</option><option value="成約">成約</option>
-        <option value="失注">失注</option><option value="保留">保留</option>
-      </select>
-      <select id="dl-filter-care">
-        <option value="">介護度 全て</option>
-        <option value="要支援1">要支援1</option><option value="要支援2">要支援2</option>
-        <option value="要介護1">要介護1</option><option value="要介護2">要介護2</option>
-        <option value="要介護3">要介護3</option><option value="要介護4">要介護4</option><option value="要介護5">要介護5</option>
-      </select>
-      <select id="dl-filter-gender">
-        <option value="">性別 全て</option><option value="男性">男性</option><option value="女性">女性</option>
-      </select>
-      <button class="dl-btn dl-btn-success" onclick="dealOpenModal()">＋ 新規追加</button>
-      <button class="dl-btn dl-btn-outline" onclick="dealExportCSV()">⬇ CSV出力</button>
-      <button class="dl-btn dl-btn-outline" onclick="toggleDealMonthly()">📊 月別比較</button>
-    </div>
-    <div class="dl-table-wrap" id="dl-monthly-compare" style="display:none;margin-bottom:10px;padding:10px 12px;"></div>
-    <div class="dl-table-wrap">
-      <table>
-        <thead>
-          <tr><th>#</th><th>相談日</th><th>利用者氏名</th><th>介護度</th><th>性別</th><th>希望施設</th><th>クロージング日</th><th>ステータス</th><th>担当者</th><th>メモ</th><th>操作</th></tr>
-        </thead>
-        <tbody id="dl-table-body"><tr><td colspan="11" style="text-align:center;padding:30px;color:var(--text-soft)">読み込み中...</td></tr></tbody>
-      </table>
-      <div class="dl-empty" id="dl-empty-msg" style="display:none">該当するデータがありません</div>
-    </div>
-  </div>
-</div>
-
-<!-- 詳細/訪問記録モーダル -->
-<div class="overlay" id="detailOverlay">
-  <div class="sheet">
-    <button class="close-btn" onclick="closeDetail()">×</button>
-    <div class="sheet-handle"></div>
-    <span class="badge" id="dKind">-</span>
-    <h2 id="dName">-</h2>
-    <div class="addr" id="dAddr">-</div>
-    <a class="maplink" id="dMapLink" href="#" target="_blank" rel="noopener">Googleマップで開く ›</a>
-    <div id="dVacancyBox" style="margin-top:12px;"></div>
-
-    <div class="divider"></div>
-    <h3 style="font-size:13.5px;margin:0 0 8px;">訪問記録を追加</h3>
-    <div class="form-row">
-      <label>訪問日</label>
-      <input type="date" id="vDate">
-    </div>
-    <div class="form-row">
-      <label>担当者</label>
-      <select id="vRep"></select>
-    </div>
-    <div class="form-row">
-      <label>メモ</label>
-      <textarea id="vMemo" placeholder="面談内容、相手担当者名、紹介状況など"></textarea>
-    </div>
-    <div class="form-row">
-      <label>次回訪問予定日（任意）</label>
-      <input type="date" id="vNext">
-    </div>
-    <button class="save-btn" id="vSaveBtn" onclick="submitVisit()">この内容で記録する</button>
-
-    <div class="divider"></div>
-    <h3 style="font-size:13.5px;margin:0 0 4px;">訪問履歴</h3>
-    <div id="dHistory"><div class="empty">読み込み中...</div></div>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
-
-<!-- 月別訪問実績モーダル -->
-<div class="overlay" id="monthlyOverlay">
-  <div class="sheet">
-    <button class="close-btn" onclick="closeMonthly()">×</button>
-    <div class="sheet-handle"></div>
-    <h2 style="font-size:16px;">月別実績（訪問・紹介・入居）</h2>
-    <div id="monthlyList" style="margin-top:14px;"></div>
-  </div>
-</div>
-
-<!-- 営業予定表モーダル -->
-<div class="overlay" id="scheduleOverlay">
-  <div class="sheet">
-    <button class="close-btn" onclick="closeSchedule()">×</button>
-    <div class="sheet-handle"></div>
-    <h2 style="font-size:16px;">営業予定表</h2>
-    <div id="scheduleList" style="margin-top:14px;"></div>
-  </div>
-</div>
-
-<!-- 空床一覧モーダル -->
-<div class="overlay" id="vacancyListOverlay">
-  <div class="sheet">
-    <button class="close-btn" onclick="closeVacancyList()">×</button>
-    <div class="sheet-handle"></div>
-    <h2 style="font-size:16px;">空床一覧</h2>
-    <div id="vacancyListBody" style="margin-top:14px;"></div>
-  </div>
-</div>
-
-<!-- 施設 新規追加/編集モーダル（管理者のみ） -->
-<div class="overlay" id="addFacilityOverlay">
-  <div class="sheet">
-    <button class="close-btn" onclick="closeAddFacility()">×</button>
-    <div class="sheet-handle"></div>
-    <h2 style="font-size:16px;" id="afTitle">施設を追加</h2>
-    <div class="form-row" style="margin-top:14px;">
-      <label>法人・グループ（例：悠久福祉会。入力すると空床管理の対象になります／空欄なら紹介施設として住所などのみ管理）</label>
-      <input type="text" id="afGroup" placeholder="例：悠久福祉会（空欄でも可）" list="groupDatalist">
-      <datalist id="groupDatalist"><option value="悠久福祉会"></option></datalist>
-    </div>
-    <div class="form-row">
-      <label>施設名 *</label>
-      <input type="text" id="afName" placeholder="例：〇〇居宅介護支援事業所">
-    </div>
-    <div class="form-row">
-      <label>市区町村</label>
-      <input type="text" id="afCity" placeholder="例：大分市">
-    </div>
-    <div class="form-row">
-      <label>種別</label>
-      <select id="afKind">
-        <option value="">未設定</option>
-        <option value="特養">特養</option>
-        <option value="有料">有料</option>
-        <option value="ショート">ショート</option>
-        <option value="居宅">居宅</option>
-        <option value="病院">病院</option>
-        <option value="老健">老健</option>
-        <option value="包括">包括</option>
-      </select>
-    </div>
-    <div class="form-row">
-      <label>住所 *</label>
-      <input type="text" id="afAddr" placeholder="例：大分県大分市〇〇1丁目1番1号">
-    </div>
-    <div class="form-row">
-      <label>電話番号</label>
-      <input type="text" id="afTel" placeholder="例：097-000-0000">
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <div class="form-row"><label>FAX</label><input type="text" id="afFax" placeholder="例：097-000-0001"></div>
-      <div class="form-row"><label>携帯番号</label><input type="text" id="afMobile" placeholder="例：090-0000-0000"></div>
-    </div>
-    <div class="form-row">
-      <label>担当者</label>
-      <select id="afRep"></select>
-    </div>
-    <div class="divider"></div>
-    <h3 style="font-size:13px;margin:0 0 10px;color:var(--navy-deep);">空床・受入情報</h3>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <div class="form-row"><label>定員</label><input type="number" id="afCapacity" min="0" oninput="updateAfVacancyPreview()"></div>
-      <div class="form-row"><label>現在の入居人数</label><input type="number" id="afOccupied" min="0" oninput="updateAfVacancyPreview()"></div>
-    </div>
-    <div class="vacancy-box" id="afVacancyPreview" style="margin-bottom:12px;">定員と現在人数を入力すると空床数が自動計算されます</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" id="afMale">男性のみ受入</label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" id="afFemale">女性のみ受入</label>
-    </div>
-    <div class="form-row" style="margin-top:10px;">
-      <label>対応可能な要介護度</label>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <label style="font-size:12.5px;"><input type="checkbox" class="af-care" value="0">要支援</label>
-        <label style="font-size:12.5px;"><input type="checkbox" class="af-care" value="1">要介護1</label>
-        <label style="font-size:12.5px;"><input type="checkbox" class="af-care" value="2">要介護2</label>
-        <label style="font-size:12.5px;"><input type="checkbox" class="af-care" value="3">要介護3</label>
-        <label style="font-size:12.5px;"><input type="checkbox" class="af-care" value="4">要介護4</label>
-        <label style="font-size:12.5px;"><input type="checkbox" class="af-care" value="5">要介護5</label>
-      </div>
-    </div>
-    <div class="form-row" style="margin-top:10px;">
-      <label>対応項目（増やしたい項目は管理者が後から自由に追加できます）</label>
-      <div id="afTagList" style="display:flex;gap:8px 12px;flex-wrap:wrap;font-size:12.5px;"></div>
-    </div>
-    <div class="form-row" style="margin-top:10px;">
-      <label>備考</label>
-      <textarea id="afMemo" placeholder="その他特記事項"></textarea>
-    </div>
-    <button class="save-btn" id="afSaveBtn" onclick="submitAddFacility()">この内容で保存する</button>
-    <button class="save-btn" id="afDeleteBtn" style="background:var(--danger);display:none;" onclick="submitDeleteFacility()">この施設を削除する</button>
-    <div class="login-err" id="afErr" style="height:auto;margin-top:8px;"></div>
-  </div>
-</div>
-
-<!-- パスワード変更モーダル -->
-<div class="overlay" id="pwOverlay">
-  <div class="sheet">
-    <button class="close-btn" onclick="closePwChange()">×</button>
-    <div class="sheet-handle"></div>
-    <h2 style="font-size:16px;">パスワードを変更</h2>
-    <div class="form-row" style="margin-top:14px;">
-      <label>現在のパスワード</label>
-      <input type="password" id="pwOld">
-    </div>
-    <div class="form-row">
-      <label>新しいパスワード（4文字以上）</label>
-      <input type="password" id="pwNew1">
-    </div>
-    <div class="form-row">
-      <label>新しいパスワード（確認）</label>
-      <input type="password" id="pwNew2">
-    </div>
-    <button class="save-btn" id="pwSaveBtn" onclick="submitPwChange()">変更する</button>
-    <div class="login-err" id="pwErr" style="height:auto;margin-top:8px;"></div>
-
-    <div class="divider"></div>
-    <h3 style="font-size:13.5px;margin:0 0 8px;">担当者の管理</h3>
-    <div id="repChips" class="rep-chips"></div>
-    <div class="rep-add-row">
-      <input type="text" id="repNewName" placeholder="新しい担当者名">
-      <button class="rep-add-btn" onclick="addRepLocal()">＋追加</button>
-    </div>
-    <button class="save-btn" id="repSaveBtn" onclick="submitReps()" style="margin-top:10px;">この内容で保存する</button>
-    <div class="login-err" id="repErr" style="height:auto;margin-top:8px;"></div>
-
-    <div class="divider admin-only"></div>
-    <div class="admin-only">
-      <h3 style="font-size:13.5px;margin:0 0 8px;">許可するGoogleアカウント（管理者のみ）</h3>
-      <div id="accountChips" style="margin-bottom:10px;"></div>
-      <div class="rep-add-row" style="margin-bottom:8px;">
-        <input type="text" id="accNewEmail" placeholder="メールアドレス" style="flex:1.3;">
-        <input type="text" id="accNewName" placeholder="表示名" style="flex:1;">
-      </div>
-      <div class="rep-add-row">
-        <select id="accNewRole" style="flex:1;padding:10px;border-radius:9px;border:1.3px solid var(--line);">
-          <option value="rep">営業担当</option>
-          <option value="admin">管理者</option>
-        </select>
-        <button class="rep-add-btn" onclick="addAccountLocal()">＋追加</button>
-      </div>
-      <button class="save-btn" id="accSaveBtn" onclick="submitAccounts()" style="margin-top:10px;">この内容で保存する</button>
-      <div class="login-err" id="accErr" style="height:auto;margin-top:8px;"></div>
-    </div>
-
-    <div class="divider admin-only"></div>
-    <div class="admin-only">
-      <h3 style="font-size:13.5px;margin:0 0 8px;">管理者ツール</h3>
-      <button class="save-btn" style="background:var(--navy-deep);margin-bottom:8px;" onclick="openLoginHistory()">ログイン履歴を見る</button>
-      <button class="save-btn" style="background:var(--navy-deep);" onclick="runBackupNow()">今すぐバックアップを作成</button>
-      <div class="login-err" id="adminToolErr" style="height:auto;margin-top:8px;"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ログイン履歴モーダル（管理者のみ） -->
-<div class="overlay" id="loginHistoryOverlay">
-  <div class="sheet">
-    <button class="close-btn" onclick="closeLoginHistory()">×</button>
-    <div class="sheet-handle"></div>
-    <h2 style="font-size:16px;">ログイン履歴</h2>
-    <div id="loginHistoryList" style="margin-top:14px;font-size:12.5px;"></div>
-  </div>
-</div>
-
-<!-- 紹介 新規追加/編集モーダル -->
-<div class="overlay" id="referralOverlay">
-  <div class="sheet">
-    <button class="close-btn" onclick="closeReferralEdit()">×</button>
-    <div class="sheet-handle"></div>
-    <h2 style="font-size:16px;" id="refTitle">紹介を記録</h2>
-    <div class="form-row" style="margin-top:14px;">
-      <label>相談日 *</label>
-      <input type="date" id="refConsultDate">
-    </div>
-    <div class="form-row">
-      <label>利用者名</label>
-      <input type="text" id="refUserName" placeholder="例：山田 花子">
-    </div>
-    <div class="form-row">
-      <label>紹介施設 *</label>
-      <select id="refFacility"></select>
-    </div>
-    <div class="form-row">
-      <label>見学日（任意）</label>
-      <input type="date" id="refVisitDate">
-    </div>
-    <div class="form-row">
-      <label>入居日（任意）</label>
-      <input type="date" id="refMoveInDate">
-    </div>
-    <div class="form-row">
-      <label>キャンセル日（任意）</label>
-      <input type="date" id="refCancelDate">
-    </div>
-    <div class="form-row">
-      <label>状態</label>
-      <select id="refStatusSelect">
-        <option value="相談中">相談中</option>
-        <option value="見学予定">見学予定</option>
-        <option value="入居決定">入居決定</option>
-        <option value="キャンセル">キャンセル</option>
-      </select>
-    </div>
-    <div class="form-row">
-      <label>担当者</label>
-      <select id="refRep"></select>
-    </div>
-    <div class="form-row">
-      <label>メモ</label>
-      <textarea id="refMemo" placeholder="紹介の経緯、状況など"></textarea>
-    </div>
-    <button class="save-btn" id="refSaveBtn" onclick="submitReferral()">この内容で保存する</button>
-    <button class="save-btn" id="refDeleteBtn" style="background:var(--danger);display:none;" onclick="submitDeleteReferral()">この紹介記録を削除する</button>
-    <div class="login-err" id="refErr" style="height:auto;margin-top:8px;"></div>
-  </div>
-</div>
-
-<!-- 案件 新規追加/編集モーダル -->
-<div class="dl-modal-bg" id="dl-modal">
-  <div class="dl-modal">
-    <h2 id="dl-modal-title">新規案件を追加</h2>
-    <div class="dl-form-2col">
-      <div class="dl-form-row"><label>相談日 *</label><input type="date" id="dl-f-consult"></div>
-      <div class="dl-form-row"><label>クロージング日</label><input type="date" id="dl-f-close"></div>
-    </div>
-    <div class="dl-form-row"><label>利用者氏名 *</label><input type="text" id="dl-f-name" placeholder="例：山田 花子"></div>
-    <div class="dl-form-2col">
-      <div class="dl-form-row"><label>介護度</label>
-        <select id="dl-f-care"><option value="">未定</option><option>要支援1</option><option>要支援2</option><option>要介護1</option><option>要介護2</option><option>要介護3</option><option>要介護4</option><option>要介護5</option></select>
-      </div>
-      <div class="dl-form-row"><label>性別</label>
-        <select id="dl-f-gender"><option value="">未記入</option><option>男性</option><option>女性</option></select>
-      </div>
-    </div>
-    <div class="dl-form-row"><label>希望施設</label><input type="text" id="dl-f-facility" placeholder="例：みなはるの里、悠久の里"></div>
-    <div class="dl-form-2col">
-      <div class="dl-form-row"><label>ステータス</label>
-        <select id="dl-f-status"><option>商談中</option><option>成約</option><option>失注</option><option>保留</option></select>
-      </div>
-      <div class="dl-form-row"><label>担当者名</label><input type="text" id="dl-f-staff" list="repDatalist" placeholder="例：牧 良子"></div>
-      <datalist id="repDatalist"></datalist>
-    </div>
-    <div class="dl-form-row"><label>メモ</label><textarea id="dl-f-memo" placeholder="家族の状況、本人の希望など"></textarea></div>
-    <div class="dl-modal-footer">
-      <button class="dl-btn dl-btn-outline" onclick="dealCloseModal()">キャンセル</button>
-      <button class="dl-btn dl-btn-primary" id="dl-save-btn" onclick="dealSaveRecord()">保存</button>
-    </div>
-  </div>
-</div>
-
-<script>
-/* ============ 設定 ============
-   施設訪問データ用 GAS（施設マスタ・訪問記録・設定シート）      */
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxYLjGt7vlDkNylFRyD-_0ubXDkO4DCyukmlwsM8XkeHGdIZsMITaCvHpzBcv-s1vtq/exec';
-/* 案件管理データ用 GAS（既存の「営業記録」バックエンド。変更なしでそのまま利用） */
-const DEAL_GAS_URL = 'https://script.google.com/macros/s/AKfycbzvfCyfMX-xd862m77B1jNhJMQkDc6nv0iBd8UVGvyblooyL8UwtNR5yF2U87ZhZRzd/exec';
-/* Google Sign-In クライアントID。Google Cloud Consoleで発行後、ここに貼り替えてください。
-   未設定（PASTE_YOUR...のまま）の間は、従来の共通パスワードでログインできます。 */
+/** Google Sign-In 用クライアントID（Google Cloud Consoleで発行後、ここに設定） */
 const GOOGLE_CLIENT_ID = 'PASTE_YOUR_GOOGLE_CLIENT_ID_HERE';
-/* ============================== */
+/** セッショントークン署名用の秘密文字列（他人に推測されない適当な長い文字列に変更してよい） */
+const SESSION_SECRET = 'eigyomawari-session-secret-2026-change-if-you-like';
+/** セッション有効期限（ミリ秒）：8時間 */
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
-let currentPassword = null;   // 旧・共通パスワード方式でログインした場合に保持
-let currentSessionToken = null; // Googleログイン方式でログインした場合に保持
-let currentUserName = '';
-let currentUserRole = 'legacy'; // 'admin' | 'rep' | 'legacy'
-
-function authPayload(){
-  return currentSessionToken ? {sessionToken: currentSessionToken} : {password: currentPassword};
-}
-function isAdmin(){
-  return currentUserRole === 'admin' || currentUserRole === 'legacy';
-}
-
-let facilities = [];
-let visits = [];
-let referrals = [];
-let repList = [];
-let repListDraft = [];
-let allowedAccounts = [];
-let allowedAccountsDraft = [];
-let currentFacilityId = null;
-let currentReferralId = null;
-let editingFacilityId = null;
-const KIND_COLOR = {'包括':'#3B6EA5','居宅':'#4C8C63','老健':'#C9902E','病院':'#B14C4C'};
-/* 施設の「対応項目」タグ一覧。ここに追加・削除するだけで、検索フィルターと施設編集フォームの両方に反映されます。
-   （施設マスタの列を増やす必要はありません＝拡張しやすい設計） */
-const FACILITY_TAGS = [
-  '生活保護','認知症','看取り','インスリン','胃ろう','バルーン','ストマ','透析',
-  '在宅酸素','吸引','経管栄養','定期巡回対応','ショート利用可','夫婦部屋あり'
+// 施設マスタ 列定義（V2：既存8列 + 新規14列。既存データは残したまま列を追加するだけなので消えません）
+// ※「対応タグ」はカンマ区切りの自由なタグ一覧（生活保護,認知症,看取り,インスリン,胃ろう,バルーン,ストマ,透析,
+//    在宅酸素,吸引,経管栄養,定期巡回,ショート,夫婦部屋 など）。将来タグを増やしても列を追加する必要がありません。
+// ※「最終営業日」は保存せず、訪問記録から都度計算する（フロント側 statusFor 等を参照）ため列は持たない。
+// ※「法人グループ」が入っている施設（例：悠久福祉会）だけが空床管理の対象。空欄の施設は紹介施設として
+//    施設情報のみ管理し、空床の自動計算・表示は行わない（施設検索では両方まとめて検索できる）。
+const FACILITY_HEADER = [
+  'ID', '市区町村', '種別', '施設名', '担当者', '住所', '緯度', '経度',
+  '電話番号', 'FAX', '携帯番号', '定員', '現在入居数',
+  '男性受入', '女性受入', '要介護対応', '対応タグ', '備考', '更新日', '最終更新者', '法人グループ'
 ];
-let mainTab = 'visit';
-let dealLoaded = false;
+const VISIT_HEADER = ['ID', '施設ID', '施設名', '訪問日', '担当者', 'メモ', '次回訪問予定日', '登録日時'];
+const REFERRAL_HEADER = ['ID', '相談日', '利用者名', '施設ID', '施設名', '見学日', '入居日', 'キャンセル日', 'ステータス', '担当者', 'メモ', '登録日時', '紹介元区分', '紹介元施設ID', '紹介元施設名'];
+const LOGIN_LOG_HEADER = ['日時', 'メールアドレス', '名前', '権限'];
 
-function switchMainTab(tab){
-  if((tab==='facility') && !isAdmin()){
-    showToast('施設管理は管理者のみ利用できます');
-    return;
+// 自法人（悠久福祉会）の施設。ここに追加した施設だけ「空床管理あり」として扱われます。
+// 将来施設が増えても、このリストに1行足すか、施設管理タブの「法人・グループ」欄に "悠久福祉会" と
+// 入力するだけで空床管理の対象にできます（コードを変更する必要はありません）。
+const YUKYU_GROUP_FACILITIES = [
+  { name: '悠久の里一番館', kind: '有料' },
+  { name: '悠久の里二番館', kind: '有料' },
+  { name: '悠久の里三番館', kind: '有料' },
+  { name: '悠久の里横尾', kind: '有料' },
+  { name: '悠久の里佐伯', kind: '有料' },
+  { name: '悠久の里米良', kind: '有料' },
+  { name: 'みなはるの里（特養）', kind: '特養' },
+  { name: 'みなはるの里（有料）', kind: '有料' },
+  { name: 'みなはるの里（ショートステイ）', kind: 'ショート' },
+  { name: 'みどりの郷ほんじょう', kind: '有料' }
+];
+
+// 初期投入用 施設データ（大分高齢者紹介センター 全体リストから取り込み・267件）
+const INITIAL_FACILITIES = [
+  ["F001", "大分市", "居宅", "ふじが丘介護保険サービスセンター", "岩矢", "大分県大分市ふじが丘南1丁目16番10号", "", ""],
+  ["F002", "大分市", "老健", "介護老人保健施設メディケアふじが丘", "岩矢", "大分県大分市ふじが丘南1丁目16番10号", "", ""],
+  ["F003", "大分市", "居宅", "いまじん介護相談室", "岩矢", "大分県大分市三ケ田町3丁目4番1号", "", ""],
+  ["F004", "大分市", "居宅", "介護保険サービスセンターほむら", "岩矢", "大分県大分市三佐5丁目4番5号 エクレール三佐A102号", "", ""],
+  ["F005", "大分市", "居宅", "介護保険サービスセンターほんだ", "岩矢", "大分県大分市三川上ニ丁目6番36号", "", ""],
+  ["F006", "大分市", "居宅", "介護相談 こねくと", "岩矢", "大分県大分市三川新町1丁目2-1 三川ホワイトオフィス109号", "", ""],
+  ["F007", "大分市", "居宅", "ケアプランセンター実の里", "岩矢", "大分県大分市三芳642番地", "", ""],
+  ["F008", "大分市", "病院", "医療法人社団 親和会 衛藤病院", "岩矢", "大分県大分市上判田", "", ""],
+  ["F009", "大分市", "居宅", "ケアステーションあん", "岩矢", "大分県大分市上宗方544-1 グリーンシティ雄城台201号室", "", ""],
+  ["F010", "大分市", "居宅", "Greenガーデン南大分居宅介護支援センター", "岩矢", "大分県大分市上田町3丁目3番4-111号 チュリス古国府壱番館", "", ""],
+  ["F011", "大分市", "居宅", "ケアサポートやました", "岩矢", "大分県大分市下判田2349－1", "", ""],
+  ["F012", "大分市", "居宅", "ケアサポート宗方", "岩矢", "大分県大分市下宗方字櫛引258番地", "", ""],
+  ["F013", "大分市", "居宅", "介護相談サービス 佑マネジメント", "岩矢", "大分県大分市下郡中央3丁目3番10号 グリーンフラットノダ103号", "", ""],
+  ["F014", "大分市", "居宅", "いちごプラン", "岩矢", "大分県大分市下郡中央三丁目3番10号 グリーンフラットノダ101号", "", ""],
+  ["F015", "大分市", "居宅", "介護保険サービスセンターだいかく", "岩矢", "大分県大分市下郡山の手2番18号", "", ""],
+  ["F016", "大分市", "病院", "医療法人秀明会 だいかく病院", "岩矢", "大分県大分市下郡山の手２番１８号", "", ""],
+  ["F017", "大分市", "居宅", "介護保険サービスセンターこが", "岩矢", "大分県大分市中鶴崎2丁目4番29号", "", ""],
+  ["F018", "大分市", "居宅", "ＪＡおおいた大分福祉サービスセンター", "岩矢", "大分県大分市丹生147番地の3", "", ""],
+  ["F019", "大分市", "居宅", "おれんじ・ケアプラン", "岩矢", "大分県大分市今津留三丁目13番21号レジデンス丸互203号", "", ""],
+  ["F020", "大分市", "居宅", "ケアプランはるか", "岩矢", "大分県大分市仲西町1丁目1番24号 第一森和ビル107号", "", ""],
+  ["F021", "大分市", "居宅", "L.L.C．ハートブリッジ・介護サポートセンター風", "岩矢", "大分県大分市仲西町2丁目5番4号 メゾンナカニシ105号", "", ""],
+  ["F022", "大分市", "居宅", "Greenガーデンさがのせき居宅", "岩矢", "大分県大分市佐賀関335番地", "", ""],
+  ["F023", "大分市", "居宅", "大分市介護保険サービスセンターさざんか佐賀関事業所", "岩矢", "大分県大分市佐賀関869番地の4", "", ""],
+  ["F024", "大分市", "居宅", "社会医療法人関愛会 ケアセンターひまわり", "岩矢", "大分県大分市佐賀関880番地の1", "", ""],
+  ["F025", "大分市", "病院", "社会医療法人関愛会 佐賀関病院", "岩矢", "大分県大分市佐賀関７５０－８８", "", ""],
+  ["F026", "大分市", "居宅", "Ｂａｎｓｏ相談支援センター", "岩矢", "大分県大分市佐野４０５８番地", "", ""],
+  ["F027", "大分市", "居宅", "介護保険サービスセンター柞原の里", "岩矢", "大分県大分市八幡320番地の1", "", ""],
+  ["F028", "大分市", "居宅", "介護保険相談 心音", "岩矢", "大分県大分市判田台北四丁目13番3号", "", ""],
+  ["F029", "大分市", "病院", "大分健生病院", "岩矢", "大分県大分市古ケ鶴１丁目１番１５号", "", ""],
+  ["F030", "大分市", "居宅", "社会医療法人関愛会 ケアセンター坂ノ市ひまわり", "岩矢", "大分県大分市坂ノ市中央3丁目18-9-1", "", ""],
+  ["F031", "大分市", "居宅", "いずみ在宅介護支援事業所", "岩矢", "大分県大分市大在北1丁目12番12号", "", ""],
+  ["F032", "大分市", "病院", "医療法人 輝心会 大分循環器病院", "岩矢", "大分県大分市大字三芳３２０番３", "", ""],
+  ["F033", "大分市", "病院", "井野辺病院", "岩矢", "大分県大分市大字中尾字平２５５", "", ""],
+  ["F034", "大分市", "老健", "介護老人保健施設陽光苑", "岩矢", "大分県大分市大字中戸次4525番地", "", ""],
+  ["F035", "大分市", "病院", "社会医療法人財団 天心堂 へつぎ病院", "岩矢", "大分県大分市大字中戸次字二本木５９５６番地", "", ""],
+  ["F036", "大分市", "居宅", "介護保険相談室ハート", "岩矢", "大分県大分市大字光吉1430番地の27", "", ""],
+  ["F037", "大分市", "居宅", "介護保険支援センターアルメイダ", "岩矢", "大分県大分市大字宮崎1315番地", "", ""],
+  ["F038", "大分市", "病院", "大分市医師会立アルメイダ病院", "岩矢", "大分県大分市大字宮崎１５０９－２", "", ""],
+  ["F039", "大分市", "病院", "大分リハビリテーション病院", "岩矢", "大分県大分市大字志村字谷ヶ迫７６５番地", "", ""],
+  ["F040", "大分市", "居宅", "居宅介護支援総合福祉施設「憩いの館」居宅介護支援事業所", "岩矢", "大分県大分市大字津守字長田2547番地の6", "", ""],
+  ["F041", "大分市", "居宅", "医療生協介護保険サービスセンター健生", "岡野", "大分県大分市大字津留字六本松1970-7", "", ""],
+  ["F042", "大分市", "包括", "大分市 稙田南地域包括支援センター", "岡野", "大分県大分市大字田尻659番地", "", ""],
+  ["F043", "大分市", "老健", "大分豊寿苑", "岡野", "大分県大分市大字皆春1521番地の1", "", ""],
+  ["F044", "大分市", "居宅", "介護保険サービスセンター清流苑", "岡野", "大分県大分市大字種具144番地", "", ""],
+  ["F045", "大分市", "病院", "医療法人 善慈会 大分丘の上病院", "岡野", "大分県大分市大字竹中１４０３番地", "", ""],
+  ["F046", "大分市", "居宅", "介護保険サービスセンター和泉荘", "岡野", "大分県大分市大字竹矢1006番地の1", "", ""],
+  ["F047", "大分市", "居宅", "誠寿園介護保険サービスセンター", "岡野", "大分県大分市大字辻902番地", "", ""],
+  ["F048", "大分市", "居宅", "介護保険相談センターTONERIKOの木 大分", "岡野", "大分県大分市大字野津原160番地1", "", ""],
+  ["F049", "大分市", "包括", "大分市 野津原地域包括支援センター", "岡野", "大分県大分市大字野津原字久保1505番地1", "", ""],
+  ["F050", "大分市", "居宅", "介護保険サービスセンター創生の里", "岡野", "大分県大分市大字野田306番地の2", "", ""],
+  ["F051", "大分市", "居宅", "天神ヴィラ 居宅介護支援事業所", "岡野", "大分県大分市大字駄原字天神平1670番地1", "", ""],
+  ["F052", "大分市", "病院", "今村病院", "岡野", "大分県大分市大手町３－２－２９", "", ""],
+  ["F053", "大分市", "病院", "リバーサイド病院", "岡野", "大分県大分市宮崎６番地の３", "", ""],
+  ["F054", "大分市", "病院", "大分県勤労者医療生活協同組合 大分協和病院", "岡野", "大分県大分市宮崎９５３番地の１", "", ""],
+  ["F055", "大分市", "居宅", "ケアプランたきた", "岡野", "大分県大分市小池原528番地の8", "", ""],
+  ["F056", "大分市", "老健", "介護老人保健施設ふない", "岡野", "大分県大分市府内町1丁目3番23号", "", ""],
+  ["F057", "大分市", "居宅", "居宅介護支援事業所 さくら", "岡野", "大分県大分市恵比寿町3-29", "", ""],
+  ["F058", "大分市", "病院", "藤島病院", "岡野", "大分県大分市敷戸台１－１－３３", "", ""],
+  ["F059", "大分市", "居宅", "介護保険相談センター きぼう", "岡野", "大分県大分市敷戸東町20番2号", "", ""],
+  ["F060", "大分市", "居宅", "居宅介護支援事業所スマイルゆい", "岡野", "大分県大分市敷戸西町1-3 ミクスチャーハウスえん２F", "", ""],
+  ["F061", "大分市", "居宅", "大分ケアプランエージェント", "岡野", "大分県大分市旦野原167番地", "", ""],
+  ["F062", "大分市", "居宅", "ウェルフェアサポートen", "岡野", "大分県大分市旦野原457番地 コーポKAI 102号室", "", ""],
+  ["F063", "大分市", "居宅", "グリーンコープケアプランセンター大分", "岡野", "大分県大分市旦野原880番地の96", "", ""],
+  ["F064", "大分市", "居宅", "南大分居宅介護支援センター", "岡野", "大分県大分市明磧町1丁目2番9号", "", ""],
+  ["F065", "大分市", "居宅", "介護保険相談センター結", "岡野", "大分県大分市明磧町一丁目4番38号 荏隈タウンB棟", "", ""],
+  ["F066", "大分市", "居宅", "ケアセンターゆぅゆぅ", "岡野", "大分県大分市明磧町一丁目9番77号", "", ""],
+  ["F067", "大分市", "居宅", "サンプレイス", "岡野", "大分県大分市明磧町二丁目１４番１号", "", ""],
+  ["F068", "大分市", "病院", "大分共立病院", "岡野", "大分県大分市明磧町１丁目２番９号", "", ""],
+  ["F069", "大分市", "病院", "医療法人 ライフサポート 明和記念病院", "岡野", "大分県大分市明野北", "", ""],
+  ["F070", "大分市", "老健", "老健めいわ", "岡野", "大分県大分市明野北1丁目2番18号", "", ""],
+  ["F071", "大分市", "居宅", "コスモス介護保険支援センター", "岡野", "大分県大分市東鶴崎2丁目3番35号", "", ""],
+  ["F072", "大分市", "老健", "介護老人保健施設やすらぎ苑", "岡野", "大分県大分市松岡字道ノ下1946番地", "", ""],
+  ["F073", "大分市", "病院", "社会医療法人関愛会 大東よつば病院", "岡野", "大分県大分市松岡１９４６番地", "", ""],
+  ["F074", "大分市", "居宅", "介護保険サービスセンターみよし", "岡野", "大分県大分市森町534番地の10", "", ""],
+  ["F075", "大分市", "病院", "河野脳神経外科病院", "岡野", "大分県大分市森町字花ノ木通５１１－１", "", ""],
+  ["F076", "大分市", "居宅", "Ｇｒｅｅｎガーデンもりまち居宅", "岡野", "大分県大分市森６４１番地３", "", ""],
+  ["F077", "大分市", "病院", "独立行政法人国立病院機構 大分医療センター", "岡野", "大分県大分市横田２丁目１１番４５号", "", ""],
+  ["F078", "大分市", "居宅", "介護保険サービスセンターおおつか", "岡野", "大分県大分市浜町東3組", "", ""],
+  ["F079", "大分市", "居宅", "介護保険サービスセンター愉里", "木﨑", "大分県大分市片島750番地", "", ""],
+  ["F080", "大分市", "病院", "医療法人愛恵会タキオ保養院", "木﨑", "大分県大分市片島１３５５", "", ""],
+  ["F081", "大分市", "居宅", "居宅介護支援センター大分まどか", "木﨑", "大分県大分市片島７３－１小野ビル３０１号室", "", ""],
+  ["F082", "大分市", "居宅", "さくらハウス介護サービスセンター", "木﨑", "大分県大分市牧1丁目25番1号", "", ""],
+  ["F083", "大分市", "居宅", "のりこえ居宅介護支援事業所", "木﨑", "大分県大分市牧1丁目9番24号", "", ""],
+  ["F084", "大分市", "老健", "介護老人保健施設さくらハウスぜぜ", "木﨑", "大分県大分市牧1丁目２５番１号", "", ""],
+  ["F085", "大分市", "居宅", "ケアサポート オハナ", "木﨑", "大分県大分市玉沢1191番地 ルピナスおぎ102", "", ""],
+  ["F086", "大分市", "病院", "織部病院", "木﨑", "大分県大分市田中町一丁目８番６２号", "", ""],
+  ["F087", "大分市", "老健", "介護老人保健施設たばる", "木﨑", "大分県大分市田原936番地1の1", "", ""],
+  ["F088", "大分市", "居宅", "田室ケアプランセンターいきいき", "木﨑", "大分県大分市田室町9番80号 アーバン田室128", "", ""],
+  ["F089", "大分市", "居宅", "ケアマネジメント影光", "木﨑", "大分県大分市田室町７番８号サンライフ米穀５０６号室", "", ""],
+  ["F090", "大分市", "居宅", "そうりんケアセンター稙田南", "木﨑", "大分県大分市田尻647-2", "", ""],
+  ["F091", "大分市", "居宅", "介護保険独立支援センター丸永樹", "木﨑", "大分県大分市田尻中央19番12号", "", ""],
+  ["F092", "大分市", "居宅", "居宅介護支援事業所トリコ", "木﨑", "大分県大分市田尻南1丁目4番8号", "", ""],
+  ["F093", "大分市", "居宅", "介護保険サービスセンターあおい", "木﨑", "大分県大分市畑中3丁目4番32-504号 フォレスト7", "", ""],
+  ["F094", "大分市", "居宅", "介護保険相談オフィス誠実", "木﨑", "大分県大分市畑中四丁目3番37号", "", ""],
+  ["F095", "大分市", "居宅", "大分豊寿苑居宅介護支援事業所", "木﨑", "大分県大分市皆春1521番地の1", "", ""],
+  ["F096", "大分市", "居宅", "介護保険サービスセンター清静園", "木﨑", "大分県大分市竹中5268番地", "", ""],
+  ["F097", "大分市", "居宅", "居宅介護支援事業所いきいきほっとカフェ", "木﨑", "大分県大分市緑が丘3丁目16番1号", "", ""],
+  ["F098", "大分市", "包括", "大分市 南大分地域包括支援センター", "木﨑", "大分県大分市羽屋4丁目1番68号 キクチテナントビル103号", "", ""],
+  ["F099", "大分市", "病院", "大分記念病院", "木﨑", "大分県大分市羽屋二丁目５番１０号", "", ""],
+  ["F100", "大分市", "居宅", "介護相談室 椿", "木﨑", "大分県大分市舞鶴町1丁目7番2-516号（エイルマンション城址公園東）", "", ""],
+  ["F101", "大分市", "居宅", "介護保険サービスセンターあかり2nd", "木﨑", "大分県大分市舞鶴町一丁目7-12 市川ビル201号", "", ""],
+  ["F102", "大分市", "居宅", "介護保険サービスセンター舞鶴清流苑", "木﨑", "大分県大分市西新地２丁目５－４０", "", ""],
+  ["F103", "大分市", "病院", "大分岡病院", "木﨑", "大分県大分市西鶴崎３丁目７番１１号", "", ""],
+  ["F104", "大分市", "居宅", "SJR大分ケアプランセンター", "木﨑", "大分県大分市要町6番32号", "", ""],
+  ["F105", "大分市", "居宅", "在宅ケアセンター大分", "木﨑", "大分県大分市豊饒二丁目3番23号", "", ""],
+  ["F106", "大分市", "居宅", "公益社団法人大分県看護協会訪問看護ステーションおおいた", "木﨑", "大分県大分市豊饒二丁目7番1号", "", ""],
+  ["F107", "大分市", "病院", "大分県立病院", "木﨑", "大分県大分市豊饒二丁目８番１号", "", ""],
+  ["F108", "大分市", "居宅", "居宅介護支援事業所 まねき", "木﨑", "大分県大分市賀来北2丁目9番3号メゾンベルデ302", "", ""],
+  ["F109", "大分市", "居宅", "居宅介護支援事業所 風香", "木﨑", "大分県大分市賀来南1丁目13番39号", "", ""],
+  ["F110", "大分市", "居宅", "居宅介護支援事業所 メイプル", "木﨑", "大分県大分市賀来南1丁目1番71号", "", ""],
+  ["F111", "大分市", "居宅", "居宅介護支援センターからしま", "木﨑", "大分県大分市賀来新川2丁目1番15号", "", ""],
+  ["F112", "大分市", "居宅", "Greenガーデン居宅ケアプランニング", "木﨑", "大分県大分市賀来西2丁目11番5-1 フレル賀来西D棟", "", ""],
+  ["F113", "大分市", "居宅", "居宅介護支援事業所 あさかぜ", "木﨑", "大分県大分市里3丁目9番7号", "", ""],
+  ["F114", "大分市", "居宅", "大分市介護保険サービスセンターさざんか野津原事業所", "木﨑", "大分県大分市野津原800番地", "", ""],
+  ["F115", "大分市", "老健", "介護老人保健施設 狐兎如庵", "木﨑", "大分県大分市野田1085番地", "", ""],
+  ["F116", "別府市", "包括", "別府市 別府市北部地域包括支援センター", "牧", "別府市亀川中央町20番29号 別府王子ハイツ", "", ""],
+  ["F117", "別府市", "包括", "別府市 別府市朝日地域包括支援センター", "牧", "別府市大畑町6番31号 飛鳥ビル1階", "", ""],
+  ["F118", "別府市", "包括", "別府市 別府市山の手地域包括支援センター", "牧", "別府市山の手町2番17号", "", ""],
+  ["F119", "別府市", "包括", "別府市 別府市浜脇地域包括支援センター", "牧", "別府市浜脇1丁目8-5 浜脇高層店舗B", "", ""],
+  ["F120", "別府市", "包括", "別府市 別府市中部地域包括支援センター", "牧", "別府市石垣東1丁目9番20号テラス石垣1F", "", ""],
+  ["F121", "別府市", "包括", "別府市 別府市鶴見台地域包括支援センター", "牧", "別府市石垣西10丁目9-13 豊ビル102", "", ""],
+  ["F122", "別府市", "包括", "別府市 別府市青山・東山地域包括支援センター", "牧", "別府市鶴見2丁目2番55号", "", ""],
+  ["F123", "別府市", "居宅", "介護保険サービスセンター 大学通り一燈園", "牧", "大分県別府市上人南10組", "", ""],
+  ["F124", "別府市", "居宅", "別府市医師会居宅介護支援センター", "牧", "大分県別府市上田の湯町10番5号", "", ""],
+  ["F125", "別府市", "居宅", "別府市社会福祉協議会指定居宅介護支援事業所", "牧", "大分県別府市上田の湯町15番40号  別府市成年後見支援センター内", "", ""],
+  ["F126", "別府市", "老健", "メディケア別府", "牧", "大分県別府市中島町14-6", "", ""],
+  ["F127", "別府市", "居宅", "居宅介護支援事業所ひまわり", "牧", "大分県別府市中島町17番6号", "", ""],
+  ["F128", "別府市", "病院", "畑病院", "牧", "大分県別府市中島町１４番２２号", "", ""],
+  ["F129", "別府市", "居宅", "一燈園亀川介護保険サービスセンター", "牧", "大分県別府市亀川中央町19－13", "", ""],
+  ["F130", "別府市", "病院", "医療法人聡明児玉病院", "牧", "大分県別府市亀川四の湯町５番１９号", "", ""],
+  ["F131", "別府市", "居宅", "和幸苑介護保険サービスセンター", "牧", "大分県別府市亀川東町8番20号", "", ""],
+  ["F132", "別府市", "病院", "山本病院", "牧", "大分県別府市光町１４番３号", "", ""],
+  ["F133", "別府市", "居宅", "ケアステーションかんなわ", "牧", "大分県別府市北中214番地１", "", ""],
+  ["F134", "別府市", "居宅", "ハーモニーふじみ介護保険センター", "牧", "大分県別府市北的ケ浜町５番１９号", "", ""],
+  ["F135", "別府市", "病院", "別府中央病院", "牧", "大分県別府市北的ケ浜町５番１９号", "", ""],
+  ["F136", "別府市", "病院", "別府湾腎泌尿器病院", "牧", "大分県別府市北石垣深町８５１番地", "", ""],
+  ["F137", "別府市", "病院", "医療法人 百善会 村橋病院", "牧", "大分県別府市千代町", "", ""],
+  ["F138", "別府市", "居宅", "居宅介護支援センターむらはし", "牧", "大分県別府市千代町2番5号", "", ""],
+  ["F139", "別府市", "居宅", "こねん居宅介護支援事業所", "牧", "大分県別府市千代町4番15号 伊藤ビル1F", "", ""],
+  ["F140", "別府市", "居宅", "居宅介護支援センター福笑居", "牧", "大分県別府市南荘園町20番1号", "", ""],
+  ["F141", "別府市", "居宅", "居宅介護支援事業所 偕楽園", "牧", "大分県別府市南荘園町4番39号", "", ""],
+  ["F142", "別府市", "居宅", "さわやかケアプランセンター別府", "牧", "大分県別府市堀田4組ー2", "", ""],
+  ["F143", "別府市", "病院", "向井病院", "牧", "大分県別府市堀田町２０番１３号", "", ""],
+  ["F144", "豊後大野市", "居宅", "介護相談室花みずき", "木﨑", "大分県豊後大野市三重町市場1511番地1", "", ""],
+  ["F145", "豊後大野市", "居宅", "ふくしま居宅介護支援事業所", "木﨑", "大分県豊後大野市三重町市場231番地", "", ""],
+  ["F146", "豊後大野市", "居宅", "居宅介護支援事業所たんぽぽ", "木﨑", "大分県豊後大野市三重町市場598番地1", "", ""],
+  ["F147", "豊後大野市", "病院", "福島病院", "木﨑", "大分県豊後大野市三重町市場２３１番地", "", ""],
+  ["F148", "豊後大野市", "老健", "老人保健施設豊西苑", "木﨑", "大分県豊後大野市三重町百枝1086の12", "", ""],
+  ["F149", "豊後大野市", "居宅", "ふれあい介護相談センター", "木﨑", "大分県豊後大野市三重町百枝1086番地12", "", ""],
+  ["F150", "豊後大野市", "老健", "介護老人保健施設豊西苑なのはな", "木﨑", "大分県豊後大野市三重町百枝1086番地12", "", ""],
+  ["F151", "豊後大野市", "居宅", "居宅介護支援センターつむぎ", "木﨑", "大分県豊後大野市三重町芦刈字津留前４９５番地２", "", ""],
+  ["F152", "豊後大野市", "居宅", "コミュニティケアセンター", "木﨑", "大分県豊後大野市三重町赤嶺1259番地", "", ""],
+  ["F153", "豊後大野市", "居宅", "居宅介護支援事業所 豊志", "木﨑", "大分県豊後大野市三重町赤嶺字深田１５７０番地", "", ""],
+  ["F154", "豊後大野市", "病院", "帰巖会 みえ病院", "木﨑", "大分県豊後大野市三重町赤嶺１２５０番地１", "", ""],
+  ["F155", "豊後大野市", "老健", "ユニット型介護老人保健施設 泉の里", "木﨑", "大分県豊後大野市三重町赤嶺１２５４番地１", "", ""],
+  ["F156", "豊後大野市", "老健", "介護老人保健施設泉の里", "木﨑", "大分県豊後大野市三重町赤嶺１２５４番地１", "", ""],
+  ["F157", "豊後大野市", "居宅", "介護保険サポートセンターフェリス", "木﨑", "大分県豊後大野市千歳町前田1157番地", "", ""],
+  ["F158", "豊後大野市", "老健", "介護老人保健施設ひろせ", "木﨑", "大分県豊後大野市千歳町新殿771番地１", "", ""],
+  ["F159", "豊後大野市", "居宅", "天心堂おおのケアプランセンター", "木﨑", "大分県豊後大野市大野町田中2番地9", "", ""],
+  ["F160", "豊後大野市", "老健", "介護老人保健施設おおの郷", "木﨑", "大分県豊後大野市大野町田中2番地9", "", ""],
+  ["F161", "豊後大野市", "居宅", "介護保険サービスセンター偕生園", "木﨑", "大分県豊後大野市大野町田中700番地2", "", ""],
+  ["F162", "由布市", "居宅", "由布市社会福祉協議会居宅介護支援事業所", "木﨑", "大分県由布市庄内町庄内原365番地1", "", ""],
+  ["F163", "由布市", "居宅", "介護保険サービスセンター情和園", "木﨑", "大分県由布市庄内町西長宝870番地1", "", ""],
+  ["F164", "由布市", "病院", "大分大学医学部附属病院", "木﨑", "大分県由布市挾間町医大ケ丘１丁目１番地", "", ""],
+  ["F165", "由布市", "居宅", "指定居宅介護支援事業所「介護相談センター川崎」", "木﨑", "大分県由布市挾間町古野263番地1", "", ""],
+  ["F166", "由布市", "居宅", "ごとう介護サービスセンター", "木﨑", "大分県由布市挾間町向原350番地", "", ""],
+  ["F167", "由布市", "居宅", "介護サポートセンター せきじょうあん", "木﨑", "大分県由布市挾間町来鉢61番地", "", ""],
+  ["F168", "由布市", "居宅", "ケアプランLOYAL", "木﨑", "大分県由布市挾間町赤野８１４番地１", "", ""],
+  ["F169", "由布市", "居宅", "介護保険サービスセンター豊友館", "木﨑", "大分県由布市挾間町鬼崎4番地の16", "", ""],
+  ["F170", "由布市", "居宅", "シルバーケア総合センターぬくみケアプラン事業部", "木﨑", "大分県由布市湯布院町大字川北1964番地", "", ""],
+  ["F171", "由布市", "居宅", "介護保険サービスセンター虹", "木﨑", "大分県由布市湯布院町川北1006番地の1", "", ""],
+  ["F172", "由布市", "居宅", "居宅介護支援事業みんなの家", "木﨑", "大分県由布市湯布院町川北1112番地37", "", ""],
+  ["F173", "臼杵市", "居宅", "臼杵市医師会コスモス介護支援センター", "木﨑", "大分県臼杵市大字戸室字長谷1131番地1", "", ""],
+  ["F174", "臼杵市", "病院", "臼杵市医師会立コスモス病院", "木﨑", "大分県臼杵市大字戸室字長谷１１３１番１", "", ""],
+  ["F175", "臼杵市", "老健", "臼杵福寿苑", "木﨑", "大分県臼杵市大字末広285番地", "", ""],
+  ["F176", "臼杵市", "居宅", "介護保険サービスセンター四季の郷", "木﨑", "大分県臼杵市大字江無田1119番地の5", "", ""],
+  ["F177", "臼杵市", "居宅", "うすき介護支援センター", "木﨑", "大分県臼杵市大字臼杵字洲崎72番地32", "", ""],
+  ["F178", "臼杵市", "居宅", "臼杵市社会福祉協議会指定居宅介護支援事業所", "木﨑", "大分県臼杵市大字臼杵字祇園洲４番１  臼杵市社会福祉センター", "", ""],
+  ["F179", "臼杵市", "居宅", "指定居宅介護支援事業所はる風", "木﨑", "大分県臼杵市大浜104番地の1", "", ""],
+  ["F180", "臼杵市", "居宅", "居宅介護支援事業所「お達者クラブ」", "木﨑", "大分県臼杵市大野字友田大道西3番4", "", ""],
+  ["F181", "臼杵市", "老健", "介護老人保健施設 幸寿院", "木﨑", "大分県臼杵市市浜694番地の1", "", ""],
+  ["F182", "臼杵市", "居宅", "しらかわ", "木﨑", "大分県臼杵市末広938番地の3", "", ""],
+  ["F183", "臼杵市", "病院", "白川病院", "木﨑", "大分県臼杵市末広９３８番地", "", ""],
+  ["F184", "臼杵市", "居宅", "臼杵病院ケアプランセンター", "木﨑", "大分県臼杵市江無田1154番地1", "", ""],
+  ["F185", "佐伯市", "包括", "佐伯市 佐伯市地域包括支援センター「さいき」", "高田", "佐伯市向島1丁目３番８号", "", ""],
+  ["F186", "佐伯市", "包括", "佐伯市 佐伯市地域包括支援センター「ばんじょう」", "高田", "佐伯市直川大字赤木106番地", "", ""],
+  ["F187", "佐伯市", "包括", "佐伯市 佐伯市地域包括支援センター「あまべ」", "高田", "佐伯市蒲江大字蒲江浦3522番地5", "", ""],
+  ["F188", "佐伯市", "居宅", "ケアネットきりん", "高田", "大分県佐伯市城南町6番25号", "", ""],
+  ["F189", "佐伯市", "居宅", "wonderwall", "高田", "大分県佐伯市大手町２丁目３－４", "", ""],
+  ["F190", "佐伯市", "居宅", "介護保険サービスセンター長良苑", "高田", "大分県佐伯市宇目大字小野市字井ノ上3754番地1", "", ""],
+  ["F191", "佐伯市", "病院", "佐伯中央病院", "高田", "大分県佐伯市常盤東町６－３０", "", ""],
+  ["F192", "佐伯市", "居宅", "南海医療センター附属居宅介護支援センター", "高田", "大分県佐伯市常盤西町12-6", "", ""],
+  ["F193", "佐伯市", "老健", "南海医療センター附属介護老人保健施設", "高田", "大分県佐伯市常盤西町12番6号", "", ""],
+  ["F194", "佐伯市", "病院", "独立行政法人地域医療機能推進機構 南海医療センター", "高田", "大分県佐伯市常盤西町７番８号", "", ""],
+  ["F195", "佐伯市", "居宅", "佐伯市社協介護保険サービスセンター「まごころ」", "高田", "大分県佐伯市弥生大坂本1174番地", "", ""],
+  ["F196", "佐伯市", "居宅", "居宅介護支援事業所 もっこうばら", "高田", "大分県佐伯市弥生大字大坂本311番地1", "", ""],
+  ["F197", "佐伯市", "病院", "社会医療法人 敬和会 おおいた県南ホスピタル", "高田", "大分県佐伯市東町２７番１２号", "", ""],
+  ["F198", "佐伯市", "居宅", "ケアセンターやまもと", "高田", "大分県佐伯市直川大字上直見708-5", "", ""],
+  ["F199", "佐伯市", "居宅", "たずねケアマネジメント", "高田", "大分県佐伯市直川大字下直見3073番地２", "", ""],
+  ["F200", "佐伯市", "居宅", "介護保険サービスセンターはまゆう", "高田", "大分県佐伯市蒲江大字蒲江浦1344番地1", "", ""],
+  ["F201", "佐伯市", "病院", "御手洗病院", "高田", "大分県佐伯市蒲江蒲江浦２２１５－９", "", ""],
+  ["F202", "佐伯市", "居宅", "ひととき", "高田", "大分県佐伯市長島町2丁目18-24", "", ""],
+  ["F203", "佐伯市", "病院", "曽根病院", "高田", "大分県佐伯市長島町２丁目１８番２４号", "", ""],
+  ["F204", "佐伯市", "居宅", "居宅介護支援事業所のどか", "高田", "大分県佐伯市青山125番地２", "", ""],
+  ["F205", "佐伯市", "居宅", "ケアプランセンター 佐伯の太陽", "高田", "大分県佐伯市駅前１丁目１番11号", "", ""],
+  ["F206", "佐伯市", "病院", "社会医療法人 長門莫記念会 長門記念病院", "高田", "大分県佐伯市鶴岡町", "", ""],
+  ["F207", "佐伯市", "老健", "介護老人保健施設 鶴望野", "高田", "大分県佐伯市鶴岡町1丁目11番59号", "", ""],
+  ["F208", "佐伯市", "居宅", "介護保険サービスセンター鶴望野", "高田", "大分県佐伯市鶴岡町1丁目6-3", "", ""],
+  ["F209", "佐伯市", "居宅", "さいき長寿苑そよ風", "高田", "大分県佐伯市鶴岡西町2丁目269番地", "", ""],
+  ["F210", "佐伯市", "病院", "西田病院", "高田", "大分県佐伯市鶴岡西町２丁目２６６番地", "", ""],
+  ["F211", "竹田市", "居宅", "悠々居ケアプランセンター", "木﨑", "大分県竹田市大字三宅1763番地の1", "", ""],
+  ["F212", "竹田市", "居宅", "竹田市介護保険ケアプランセンター", "木﨑", "大分県竹田市大字会々1650番地", "", ""],
+  ["F213", "竹田市", "居宅", "ケアプランセンターみはら", "木﨑", "大分県竹田市大字会々2576番地1", "", ""],
+  ["F214", "竹田市", "居宅", "医療生協竹田介護サービスセンター", "木﨑", "大分県竹田市大字会々3313-1", "", ""],
+  ["F215", "竹田市", "老健", "老人保健施設岡の苑", "木﨑", "大分県竹田市大字竹田1855", "", ""],
+  ["F216", "竹田市", "居宅", "たけたねっとケアプランセンター", "木﨑", "大分県竹田市大字竹田町275番地 新町ウィズ内", "", ""],
+  ["F217", "竹田市", "居宅", "帰巖会たけたケアプランセンター", "木﨑", "大分県竹田市大字竹田町389-1", "", ""],
+  ["F218", "竹田市", "病院", "竹田医師会病院", "木﨑", "大分県竹田市拝田原", "", ""],
+  ["F219", "竹田市", "病院", "加藤病院", "木﨑", "大分県竹田市竹田１８５５番地", "", ""],
+  ["F220", "竹田市", "包括", "竹田市 竹田市地域包括支援センター", "木﨑", "竹田市大字会々1650番地", "", ""],
+  ["F221", "竹田市", "居宅", "介護保険サービスセンター久住", "木﨑", "大分県竹田市久住町久住６４８２番地", "", ""],
+  ["F222", "竹田市", "居宅", "居宅介護支援センター クローバーたけた", "木﨑", "大分県竹田市久住町大字仏原1558番地3", "", ""],
+  ["F223", "竹田市", "老健", "ヴァル・ド・グラスくじゅう", "木﨑", "大分県竹田市久住町大字栢木574-34", "", ""],
+  ["F224", "竹田市", "居宅", "久住高原居宅介護支援センター", "木﨑", "大分県竹田市久住町栢木5834", "", ""],
+  ["F225", "竹田市", "病院", "大久保病院", "木﨑", "大分県竹田市久住町栢木６０２６－２", "", ""],
+  ["F226", "日田市", "居宅", "日田市社協介護保険サービスセンター「つえ」", "牧", "大分県日田市上津江町川原3938番地", "", ""],
+  ["F227", "日田市", "病院", "医療法人社団 淡窓会 大分友愛病院", "牧", "大分県日田市上野町１番地の１", "", ""],
+  ["F228", "日田市", "居宅", "聖陵ストリーム居宅介護サービスセンター", "牧", "大分県日田市中釣町485-3", "", ""],
+  ["F229", "日田市", "居宅", "悠愛介護サービス", "牧", "大分県日田市亀山町４－１６－１０１", "", ""],
+  ["F230", "日田市", "病院", "医療法人 至誠会 城谷病院", "牧", "大分県日田市元町１６－２２", "", ""],
+  ["F231", "日田市", "居宅", "沙羅の花", "牧", "大分県日田市南元町11番30号", "", ""],
+  ["F232", "日田市", "病院", "医療法人 秋水堂 若宮病院", "牧", "大分県日田市南元町６番４１号", "", ""],
+  ["F233", "日田市", "病院", "桂林病院", "牧", "大分県日田市城町１丁目２ー６１", "", ""],
+  ["F234", "日田市", "病院", "大分県済生会日田病院", "牧", "大分県日田市大字三和６４３－７", "", ""],
+  ["F235", "日田市", "病院", "医療法人豊堂 岩尾整形外科病院", "牧", "大分県日田市大字十二町字岸高５９５番地の１", "", ""],
+  ["F236", "日田市", "老健", "介護老人保健施設聖陵ストリーム", "牧", "大分県日田市大字庄手字中釣484", "", ""],
+  ["F237", "日田市", "居宅", "ケアプラン よりそい", "牧", "大分県日田市大字日高873番地1", "", ""],
+  ["F238", "日田市", "居宅", "有田ひまわり介護保険センター", "牧", "大分県日田市大字東有田字町ノ坪7-5", "", ""],
+  ["F239", "日田市", "居宅", "介護保険サービスセンター花月園", "牧", "大分県日田市大字渡里字熊取156番", "", ""],
+  ["F240", "日田市", "居宅", "日田園介護保険サービスセンター", "牧", "大分県日田市大字石井字池ノ瀬271番地の2", "", ""],
+  ["F241", "日田市", "居宅", "居宅介護支援センターうえの", "牧", "大分県日田市大字高瀬字篠原2226の1", "", ""],
+  ["F242", "日田市", "病院", "医療法人 百花会 上野公園病院", "牧", "大分県日田市大字高瀬字篠原２２２６－１", "", ""],
+  ["F243", "日田市", "居宅", "指定居宅介護支援事業所センテナリアン", "牧", "大分県日田市大山町東大山14-4", "", ""],
+  ["F244", "日田市", "老健", "老人保健施設六和会センテナリアン", "牧", "大分県日田市大山町東大山14-4", "", ""],
+  ["F245", "日田市", "居宅", "日田市社協介護保険サービスセンター「おおやま」", "牧", "大分県日田市大山町西大山3610－1大山総合福祉センター内", "", ""],
+  ["F246", "日田市", "居宅", "鳩友園介護保険サービスセンター", "牧", "大分県日田市大鶴町2267-1", "", ""],
+  ["F247", "日田市", "居宅", "日田市社協介護保険サービスセンター「あまがせ」", "牧", "大分県日田市天瀬町合田1986-2", "", ""],
+  ["F248", "玖珠郡九重町", "居宅", "介護保険サービスセンターメルヘン", "木﨑", "大分県玖珠郡九重町右田3156-7", "", ""],
+  ["F249", "玖珠郡九重町", "居宅", "九重町社会福祉協議会介護保険サービスセンター", "木﨑", "大分県玖珠郡九重町大字後野上17番地の1", "", ""],
+  ["F250", "玖珠郡九重町", "居宅", "介護保険サービスセンター渓和", "木﨑", "大分県玖珠郡九重町大字町田5481番地の3", "", ""],
+  ["F251", "玖珠郡九重町", "老健", "介護老人保健施設ケアポート渓和", "木﨑", "大分県玖珠郡九重町町田5481の3", "", ""],
+  ["F252", "玖珠郡九重町", "包括", "九重町 九重町地域包括支援センター", "木﨑", "玖珠郡九重町大字後野上17-1", "", ""],
+  ["F253", "玖珠郡九重町", "居宅", "明友サービスセンター", "木﨑", "大分県玖珠郡九重町菅原739-219", "", ""],
+  ["F254", "速見郡日出町", "居宅", "ケアプランセンター暘谷苑", "木﨑", "大分県速見郡日出町大字藤原5708-3", "", ""],
+  ["F255", "速見郡日出町", "居宅", "介護支援サービスセンターすずらん", "木﨑", "大分県速見郡日出町字赤山3904番6", "", ""],
+  ["F256", "速見郡日出町", "居宅", "ひじ介護支援ステーション", "木﨑", "大分県速見郡日出町川崎837番地の1", "", ""],
+  ["F257", "速見郡日出町", "病院", "日出児玉病院", "木﨑", "大分県速見郡日出町川崎８３７－１", "", ""],
+  ["F258", "速見郡日出町", "病院", "鈴木病院", "木﨑", "大分県速見郡日出町日出町３９０４－６", "", ""],
+  ["F259", "速見郡日出町", "老健", "介護老人保健施設すずらん", "木﨑", "大分県速見郡日出町藤原1691番地の1", "", ""],
+  ["F260", "速見郡日出町", "居宅", "居宅介護支援ステーション つなぐ", "木﨑", "大分県速見郡日出町豊岡1027番地9", "", ""],
+  ["F261", "速見郡日出町", "病院", "サンライズ酒井病院", "木﨑", "大分県速見郡日出町３１５６番地１", "", ""],
+  ["F262", "速見郡日出町", "居宅", "LONG LIFE", "木﨑", "大分県速見郡日出町３８８４番地２", "", ""],
+  ["F263", "速見郡日出町", "居宅", "指定居宅介護支援事業所サンライズ・ビュー", "木﨑", "大分県速見郡日出町1827番地の1", "", ""],
+  ["F264", "速見郡日出町", "居宅", "有限会社うの福祉サービス", "木﨑", "大分県速見郡日出町2512番地1", "", ""],
+  ["F265", "速見郡日出町", "老健", "介護老人保健施設サンライズ・ビュー", "木﨑", "大分県速見郡日出町580番地2", "", ""],
+  ["F266", "速見郡日出町", "老健", "介護老人保健施設みずき", "木﨑", "大分県速見郡日出町大字川崎507番地の3", "", ""],
+  ["F267", "速見郡日出町", "居宅", "日出町社会福祉協議会指定居宅介護支援事業所", "木﨑", "大分県速見郡日出町大字藤原2277番地1", "", ""]
+];
+
+/** 施設マスタを最新の INITIAL_FACILITIES で完全に上書きする（訪問記録シートはそのまま残る） */
+function resetFacilities() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let facSheet = ss.getSheetByName(SHEET_FACILITY);
+  if (!facSheet) facSheet = ss.insertSheet(SHEET_FACILITY);
+
+  const lastRow = facSheet.getLastRow();
+  if (lastRow > 1) {
+    facSheet.getRange(2, 1, lastRow - 1, FACILITY_HEADER.length).clearContent();
   }
-  mainTab = tab;
-  document.getElementById('mainTabVisit').classList.toggle('active', tab==='visit');
-  document.getElementById('mainTabFacility').classList.toggle('active', tab==='facility');
-  document.getElementById('mainTabReferral').classList.toggle('active', tab==='referral');
-  document.getElementById('mainTabDeal').classList.toggle('active', tab==='deal');
-  document.getElementById('visitKpiBar').style.display = tab==='visit' ? 'flex':'none';
-  document.getElementById('visitSection').style.display = tab==='visit' ? 'block':'none';
-  document.getElementById('facilitySection').style.display = tab==='facility' ? 'block':'none';
-  document.getElementById('referralSection').style.display = tab==='referral' ? 'block':'none';
-  document.getElementById('dealSection').style.display = tab==='deal' ? 'block':'none';
-  if(tab==='facility') renderFacilityAdminTable();
-  if(tab==='referral') renderReferralList();
-  if(tab==='deal' && !dealLoaded){
-    dealLoaded = true;
-    dealLoadAll();
-  }
-}
-
-/* ---------- ログイン（Google / 旧パスワード） ---------- */
-window.addEventListener('DOMContentLoaded', () => {
-  if(GOOGLE_CLIENT_ID.indexOf('PASTE_YOUR') !== 0 && window.google && window.google.accounts){
-    document.getElementById('googleLoginArea').style.display = 'block';
-    document.getElementById('legacyLoginArea').style.display = 'none';
-    google.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: handleGoogleCredential
-    });
-    google.accounts.id.renderButton(document.getElementById('gsiButton'), {theme:'outline', size:'large', width:260, text:'signin_with'});
-  }
-});
-
-async function handleGoogleCredential(response){
-  const errEl = document.getElementById('loginErr');
-  errEl.textContent = '';
-  try{
-    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'googleLogin', idToken: response.credential})});
-    const data = await res.json();
-    if(data.ok){
-      currentSessionToken = data.sessionToken;
-      currentUserName = data.name;
-      currentUserRole = data.role;
-      finishLogin();
-    } else {
-      errEl.textContent = data.error || 'ログインできませんでした';
-    }
-  }catch(err){
-    errEl.textContent = '通信エラーが発生しました';
-    console.error(err);
-  }
-}
-
-async function tryLogin(){
-  const v = document.getElementById('pwInput').value;
-  const btn = document.querySelector('#legacyLoginArea button');
-  const errEl = document.getElementById('loginErr');
-  errEl.textContent = '';
-  if(GAS_URL.indexOf('PASTE_YOUR') === 0){
-    errEl.textContent = 'GAS_URLが未設定です';
-    return;
-  }
-  btn.disabled = true; btn.textContent = '確認中...';
-  try{
-    const res = await fetch(GAS_URL + '?action=checkLogin&pw=' + encodeURIComponent(v));
-    const data = await res.json();
-    if(data.ok){
-      currentPassword = v;
-      currentUserRole = 'legacy';
-      currentUserName = '';
-      finishLogin();
-    } else {
-      errEl.textContent = 'パスワードが違います';
-    }
-  }catch(err){
-    errEl.textContent = '通信エラーが発生しました';
-    console.error(err);
-  }
-  btn.disabled = false; btn.textContent = '開く';
-}
-document.getElementById('pwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
-
-function finishLogin(){
-  document.getElementById('loginScreen').style.display='none';
-  document.getElementById('app').style.display='block';
-  document.body.classList.toggle('is-admin', isAdmin());
-  document.getElementById('loginWhoami').textContent = currentUserName ? '（' + currentUserName + '）' : '';
-  boot();
-}
-
-async function boot(){
-  if(GAS_URL.indexOf('PASTE_YOUR') === 0){
-    document.getElementById('listView').innerHTML =
-      '<div class="empty">⚠ GAS_URL が未設定です。<br>営業周り.html 内の GAS_URL を、デプロイしたウェブアプリURLに書き換えてください。</div>';
-    return;
-  }
-  await loadData();
-  populateFilterOptions();
-  populateReferralFacilitySelect();
-  renderAll();
-}
-
-async function loadData(){
-  try{
-    const res = await fetch(GAS_URL + '?action=getData');
-    const data = await res.json();
-    facilities = data.facilities || [];
-    visits = data.visits || [];
-    referrals = data.referrals || [];
-    repList = data.reps && data.reps.length ? data.reps : ['牧','岡野','岩矢','木﨑','高田'];
-  }catch(err){
-    showToast('データ取得に失敗しました');
-    console.error(err);
-  }
-  if(isAdmin()){
-    try{
-      const res2 = await fetch(GAS_URL + '?action=getAllowedAccounts');
-      const data2 = await res2.json();
-      allowedAccounts = data2.accounts || [];
-    }catch(err){ console.error(err); }
-  }
-}
-
-function populateFilterOptions(){
-  const visitTargets = facilities.filter(f=>!f.group);
-  const cities = [...new Set(visitTargets.map(f=>f.city).filter(c=>c))];
-  const repsFromFacilities = [...new Set(visitTargets.map(f=>f.rep).filter(r=>r))];
-  const cSel = document.getElementById('fCity');
-  cSel.innerHTML = '<option value="">市区町村：すべて</option>';
-  cities.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; cSel.appendChild(o); });
-  const rSel = document.getElementById('fRep');
-  rSel.innerHTML = '<option value="">担当者：すべて</option>';
-  repsFromFacilities.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; rSel.appendChild(o); });
-  populateVRepSelect();
-  populateDealStaffOptions();
-  populateTagUI();
-}
-
-function populateTagUI(){
-  const tagSel = document.getElementById('fTag');
-  if(tagSel && tagSel.options.length <= 1){
-    FACILITY_TAGS.forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; tagSel.appendChild(o); });
-  }
-  const tagList = document.getElementById('afTagList');
-  if(tagList && tagList.children.length === 0){
-    tagList.innerHTML = FACILITY_TAGS.map(t=>
-      '<label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" class="af-tag" value="'+escapeHtml(t)+'">'+escapeHtml(t)+'</label>'
-    ).join('');
-  }
-}
-
-function populateVRepSelect(){
-  ['vRep','afRep','refRep'].forEach(id=>{
-    const sel = document.getElementById(id);
-    if(!sel) return;
-    sel.innerHTML = '';
-    repList.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; sel.appendChild(o); });
-    if(id==='vRep'){ const other=document.createElement('option'); other.value='その他'; other.textContent='その他'; sel.appendChild(other); }
-  });
-}
-
-function populateDealStaffOptions(){
-  const dl = document.getElementById('repDatalist');
-  if(!dl) return;
-  dl.innerHTML = repList.map(r=>'<option value="'+escapeHtml(r)+'">').join('');
-}
-
-function populateReferralFacilitySelect(){
-  const sel = document.getElementById('refFacility');
-  if(!sel) return;
-  const current = sel.value;
-  sel.innerHTML = '';
-  facilities.slice().sort((a,b)=>a.name.localeCompare(b.name,'ja')).forEach(f=>{
-    const o = document.createElement('option'); o.value = f.id; o.textContent = f.name + '（'+f.city+'）';
-    sel.appendChild(o);
-  });
-  if(current) sel.value = current;
-}
-
-function todayStr(){
-  const d = new Date();
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-}
-function thisMonthPrefix(){
-  const d = new Date();
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
-}
-function daysBetween(dateStr){
-  if(!dateStr) return Infinity;
-  const d = new Date(dateStr); d.setHours(0,0,0,0);
-  const today = new Date(); today.setHours(0,0,0,0);
-  return Math.floor((today-d)/86400000);
-}
-
-/* ---------- 空床（定員/現在人数）関連ヘルパー ---------- */
-function vacancyOf(f){
-  const cap = Number(f.capacity), occ = Number(f.occupied);
-  if(!cap || isNaN(cap)) return null;
-  const vac = cap - (isNaN(occ)?0:occ);
-  return vac;
-}
-function vacancyStatus(f){
-  const vac = vacancyOf(f);
-  if(vac===null) return {label:'未登録', cls:''};
-  if(vac<=0) return {label:'満床', cls:'full'};
-  if(vac<=2) return {label:'残りわずか', cls:'few'};
-  return {label:'空床あり', cls:'available'};
-}
-function isStale(f){
-  return f.updatedAt && daysBetween(f.updatedAt) >= 3;
-}
-function careLevelLabels(codes){
-  const map = {'0':'要支援','1':'要介護1','2':'要介護2','3':'要介護3','4':'要介護4','5':'要介護5'};
-  if(!codes) return [];
-  return String(codes).split(',').filter(c=>c).map(c=>map[c]||c);
-}
-
-function visitsFor(facilityId){
-  return visits.filter(v=>v.facilityId===facilityId).sort((a,b)=> a.visitDate < b.visitDate ? 1 : -1);
-}
-
-function statusFor(facilityId){
-  const vs = visitsFor(facilityId);
-  if(vs.length===0) return {status:'none', last:null, next:null};
-  const last = vs[0];
-  const next = last.nextVisit || null;
-  const today = todayStr();
-  if(next && next < today) return {status:'overdue', last:last.visitDate, next:next};
-  if(next && next >= today) return {status:'upcoming', last:last.visitDate, next:next};
-  return {status:'done', last:last.visitDate, next:null};
-}
-
-function getFiltered(){
-  const search = document.getElementById('fSearch').value.trim();
-  const city = document.getElementById('fCity').value;
-  const kind = document.getElementById('fKind').value;
-  const rep = document.getElementById('fRep').value;
-  const status = document.getElementById('fStatus').value;
-  const vac = document.getElementById('fVacancy') ? document.getElementById('fVacancy').value : '';
-  const gender = document.getElementById('fGender') ? document.getElementById('fGender').value : '';
-  const care = document.getElementById('fCare') ? document.getElementById('fCare').value : '';
-  const tag = document.getElementById('fTag') ? document.getElementById('fTag').value : '';
-
-  return facilities.filter(f=>{
-    if(f.group) return false; // 悠久福祉会など自法人の施設は施設訪問（営業先訪問）の対象外。施設管理タブでのみ扱う
-    if(search && !f.name.includes(search)) return false;
-    if(city && f.city!==city) return false;
-    if(kind && f.kind!==kind) return false;
-    if(rep && f.rep!==rep) return false;
-    if(status){
-      const st = statusFor(f.id).status;
-      if(status==='overdue' && st!=='overdue') return false;
-      if(status==='upcoming' && st!=='upcoming') return false;
-      if(status==='none' && st!=='none') return false;
-    }
-    if(vac && vacancyStatus(f).cls !== vac) return false;
-    if(gender==='male' && f.acceptMale!=='○') return false;
-    if(gender==='female' && f.acceptFemale!=='○') return false;
-    if(care && !String(f.careLevels||'').split(',').includes(care)) return false;
-    if(tag && !String(f.tags||'').split(',').includes(tag)) return false;
-    return true;
-  });
-}
-
-function renderAll(){
-  renderKpi();
-  renderList();
-}
-
-function renderKpi(){
-  const monthPre = thisMonthPrefix();
-  const visitTargets = facilities.filter(f=>!f.group);
-  const visitedThisMonth = new Set(
-    visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre)).map(v=>v.facilityId)
-  ).size;
-  const overdueCount = visitTargets.filter(f=>statusFor(f.id).status==='overdue').length;
-  document.getElementById('kpiTotal').textContent = visitTargets.length;
-  document.getElementById('kpiVisited').textContent = visitedThisMonth;
-  document.getElementById('kpiOverdue').textContent = overdueCount;
-}
-
-function renderList(){
-  const list = getFiltered();
-  const container = document.getElementById('listView');
-  if(list.length===0){
-    container.innerHTML = '<div class="empty">該当する施設がありません</div>';
-    return;
-  }
-
-  const rank = {overdue:0, upcoming:1, none:2, done:3};
-  const byCity = {};
-  list.forEach(f=>{ const key = f.group ? '★'+f.group : f.city; (byCity[key] = byCity[key]||[]).push(f); });
-
-  let html = '';
-  Object.keys(byCity).sort((a,b)=>{
-    // ★グループ（悠久福祉会など自法人）を先頭に表示
-    if(a.startsWith('★') && !b.startsWith('★')) return -1;
-    if(!a.startsWith('★') && b.startsWith('★')) return 1;
-    return a.localeCompare(b,'ja');
-  }).forEach(cityKey=>{
-    const items = byCity[cityKey].slice().sort((a,b)=>{
-      const sa = statusFor(a.id), sb = statusFor(b.id);
-      return rank[sa.status]-rank[sb.status];
-    });
-    const label = cityKey.startsWith('★') ? cityKey.slice(1) : cityKey;
-    html += '<div class="city-group">'+label+'（'+items.length+'）</div>';
-    items.forEach(f=>{
-      const st = statusFor(f.id);
-      let statusLabel = '未訪問';
-      let statusClass = 'none';
-      if(st.status==='done'){ statusLabel='前回 '+st.last; statusClass='done'; }
-      if(st.status==='upcoming'){ statusLabel='次回予定 '+st.next; statusClass='upcoming'; }
-      if(st.status==='overdue'){ statusLabel='期限超過 '+st.next; statusClass='overdue'; }
-      const vst = vacancyStatus(f);
-      const vac = vacancyOf(f);
-      const vacBadge = vac===null ? '' : '<span class="visit-status '+vst.cls+'">'+vst.label+(vac>=0?'（空床'+vac+'）':'')+'</span>';
-      const staleBadge = isStale(f) ? '<div class="vacancy-stale">⚠ 空床情報の要更新</div>' : '';
-      html += '<div class="card '+(st.status==='overdue'?'overdue':'')+'" onclick="openDetail(\''+f.id+'\')">'
-        + '<div class="card-top"><span class="badge '+f.kind+'">'+(f.kind||'施設')+'</span>'+vacBadge+'</div>'
-        + '<div class="card-name">'+f.name+'</div>'
-        + '<div class="card-addr">'+f.addr+'</div>'
-        + '<div class="card-meta"><span class="rep">担当：'+f.rep+'</span><span class="visit-status '+statusClass+'">'+statusLabel+'</span></div>'
-        + staleBadge
-        + '</div>';
-    });
-  });
-  container.innerHTML = html;
-}
-
-function openDetail(facilityId){
-  currentFacilityId = facilityId;
-  const f = facilities.find(x=>x.id===facilityId);
-  if(!f) return;
-  document.getElementById('dKind').textContent = (f.kind||'施設')+(f.group?'（'+f.group+'）':'');
-  document.getElementById('dKind').className = 'badge '+(f.kind||'');
-  document.getElementById('dName').textContent = f.name;
-  document.getElementById('dAddr').textContent = f.addr;
-  document.getElementById('dMapLink').href = 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(f.addr);
-
-  const tags = [...careLevelLabels(f.careLevels), ...(String(f.tags||'').split(',').filter(t=>t))];
-  const genderTags = [];
-  if(f.acceptMale==='○') genderTags.push('男性のみ');
-  if(f.acceptFemale==='○') genderTags.push('女性のみ');
-  let vBoxHtml = '';
-
-  if(f.group){
-    const vac = vacancyOf(f);
-    const vst = vacancyStatus(f);
-    vBoxHtml += '<div class="vacancy-box">';
-    if(vac!==null){
-      vBoxHtml += '<div class="vacancy-row"><span>定員 '+(f.capacity||'—')+'名 ／ 現在 '+(f.occupied||0)+'名</span><span class="vacancy-status '+vst.cls+'">空床 '+Math.max(vac,0)+'（'+vst.label+'）</span></div>';
-    } else {
-      vBoxHtml += '<div class="vacancy-row"><span>空床情報：未登録</span></div>';
-    }
-    if(f.tel) vBoxHtml += '<div class="vacancy-row"><span>電話</span><span>'+escapeHtml(f.tel)+'</span></div>';
-    if(f.updatedAt) vBoxHtml += '<div class="vacancy-row"><span>更新日</span><span>'+f.updatedAt+(f.updatedBy?'（'+escapeHtml(f.updatedBy)+'）':'')+'</span></div>';
-    if(isStale(f)) vBoxHtml += '<div class="vacancy-stale">⚠ 3日以上更新されていません。空床情報の確認をお願いします</div>';
-    if(genderTags.length || tags.length){
-      vBoxHtml += '<div class="attr-tags">'+[...genderTags,...tags].map(t=>'<span class="attr-tag on">'+escapeHtml(t)+'</span>').join('')+'</div>';
-    }
-    vBoxHtml += '</div>';
-    vBoxHtml += '<div class="vacancy-quick-update">'
-      + '<label style="font-size:11.5px;color:var(--text-soft);display:block;margin-bottom:5px;">現在の入居人数を更新（誰でも更新できます）</label>'
-      + '<div style="display:flex;gap:8px;">'
-      + '<input type="number" id="dQuickOccupied" min="0" value="'+(f.occupied||'')+'" style="flex:1;padding:9px 10px;border-radius:9px;border:1.3px solid var(--line);font-size:14px;">'
-      + '<button class="fm-edit-btn" style="width:auto;padding:0 16px;margin-top:0;" onclick="submitQuickVacancy(\''+f.id+'\')">更新</button>'
-      + '</div></div>';
+  if (lastRow === 0) {
+    facSheet.appendRow(FACILITY_HEADER);
   } else {
-    vBoxHtml += '<div class="vacancy-box">';
-    vBoxHtml += '<div class="vacancy-row"><span style="color:var(--text-soft);">紹介施設（空床管理の対象外）</span></div>';
-    if(f.tel) vBoxHtml += '<div class="vacancy-row"><span>電話</span><span>'+escapeHtml(f.tel)+'</span></div>';
-    if(genderTags.length || tags.length){
-      vBoxHtml += '<div class="attr-tags">'+[...genderTags,...tags].map(t=>'<span class="attr-tag on">'+escapeHtml(t)+'</span>').join('')+'</div>';
-    }
-    vBoxHtml += '</div>';
+    facSheet.getRange(1, 1, 1, FACILITY_HEADER.length).setValues([FACILITY_HEADER]);
   }
-  if(isAdmin()){
-    vBoxHtml += '<button class="fm-edit-btn" onclick="closeDetail();switchMainTab(\'facility\');openFacilityEdit(\''+f.id+'\')">この施設の情報を編集する（管理者）</button>';
-  }
-  document.getElementById('dVacancyBox').innerHTML = vBoxHtml;
-
-  document.getElementById('vDate').value = todayStr();
-  document.getElementById('vRep').value = repList.includes(f.rep) ? f.rep : 'その他';
-  document.getElementById('vMemo').value = '';
-  document.getElementById('vNext').value = '';
-  renderHistory(facilityId);
-  document.getElementById('detailOverlay').classList.add('show');
+  // INITIAL_FACILITIES は旧8列分のデータのみ持つため、先頭8列にだけ書き込む（新しい列は空欄のまま）
+  facSheet.getRange(2, 1, INITIAL_FACILITIES.length, 8).setValues(INITIAL_FACILITIES);
+  facSheet.setFrozenRows(1);
+  facSheet.autoResizeColumns(1, FACILITY_HEADER.length);
+  SpreadsheetApp.flush();
+  Logger.log('施設マスタを更新: ' + INITIAL_FACILITIES.length + '件');
 }
-async function submitQuickVacancy(facilityId){
-  const val = document.getElementById('dQuickOccupied').value;
-  if(val==='') { showToast('人数を入力してください'); return; }
-  try{
-    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({
-      action:'updateVacancy', ...authPayload(), id: facilityId, occupied: val, updatedBy: currentUserName||''
-    })});
-    const data = await res.json();
-    if(data.ok){
-      const idx = facilities.findIndex(f=>f.id===facilityId);
-      if(idx>-1){
-        facilities[idx].occupied = val;
-        facilities[idx].updatedAt = todayStr();
-        facilities[idx].updatedBy = currentUserName||'';
+
+/** 施設マスタが旧バージョン（8列）の場合、新しい列見出しだけを追加する（既存データは一切変更しない） */
+function migrateFacilityHeaderV2() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const facSheet = ss.getSheetByName(SHEET_FACILITY);
+  if (!facSheet) { Logger.log('施設マスタシートが見つかりません。先に setup を実行してください。'); return; }
+  const lastCol = facSheet.getLastColumn();
+  if (lastCol < FACILITY_HEADER.length) {
+    facSheet.getRange(1, 1, 1, FACILITY_HEADER.length).setValues([FACILITY_HEADER]);
+    facSheet.autoResizeColumns(1, FACILITY_HEADER.length);
+    Logger.log('施設マスタの列見出しをV2（' + FACILITY_HEADER.length + '列）に更新しました。既存データは変更していません。');
+  } else {
+    Logger.log('すでにV2の列構成です。変更はありません。');
+  }
+}
+
+/** 悠久福祉会10施設を施設マスタに投入する（すでに同じ施設名があればスキップするので、何度実行しても重複しない） */
+function seedYukyuFacilities() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_FACILITY);
+  if (!sheet) sheet = ss.insertSheet(SHEET_FACILITY);
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(FACILITY_HEADER);
+    sheet.setFrozenRows(1);
+  }
+  const existingNames = sheet.getLastRow() > 1
+    ? sheet.getRange(2, 4, sheet.getLastRow() - 1, 1).getValues().map(function (r) { return r[0]; })
+    : [];
+  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  let added = 0;
+  YUKYU_GROUP_FACILITIES.forEach(function (f) {
+    if (existingNames.indexOf(f.name) !== -1) return; // 既に登録済みならスキップ
+    const id = 'F' + new Date().getTime() + '_' + Math.floor(Math.random() * 10000);
+    sheet.appendRow([
+      id, '', f.kind, f.name, '', '', '', '',
+      '', '', '', '', '',
+      '', '', '', '', '', now, '', '悠久福祉会'
+    ]);
+    added++;
+  });
+  facAutoResize(sheet);
+  Logger.log('悠久福祉会 施設を投入: ' + added + '件追加（' + (YUKYU_GROUP_FACILITIES.length - added) + '件は登録済みのためスキップ）');
+}
+function facAutoResize(sheet) {
+  try { sheet.autoResizeColumns(1, FACILITY_HEADER.length); } catch (e) {}
+}
+
+/** 初回セットアップ：シート作成＋初期データ投入（施設マスタが空の場合のみ投入） */
+function setup() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  let facSheet = ss.getSheetByName(SHEET_FACILITY);
+  if (!facSheet) facSheet = ss.insertSheet(SHEET_FACILITY);
+  if (facSheet.getLastRow() === 0) {
+    facSheet.appendRow(FACILITY_HEADER);
+    facSheet.getRange(2, 1, INITIAL_FACILITIES.length, 8).setValues(INITIAL_FACILITIES);
+    facSheet.setFrozenRows(1);
+    facSheet.autoResizeColumns(1, FACILITY_HEADER.length);
+  } else {
+    migrateFacilityHeaderV2();
+  }
+
+  let visitSheet = ss.getSheetByName(SHEET_VISIT);
+  if (!visitSheet) visitSheet = ss.insertSheet(SHEET_VISIT);
+  if (visitSheet.getLastRow() === 0) {
+    visitSheet.appendRow(VISIT_HEADER);
+    visitSheet.setFrozenRows(1);
+    visitSheet.autoResizeColumns(1, VISIT_HEADER.length);
+  }
+
+  let referralSheet = ss.getSheetByName(SHEET_REFERRAL);
+  if (!referralSheet) referralSheet = ss.insertSheet(SHEET_REFERRAL);
+  if (referralSheet.getLastRow() === 0) {
+    referralSheet.appendRow(REFERRAL_HEADER);
+    referralSheet.setFrozenRows(1);
+    referralSheet.autoResizeColumns(1, REFERRAL_HEADER.length);
+  } else if (referralSheet.getLastColumn() < REFERRAL_HEADER.length) {
+    referralSheet.getRange(1, 1, 1, REFERRAL_HEADER.length).setValues([REFERRAL_HEADER]);
+    referralSheet.autoResizeColumns(1, REFERRAL_HEADER.length);
+  }
+
+  let loginLogSheet = ss.getSheetByName(SHEET_LOGIN_LOG);
+  if (!loginLogSheet) loginLogSheet = ss.insertSheet(SHEET_LOGIN_LOG);
+  if (loginLogSheet.getLastRow() === 0) {
+    loginLogSheet.appendRow(LOGIN_LOG_HEADER);
+    loginLogSheet.setFrozenRows(1);
+    loginLogSheet.autoResizeColumns(1, LOGIN_LOG_HEADER.length);
+  }
+
+  seedYukyuFacilities();
+
+  let settingsSheet = ss.getSheetByName(SHEET_SETTINGS);
+  if (!settingsSheet) settingsSheet = ss.insertSheet(SHEET_SETTINGS);
+  if (settingsSheet.getRange('A1').getValue() === '') {
+    settingsSheet.getRange('A1').setValue('パスワード');
+    settingsSheet.getRange('B1').setValue(DEFAULT_PASSWORD);
+    settingsSheet.getRange('A1').setFontWeight('bold');
+  }
+  if (settingsSheet.getRange('A2').getValue() === '') {
+    settingsSheet.getRange('A2').setValue('担当者リスト');
+    settingsSheet.getRange('B2').setValue(DEFAULT_REPS.join(','));
+    settingsSheet.getRange('A2').setFontWeight('bold');
+  }
+  if (settingsSheet.getRange('A3').getValue() === '') {
+    settingsSheet.getRange('A3').setValue('許可アカウント(email,名前,admin/rep を ; 区切りで)');
+    settingsSheet.getRange('B3').setValue('');
+    settingsSheet.getRange('A3').setFontWeight('bold');
+  }
+
+  SpreadsheetApp.flush();
+  Logger.log('セットアップ完了: 施設 ' + (facSheet.getLastRow() - 1) + '件');
+}
+
+/** 現在の担当者リストを取得（設定シートB2、カンマ区切り） */
+function getReps() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_SETTINGS);
+  if (!sheet) return DEFAULT_REPS;
+  const v = sheet.getRange('B2').getValue();
+  if (v === '' || v === null) return DEFAULT_REPS;
+  return String(v).split(',').map(function(s){ return s.trim(); }).filter(function(s){ return s; });
+}
+
+/** 担当者リストを丸ごと保存し直す（追加・削除はフロント側で配列を編集してから呼び出す） */
+function saveReps(body) {
+  if (!Array.isArray(body.reps)) return { ok: false, error: 'reps must be an array' };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_SETTINGS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_SETTINGS);
+    sheet.getRange('A2').setValue('担当者リスト');
+  }
+  const cleaned = body.reps.map(function(s){ return String(s).trim(); }).filter(function(s){ return s; });
+  sheet.getRange('B2').setValue(cleaned.join(','));
+  return { ok: true, reps: cleaned };
+}
+
+/** 現在有効なパスワードを取得（設定シートが無ければ初期値を使う） */
+function getPassword() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_SETTINGS);
+  if (!sheet) return DEFAULT_PASSWORD;
+  const v = sheet.getRange('B1').getValue();
+  return v === '' || v === null ? DEFAULT_PASSWORD : String(v);
+}
+
+function changePassword(body) {
+  if (body.oldPassword !== getPassword()) {
+    return { ok: false, error: '現在のパスワードが違います' };
+  }
+  if (!body.newPassword || String(body.newPassword).length < 4) {
+    return { ok: false, error: '新しいパスワードは4文字以上にしてください' };
+  }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_SETTINGS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_SETTINGS);
+    sheet.getRange('A1').setValue('パスワード');
+  }
+  sheet.getRange('B1').setValue(String(body.newPassword));
+  return { ok: true };
+}
+
+/* ================= Googleログイン・権限管理 ================= */
+
+/** 許可されたGoogleアカウント一覧を取得（設定シートB3、"email,名前,role" を ; 区切り） */
+function getAllowedAccounts() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_SETTINGS);
+  if (!sheet) return [];
+  const v = sheet.getRange('B3').getValue();
+  if (!v) return [];
+  return String(v).split(';').map(function(s){ return s.trim(); }).filter(function(s){ return s; }).map(function(entry){
+    const parts = entry.split(',');
+    return { email: (parts[0] || '').trim().toLowerCase(), name: (parts[1] || '').trim(), role: (parts[2] || 'rep').trim() };
+  });
+}
+
+/** 許可アカウント一覧を丸ごと保存し直す（管理者のみ呼び出し可） */
+function saveAllowedAccountsAction(body) {
+  if (!Array.isArray(body.accounts)) return { ok: false, error: 'accounts must be an array' };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_SETTINGS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_SETTINGS);
+  }
+  const str = body.accounts.map(function(a){
+    return [String(a.email || '').trim(), String(a.name || '').trim(), String(a.role || 'rep').trim()].join(',');
+  }).join(';');
+  sheet.getRange('B3').setValue(str);
+  return { ok: true, accounts: body.accounts };
+}
+
+/** Googleが発行したIDトークンを検証し、許可リストと突き合わせてログインさせる */
+function googleLogin(body) {
+  try {
+    if (!body.idToken) return { ok: false, error: 'idTokenがありません' };
+    const res = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(body.idToken), { muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) return { ok: false, error: 'トークンの検証に失敗しました' };
+    const payload = JSON.parse(res.getContentText());
+    if (GOOGLE_CLIENT_ID.indexOf('PASTE_YOUR') !== 0 && payload.aud !== GOOGLE_CLIENT_ID) {
+      return { ok: false, error: 'クライアントIDが一致しません' };
+    }
+    const email = String(payload.email || '').toLowerCase();
+    if (!payload.email_verified || payload.email_verified === 'false') {
+      return { ok: false, error: 'メールアドレスが確認されていません' };
+    }
+    const accounts = getAllowedAccounts();
+    const account = accounts.filter(function(a){ return a.email === email; })[0];
+    if (!account) return { ok: false, error: 'このGoogleアカウントは許可されていません（管理者に追加を依頼してください）' };
+    const displayName = account.name || payload.name || email;
+    logLogin(email, displayName, account.role);
+    const token = createSessionToken(email, displayName, account.role);
+    return { ok: true, sessionToken: token, email: email, name: displayName, role: account.role };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+
+function createSessionToken(email, name, role) {
+  const expiry = Date.now() + SESSION_TTL_MS;
+  const payload = [email, name, role, expiry].join('|');
+  const payloadB64 = Utilities.base64EncodeWebSafe(payload);
+  const sigBytes = Utilities.computeHmacSha256Signature(payloadB64, SESSION_SECRET);
+  const sig = Utilities.base64EncodeWebSafe(sigBytes);
+  return payloadB64 + '.' + sig;
+}
+
+function verifySessionToken(token) {
+  if (!token || token.indexOf('.') === -1) return null;
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  const payloadB64 = parts[0], sig = parts[1];
+  const expectedSigBytes = Utilities.computeHmacSha256Signature(payloadB64, SESSION_SECRET);
+  const expectedSig = Utilities.base64EncodeWebSafe(expectedSigBytes);
+  if (sig !== expectedSig) return null;
+  const payload = Utilities.newBlob(Utilities.base64DecodeWebSafe(payloadB64)).getDataAsString();
+  const fields = payload.split('|');
+  if (fields.length !== 4) return null;
+  const email = fields[0], name = fields[1], role = fields[2], expiry = Number(fields[3]);
+  if (!expiry || Date.now() > expiry) return null;
+  return { email: email, name: name, role: role };
+}
+
+/** リクエストを認証する。sessionToken があればそれを、無ければ旧共通パスワードを許可（移行期間中の互換用） */
+function authenticate(body) {
+  if (body.sessionToken) {
+    const info = verifySessionToken(body.sessionToken);
+    if (info) return info;
+    return null; // sessionTokenが送られてきたのに無効な場合は失敗させる
+  }
+  if (body.password && body.password === getPassword()) {
+    return { email: '', name: '（共通パスワード）', role: 'legacy' };
+  }
+  return null;
+}
+
+function isAdminAuth(auth) {
+  return !!auth && (auth.role === 'admin' || auth.role === 'legacy');
+}
+
+function logLogin(email, name, role) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_LOGIN_LOG);
+  if (!sheet) return;
+  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+  sheet.appendRow([now, email, name, role]);
+}
+
+function getLoginHistory() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_LOGIN_LOG);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, LOGIN_LOG_HEADER.length).getValues();
+  return values.map(function(r){
+    return {
+      datetime: (r[0] instanceof Date) ? Utilities.formatDate(r[0], 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss') : r[0],
+      email: r[1], name: r[2], role: r[3]
+    };
+  }).reverse().slice(0, 300);
+}
+
+/** スプレッドシート全体のバックアップコピーを作成する（管理者のみ） */
+function runBackup() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const file = DriveApp.getFileById(ss.getId());
+  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd_HHmmss');
+  const copy = file.makeCopy('営業周り_バックアップ_' + now);
+  return { ok: true, url: copy.getUrl(), name: copy.getName() };
+}
+
+function doGet(e) {
+  try {
+    const action = e.parameter.action || 'getData';
+    if (action === 'checkLogin') {
+      return jsonOut({ ok: e.parameter.pw === getPassword() });
+    }
+    if (action === 'getData') {
+      return jsonOut(getAllData());
+    }
+    if (action === 'getAllowedAccounts') {
+      return jsonOut({ accounts: getAllowedAccounts() });
+    }
+    if (action === 'getLoginHistory') {
+      const auth = verifySessionToken(e.parameter.sessionToken);
+      if (!isAdminAuth(auth) && e.parameter.password !== getPassword()) {
+        return jsonOut({ error: '権限がありません（管理者のみ）' });
       }
-      renderAll();
-      if(mainTab==='facility') renderFacilityAdminTable();
-      openDetail(facilityId); // 表示を最新状態に更新
-      showToast('空床情報を更新しました');
-    } else {
-      showToast('更新に失敗しました: '+(data.error||''));
+      return jsonOut({ history: getLoginHistory() });
     }
-  }catch(err){
-    showToast('通信エラーが発生しました');
-    console.error(err);
+    return jsonOut({ error: 'unknown action' });
+  } catch (err) {
+    return jsonOut({ error: String(err) });
   }
 }
 
-function closeDetail(){
-  document.getElementById('detailOverlay').classList.remove('show');
-  currentFacilityId = null;
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents);
+    const action = body.action;
+
+    // ログイン関連はここで処理（認証チェックの対象外）
+    if (action === 'changePassword') {
+      return jsonOut(changePassword(body));
+    }
+    if (action === 'googleLogin') {
+      return jsonOut(googleLogin(body));
+    }
+
+    const auth = authenticate(body);
+    if (!auth) {
+      return jsonOut({ error: 'パスワードが違います' });
+    }
+    const admin = isAdminAuth(auth);
+
+    if (action === 'addVisit') {
+      return jsonOut(addVisit(body));
+    }
+    if (action === 'updateLatLng') {
+      return jsonOut(updateLatLng(body));
+    }
+    if (action === 'deleteVisit') {
+      return jsonOut(deleteVisit(body));
+    }
+    if (action === 'saveReps') {
+      if (!admin) return jsonOut({ error: '権限がありません（管理者のみ）' });
+      return jsonOut(saveReps(body));
+    }
+    if (action === 'addFacility') {
+      if (!admin) return jsonOut({ error: '権限がありません（管理者のみ）' });
+      return jsonOut(addFacility(body));
+    }
+    if (action === 'updateFacility') {
+      if (!admin) return jsonOut({ error: '権限がありません（管理者のみ）' });
+      return jsonOut(updateFacility(body));
+    }
+    if (action === 'deleteFacility') {
+      if (!admin) return jsonOut({ error: '権限がありません（管理者のみ）' });
+      return jsonOut(deleteFacility(body));
+    }
+    if (action === 'updateVacancy') {
+      // 空床（現在入居数）の更新は営業担当・管理者どちらも可能（施設情報そのものの編集とは権限を分けている）
+      return jsonOut(updateVacancy(body));
+    }
+    if (action === 'addReferral') {
+      return jsonOut(addReferral(body));
+    }
+    if (action === 'updateReferral') {
+      return jsonOut(updateReferral(body));
+    }
+    if (action === 'deleteReferral') {
+      return jsonOut(deleteReferral(body));
+    }
+    if (action === 'saveAllowedAccounts') {
+      if (!admin) return jsonOut({ error: '権限がありません（管理者のみ）' });
+      return jsonOut(saveAllowedAccountsAction(body));
+    }
+    if (action === 'runBackup') {
+      if (!admin) return jsonOut({ error: '権限がありません（管理者のみ）' });
+      return jsonOut(runBackup());
+    }
+    return jsonOut({ error: 'unknown action' });
+  } catch (err) {
+    return jsonOut({ error: String(err) });
+  }
 }
 
-function renderHistory(facilityId){
-  const vs = visitsFor(facilityId);
-  const el = document.getElementById('dHistory');
-  if(vs.length===0){ el.innerHTML = '<div class="empty">まだ訪問記録がありません</div>'; return; }
-  el.innerHTML = vs.map(v=>
-    '<div class="hist-item">'
-    + '<button class="del-btn" onclick="removeVisit(\''+v.id+'\')">削除</button>'
-    + '<span class="hist-date">'+v.visitDate+'</span><span class="hist-rep">'+v.rep+'</span>'
-    + (v.memo ? '<div class="hist-memo">'+escapeHtml(v.memo)+'</div>' : '')
-    + (v.nextVisit ? '<div class="hist-next">次回予定：'+v.nextVisit+'</div>' : '')
-    + '</div>'
-  ).join('');
+function getAllData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const facSheet = ss.getSheetByName(SHEET_FACILITY);
+  const visitSheet = ss.getSheetByName(SHEET_VISIT);
+  const referralSheet = ss.getSheetByName(SHEET_REFERRAL);
+
+  const facilities = sheetToObjects(facSheet, [
+    'id', 'city', 'kind', 'name', 'rep', 'addr', 'lat', 'lng',
+    'tel', 'fax', 'mobile', 'capacity', 'occupied',
+    'acceptMale', 'acceptFemale', 'careLevels', 'tags', 'memo', 'updatedAt', 'updatedBy', 'group'
+  ]);
+  const visits = sheetToObjects(visitSheet, ['id', 'facilityId', 'facilityName', 'visitDate', 'rep', 'memo', 'nextVisit', 'createdAt']);
+  const referrals = sheetToObjects(referralSheet, [
+    'id', 'consultDate', 'userName', 'facilityId', 'facilityName', 'visitDate', 'moveInDate', 'cancelDate', 'status', 'rep', 'memo', 'createdAt',
+    'sourceType', 'sourceFacilityId', 'sourceFacilityName'
+  ]);
+
+  return { facilities: facilities, visits: visits, referrals: referrals, reps: getReps() };
 }
 
-function escapeHtml(s){
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-async function submitVisit(){
-  if(!currentFacilityId) return;
-  const f = facilities.find(x=>x.id===currentFacilityId);
-  const date = document.getElementById('vDate').value;
-  if(!date){ showToast('訪問日を入力してください'); return; }
-  const btn = document.getElementById('vSaveBtn');
-  btn.disabled = true; btn.textContent = '保存中...';
-  const payload = {
-    action:'addVisit', ...authPayload(),
-    facilityId: f.id, facilityName: f.name,
-    visitDate: date, rep: document.getElementById('vRep').value,
-    memo: document.getElementById('vMemo').value,
-    nextVisit: document.getElementById('vNext').value
-  };
-  try{
-    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify(payload)});
-    const data = await res.json();
-    if(data.ok){
-      visits.push({
-        id:data.id, facilityId:f.id, facilityName:f.name, visitDate:date,
-        rep:payload.rep, memo:payload.memo, nextVisit:payload.nextVisit, createdAt: new Date().toISOString()
+function sheetToObjects(sheet, keys) {
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, keys.length).getValues();
+  return values
+    .filter(function (row) { return row[0] !== ''; })
+    .map(function (row) {
+      const obj = {};
+      keys.forEach(function (k, i) {
+        let v = row[i];
+        if (v instanceof Date) v = Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy-MM-dd');
+        obj[k] = v;
       });
-      renderHistory(f.id);
-      renderAll();
-      showToast('訪問記録を保存しました');
-      document.getElementById('vMemo').value='';
-      document.getElementById('vNext').value='';
-    } else {
-      showToast('保存に失敗しました: '+(data.error||''));
+      return obj;
+    });
+}
+
+/** 新しい施設（営業先）を施設マスタに追加する（管理者のみ呼び出し可） */
+function addFacility(body) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_FACILITY);
+  const id = 'F' + new Date().getTime();
+  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  sheet.appendRow([
+    id,
+    body.city || '',
+    body.kind || '',
+    body.name || '',
+    body.rep || '',
+    body.addr || '',
+    '',
+    '',
+    body.tel || '',
+    body.fax || '',
+    body.mobile || '',
+    body.capacity || '',
+    body.occupied || '',
+    body.acceptMale ? '○' : '',
+    body.acceptFemale ? '○' : '',
+    body.careLevels || '',
+    body.tags || '',
+    body.memo || '',
+    now,
+    body.updatedBy || '',
+    body.group || ''
+  ]);
+  return { ok: true, id: id };
+}
+
+/** 空床（現在入居数）だけを更新する。営業担当・管理者どちらも呼び出し可能。
+ *  施設情報そのもの（住所・電話番号・対応項目など）は updateFacility（管理者専用）でのみ変更できる。 */
+function updateVacancy(body) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_FACILITY);
+  const data = sheet.getDataRange().getValues();
+  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === body.id) {
+      sheet.getRange(i + 1, 13).setValue(body.occupied !== undefined ? body.occupied : data[i][12]); // 現在入居数（列13）
+      sheet.getRange(i + 1, 19).setValue(now); // 更新日（列19）
+      sheet.getRange(i + 1, 20).setValue(body.updatedBy || data[i][19]); // 最終更新者（列20）
+      return { ok: true };
     }
-  }catch(err){
-    showToast('通信エラーが発生しました');
-    console.error(err);
   }
-  btn.disabled = false; btn.textContent = 'この内容で記録する';
+  return { ok: false, error: '施設が見つかりません' };
 }
 
-async function removeVisit(id){
-  if(!confirm('この訪問記録を削除しますか？')) return;
-  try{
-    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'deleteVisit', ...authPayload(), id:id})});
-    const data = await res.json();
-    if(data.ok){
-      visits = visits.filter(v=>v.id!==id);
-      renderHistory(currentFacilityId);
-      renderAll();
-      showToast('削除しました');
+/** 施設情報を更新する（管理者のみ呼び出し可）。渡されたフィールドだけ上書きする */
+function updateFacility(body) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_FACILITY);
+  const data = sheet.getDataRange().getValues();
+  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === body.id) {
+      const row = data[i].slice();
+      if (body.city !== undefined) row[1] = body.city;
+      if (body.kind !== undefined) row[2] = body.kind;
+      if (body.name !== undefined) row[3] = body.name;
+      if (body.rep !== undefined) row[4] = body.rep;
+      if (body.addr !== undefined) row[5] = body.addr;
+      if (body.tel !== undefined) row[8] = body.tel;
+      if (body.fax !== undefined) row[9] = body.fax;
+      if (body.mobile !== undefined) row[10] = body.mobile;
+      if (body.capacity !== undefined) row[11] = body.capacity;
+      if (body.occupied !== undefined) row[12] = body.occupied;
+      if (body.acceptMale !== undefined) row[13] = body.acceptMale ? '○' : '';
+      if (body.acceptFemale !== undefined) row[14] = body.acceptFemale ? '○' : '';
+      if (body.careLevels !== undefined) row[15] = body.careLevels;
+      if (body.tags !== undefined) row[16] = body.tags;
+      if (body.memo !== undefined) row[17] = body.memo;
+      if (body.group !== undefined) row[20] = body.group;
+      row[18] = now;
+      row[19] = body.updatedBy || row[19];
+      sheet.getRange(i + 1, 1, 1, FACILITY_HEADER.length).setValues([row]);
+      return { ok: true };
     }
-  }catch(err){ console.error(err); }
+  }
+  return { ok: false, error: '施設が見つかりません' };
 }
 
-function showToast(msg){
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.style.display='block';
-  setTimeout(()=>{ t.style.display='none'; }, 2200);
-}
-
-/* ---------- 営業先（施設）を追加 ---------- */
-function openFacilityEdit(id, defaultGroup){
-  editingFacilityId = id;
-  populateTagUI();
-  document.getElementById('afErr').textContent = '';
-  const repSel = document.getElementById('afRep');
-  repSel.innerHTML = '';
-  repList.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; repSel.appendChild(o); });
-
-  const f = id ? facilities.find(x=>x.id===id) : null;
-  document.getElementById('afTitle').textContent = id ? '施設情報を編集' : '施設を追加';
-  document.getElementById('afGroup').value = f ? (f.group||'') : (defaultGroup||'');
-  document.getElementById('afName').value = f ? f.name : '';
-  document.getElementById('afCity').value = f ? f.city : '';
-  document.getElementById('afKind').value = f ? (f.kind||'') : '';
-  document.getElementById('afAddr').value = f ? f.addr : '';
-  document.getElementById('afTel').value = f ? (f.tel||'') : '';
-  document.getElementById('afFax').value = f ? (f.fax||'') : '';
-  document.getElementById('afMobile').value = f ? (f.mobile||'') : '';
-  if(repSel.querySelector('option[value="'+(f?f.rep:'')+'"]')) repSel.value = f ? f.rep : repList[0];
-  document.getElementById('afCapacity').value = f ? (f.capacity||'') : '';
-  document.getElementById('afOccupied').value = f ? (f.occupied||'') : '';
-  document.getElementById('afMale').checked = f ? f.acceptMale==='○' : false;
-  document.getElementById('afFemale').checked = f ? f.acceptFemale==='○' : false;
-  document.getElementById('afMemo').value = f ? (f.memo||'') : '';
-  const careArr = f ? String(f.careLevels||'').split(',').filter(c=>c) : [];
-  document.querySelectorAll('.af-care').forEach(cb=>{ cb.checked = careArr.includes(cb.value); });
-  const tagArr = f ? String(f.tags||'').split(',').filter(t=>t) : [];
-  document.querySelectorAll('.af-tag').forEach(cb=>{ cb.checked = tagArr.includes(cb.value); });
-  document.getElementById('afDeleteBtn').style.display = id ? 'block' : 'none';
-  updateAfVacancyPreview();
-  document.getElementById('addFacilityOverlay').classList.add('show');
-}
-function closeAddFacility(){
-  document.getElementById('addFacilityOverlay').classList.remove('show');
-  editingFacilityId = null;
-}
-function updateAfVacancyPreview(){
-  const cap = Number(document.getElementById('afCapacity').value);
-  const occ = Number(document.getElementById('afOccupied').value);
-  const box = document.getElementById('afVacancyPreview');
-  if(!cap){ box.innerHTML = '定員と現在人数を入力すると空床数が自動計算されます'; return; }
-  const vac = cap - (isNaN(occ)?0:occ);
-  const st = vac<=0 ? {label:'満床',cls:'full'} : (vac<=2 ? {label:'残りわずか',cls:'few'} : {label:'空床あり',cls:'available'});
-  box.innerHTML = '<div class="vacancy-row"><span>定員 '+cap+'名 ／ 現在 '+(isNaN(occ)?0:occ)+'名</span><span class="vacancy-status '+st.cls+'">空床 '+Math.max(vac,0)+'（'+st.label+'）</span></div>';
-}
-
-async function submitAddFacility(){
-  const name = document.getElementById('afName').value.trim();
-  const city = document.getElementById('afCity').value.trim();
-  const kind = document.getElementById('afKind').value;
-  const group = document.getElementById('afGroup').value.trim();
-  const addr = document.getElementById('afAddr').value.trim();
-  const tel = document.getElementById('afTel').value.trim();
-  const fax = document.getElementById('afFax').value.trim();
-  const mobile = document.getElementById('afMobile').value.trim();
-  const rep = document.getElementById('afRep').value;
-  const capacity = document.getElementById('afCapacity').value;
-  const occupied = document.getElementById('afOccupied').value;
-  const acceptMale = document.getElementById('afMale').checked;
-  const acceptFemale = document.getElementById('afFemale').checked;
-  const careLevels = Array.from(document.querySelectorAll('.af-care:checked')).map(cb=>cb.value).join(',');
-  const tags = Array.from(document.querySelectorAll('.af-tag:checked')).map(cb=>cb.value).join(',');
-  const memo = document.getElementById('afMemo').value.trim();
-  const errEl = document.getElementById('afErr');
-  errEl.textContent = '';
-  if(!name || !addr){ errEl.textContent = '施設名と住所は必須です'; return; }
-  const btn = document.getElementById('afSaveBtn');
-  btn.disabled = true; btn.textContent = '保存中...';
-  const fields = { city, kind, group, name, rep, addr, tel, fax, mobile, capacity, occupied, acceptMale, acceptFemale, careLevels, tags, memo, updatedBy: currentUserName||'' };
-  try{
-    const action = editingFacilityId ? 'updateFacility' : 'addFacility';
-    const body = editingFacilityId ? {action, ...authPayload(), id: editingFacilityId, ...fields} : {action, ...authPayload(), ...fields};
-    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify(body)});
-    const data = await res.json();
-    if(data.ok){
-      const today = todayStr();
-      if(editingFacilityId){
-        const idx = facilities.findIndex(x=>x.id===editingFacilityId);
-        if(idx>-1) facilities[idx] = { ...facilities[idx],
-          city, kind, group, name, rep, addr, tel, fax, mobile, capacity, occupied,
-          acceptMale: acceptMale?'○':'', acceptFemale: acceptFemale?'○':'',
-          careLevels, tags, memo, updatedAt: today, updatedBy: currentUserName||''
-        };
-      } else {
-        facilities.push({ id:data.id, city, kind, group, name, rep, addr, lat:'', lng:'',
-          tel, fax, mobile, capacity, occupied,
-          acceptMale: acceptMale?'○':'', acceptFemale: acceptFemale?'○':'',
-          careLevels, tags, memo, updatedAt: today, updatedBy: currentUserName||''
-        });
-      }
-      populateFilterOptions();
-      populateReferralFacilitySelect();
-      renderAll();
-      if(mainTab==='facility') renderFacilityAdminTable();
-      closeAddFacility();
-      showToast(editingFacilityId ? '施設情報を更新しました' : '施設を追加しました');
-    } else {
-      errEl.textContent = data.error || '保存に失敗しました';
+/** 施設を削除する（管理者のみ呼び出し可） */
+function deleteFacility(body) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_FACILITY);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === body.id) {
+      sheet.deleteRow(i + 1);
+      return { ok: true };
     }
-  }catch(err){
-    errEl.textContent = '通信エラーが発生しました';
-    console.error(err);
   }
-  btn.disabled = false; btn.textContent = 'この内容で保存する';
-}
-
-async function submitDeleteFacility(){
-  if(!editingFacilityId) return;
-  if(!confirm('この施設を削除しますか？（訪問記録・紹介記録は残ります）')) return;
-  const btn = document.getElementById('afDeleteBtn');
-  btn.disabled = true; btn.textContent = '削除中...';
-  try{
-    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'deleteFacility', ...authPayload(), id: editingFacilityId})});
-    const data = await res.json();
-    if(data.ok){
-      facilities = facilities.filter(f=>f.id!==editingFacilityId);
-      populateFilterOptions();
-      populateReferralFacilitySelect();
-      renderAll();
-      renderFacilityAdminTable();
-      closeAddFacility();
-      showToast('施設を削除しました');
-    } else {
-      showToast('削除に失敗しました: '+(data.error||''));
-    }
-  }catch(err){
-    showToast('通信エラーが発生しました');
-    console.error(err);
-  }
-  btn.disabled = false; btn.textContent = 'この施設を削除する';
-}
-
-/* ---------- 施設管理タブ（管理者のみ） ---------- */
-function renderFacilityAdminTable(){
-  const q = (document.getElementById('fmSearch').value||'').trim();
-  const list = facilities.filter(f=>f.group && (!q || f.name.includes(q))).slice()
-    .sort((a,b)=>a.name.localeCompare(b.name,'ja'));
-  const tbody = document.getElementById('fm-table-body');
-  if(list.length===0){ tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-soft)">該当する施設がありません</td></tr>'; return; }
-  tbody.innerHTML = list.map(f=>{
-    const vac = vacancyOf(f);
-    const st = vacancyStatus(f);
-    const stale = isStale(f);
-    return '<tr>'
-      + '<td style="font-weight:600;">'+escapeHtml(f.name)+'<span class="group-badge">'+escapeHtml(f.group)+'</span></td>'
-      + '<td><span class="badge '+(f.kind||'')+'">'+(f.kind||'—')+'</span></td>'
-      + '<td>'+escapeHtml(f.city||'')+'</td>'
-      + '<td>'+((f.capacity||'—')+' / '+(f.occupied||'—')+' / '+(vac===null?'—':vac))+'</td>'
-      + '<td><span class="vacancy-status '+st.cls+'">'+st.label+'</span>'+(stale?'<div class="vacancy-stale">要更新</div>':'')+'</td>'
-      + '<td style="font-size:11px;color:var(--text-soft);">'+(f.updatedAt||'—')+'</td>'
-      + '<td><button class="dl-btn-icon" title="編集" onclick="openFacilityEdit(\''+f.id+'\')">✏️</button></td>'
-      + '</tr>';
-  }).join('');
-}
-
-/* ---------- 施設訪問タブでの空床表示 ---------- */
-function vacancyBadgeHtml(f){
-  const st = vacancyStatus(f);
-  if(st.cls===''){
-    return '';
-  }
-  return '<span class="visit-status '+st.cls+'">'+st.label+'</span>';
+  return { ok: false, error: '施設が見つかりません' };
 }
 
 /* ================= 紹介管理 ================= */
-function renderReferralList(){
-  populateReferralFacilitySelect();
-  const q = (document.getElementById('refSearch').value||'').trim();
-  const statusF = document.getElementById('refStatus').value;
-  const list = referrals.filter(r=>{
-    if(statusF && r.status!==statusF) return false;
-    if(q && !((r.userName||'').includes(q) || (r.facilityName||'').includes(q))) return false;
-    return true;
-  }).slice().sort((a,b)=> (b.consultDate||'').localeCompare(a.consultDate||''));
-  const tbody = document.getElementById('ref-table-body');
-  if(list.length===0){ tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-soft)">該当する紹介記録がありません</td></tr>'; return; }
-  const statusColor = {'相談中':'upcoming','見学予定':'upcoming','入居決定':'done','キャンセル':'overdue'};
-  tbody.innerHTML = list.map(r=>
-    '<tr>'
-    + '<td>'+(r.consultDate||'—')+'</td>'
-    + '<td style="font-weight:600;">'+escapeHtml(r.userName||'—')+'</td>'
-    + '<td>'+escapeHtml(r.facilityName||'—')+'</td>'
-    + '<td>'+(r.visitDate||'—')+'</td>'
-    + '<td>'+(r.moveInDate||'—')+'</td>'
-    + '<td><span class="visit-status '+(statusColor[r.status]||'none')+'">'+escapeHtml(r.status||'')+'</span></td>'
-    + '<td>'+escapeHtml(r.rep||'—')+'</td>'
-    + '<td><button class="dl-btn-icon" title="編集" onclick="openReferralEdit(\''+r.id+'\')">✏️</button></td>'
-    + '</tr>'
-  ).join('');
+
+function addReferral(body) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_REFERRAL);
+  const id = 'R' + new Date().getTime();
+  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+  sheet.appendRow([
+    id,
+    body.consultDate || '',
+    body.userName || '',
+    body.facilityId || '',
+    body.facilityName || '',
+    body.visitDate || '',
+    body.moveInDate || '',
+    body.cancelDate || '',
+    body.status || '相談中',
+    body.rep || '',
+    body.memo || '',
+    now,
+    body.sourceType || '当センター',
+    body.sourceFacilityId || '',
+    body.sourceFacilityName || ''
+  ]);
+  return { ok: true, id: id };
 }
 
-function openReferralEdit(id){
-  currentReferralId = id;
-  populateReferralFacilitySelect();
-  const r = id ? referrals.find(x=>x.id===id) : null;
-  document.getElementById('refTitle').textContent = id ? '紹介記録を編集' : '紹介を記録';
-  document.getElementById('refConsultDate').value = r ? r.consultDate : todayStr();
-  document.getElementById('refUserName').value = r ? (r.userName||'') : '';
-  if(r && r.facilityId) document.getElementById('refFacility').value = r.facilityId;
-  document.getElementById('refVisitDate').value = r ? (r.visitDate||'') : '';
-  document.getElementById('refMoveInDate').value = r ? (r.moveInDate||'') : '';
-  document.getElementById('refCancelDate').value = r ? (r.cancelDate||'') : '';
-  document.getElementById('refStatusSelect').value = r ? r.status : '相談中';
-  document.getElementById('refRep').value = r && repList.includes(r.rep) ? r.rep : repList[0];
-  document.getElementById('refMemo').value = r ? (r.memo||'') : '';
-  document.getElementById('refErr').textContent = '';
-  document.getElementById('refDeleteBtn').style.display = id ? 'block' : 'none';
-  document.getElementById('referralOverlay').classList.add('show');
-}
-function closeReferralEdit(){
-  document.getElementById('referralOverlay').classList.remove('show');
-  currentReferralId = null;
-}
-async function submitReferral(){
-  const consultDate = document.getElementById('refConsultDate').value;
-  const userName = document.getElementById('refUserName').value.trim();
-  const facilityId = document.getElementById('refFacility').value;
-  const facility = facilities.find(f=>f.id===facilityId);
-  const visitDate = document.getElementById('refVisitDate').value;
-  const moveInDate = document.getElementById('refMoveInDate').value;
-  const cancelDate = document.getElementById('refCancelDate').value;
-  const status = document.getElementById('refStatusSelect').value;
-  const rep = document.getElementById('refRep').value;
-  const memo = document.getElementById('refMemo').value.trim();
-  const errEl = document.getElementById('refErr');
-  errEl.textContent = '';
-  if(!consultDate || !facilityId){ errEl.textContent = '相談日と紹介施設は必須です'; return; }
-  const btn = document.getElementById('refSaveBtn');
-  btn.disabled = true; btn.textContent = '保存中...';
-  const fields = { consultDate, userName, facilityId, facilityName: facility?facility.name:'', visitDate, moveInDate, cancelDate, status, rep, memo };
-  try{
-    const action = currentReferralId ? 'updateReferral' : 'addReferral';
-    const body = currentReferralId ? {action, ...authPayload(), id:currentReferralId, ...fields} : {action, ...authPayload(), ...fields};
-    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify(body)});
-    const data = await res.json();
-    if(data.ok){
-      if(currentReferralId){
-        const idx = referrals.findIndex(x=>x.id===currentReferralId);
-        if(idx>-1) referrals[idx] = {...referrals[idx], ...fields};
-      } else {
-        referrals.push({ id:data.id, ...fields, createdAt: new Date().toISOString() });
-      }
-      renderReferralList();
-      closeReferralEdit();
-      showToast('紹介記録を保存しました');
-    } else {
-      errEl.textContent = data.error || '保存に失敗しました';
+function updateReferral(body) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_REFERRAL);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === body.id) {
+      const row = data[i].slice();
+      if (body.consultDate !== undefined) row[1] = body.consultDate;
+      if (body.userName !== undefined) row[2] = body.userName;
+      if (body.facilityId !== undefined) row[3] = body.facilityId;
+      if (body.facilityName !== undefined) row[4] = body.facilityName;
+      if (body.visitDate !== undefined) row[5] = body.visitDate;
+      if (body.moveInDate !== undefined) row[6] = body.moveInDate;
+      if (body.cancelDate !== undefined) row[7] = body.cancelDate;
+      if (body.status !== undefined) row[8] = body.status;
+      if (body.rep !== undefined) row[9] = body.rep;
+      if (body.memo !== undefined) row[10] = body.memo;
+      if (body.sourceType !== undefined) row[12] = body.sourceType;
+      if (body.sourceFacilityId !== undefined) row[13] = body.sourceFacilityId;
+      if (body.sourceFacilityName !== undefined) row[14] = body.sourceFacilityName;
+      sheet.getRange(i + 1, 1, 1, REFERRAL_HEADER.length).setValues([row]);
+      return { ok: true };
     }
-  }catch(err){
-    errEl.textContent = '通信エラーが発生しました';
-    console.error(err);
   }
-  btn.disabled = false; btn.textContent = 'この内容で保存する';
+  return { ok: false, error: '紹介記録が見つかりません' };
 }
-async function submitDeleteReferral(){
-  if(!currentReferralId) return;
-  if(!confirm('この紹介記録を削除しますか？')) return;
-  try{
-    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'deleteReferral', ...authPayload(), id:currentReferralId})});
-    const data = await res.json();
-    if(data.ok){
-      referrals = referrals.filter(r=>r.id!==currentReferralId);
-      renderReferralList();
-      closeReferralEdit();
-      showToast('削除しました');
+
+function deleteReferral(body) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_REFERRAL);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === body.id) {
+      sheet.deleteRow(i + 1);
+      return { ok: true };
     }
-  }catch(err){ console.error(err); }
+  }
+  return { ok: false, error: '紹介記録が見つかりません' };
 }
 
-/* ================= 営業予定表 ================= */
-/* ================= 空床一覧（悠久福祉会＝空床管理対象施設のみ） ================= */
-function openVacancyList(){
-  renderVacancyList();
-  document.getElementById('vacancyListOverlay').classList.add('show');
-}
-function closeVacancyList(){
-  document.getElementById('vacancyListOverlay').classList.remove('show');
-}
-function renderVacancyList(){
-  const managed = facilities.filter(f=>f.group);
-  const el = document.getElementById('vacancyListBody');
-  if(managed.length===0){
-    el.innerHTML = '<div class="empty">空床管理対象の施設が登録されていません（施設管理タブの「法人・グループ」欄に入力すると対象になります）</div>';
-    return;
-  }
-  const available = [];
-  const few = [];
-  const full = [];
-  const unset = [];
-  managed.forEach(f=>{
-    const vac = vacancyOf(f);
-    if(vac===null){ unset.push(f); return; }
-    if(vac<=0) full.push(f);
-    else if(vac<=2) few.push({f, vac});
-    else available.push({f, vac});
-  });
-  let html = '';
-  if(available.length || few.length){
-    html += '<div class="vlist-section"><div class="vlist-heading">空床あり</div>';
-    [...few, ...available].sort((a,b)=>a.vac-b.vac).forEach(({f,vac})=>{
-      html += '<div class="vlist-row" onclick="closeVacancyList();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span><span class="vlist-count">空床'+vac+'</span></div>';
-    });
-    html += '</div>';
-  }
-  if(full.length){
-    html += '<div class="vlist-section"><div class="vlist-heading full">満床</div>';
-    full.forEach(f=>{
-      html += '<div class="vlist-row" onclick="closeVacancyList();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span><span class="vlist-count full">満床</span></div>';
-    });
-    html += '</div>';
-  }
-  if(unset.length){
-    html += '<div class="vlist-section"><div class="vlist-heading">定員・入居人数 未登録</div>';
-    unset.forEach(f=>{
-      html += '<div class="vlist-row" onclick="closeVacancyList();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span><span style="color:var(--text-soft);font-size:12px;">未登録</span></div>';
-    });
-    html += '</div>';
-  }
-  el.innerHTML = html;
+function addVisit(body) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_VISIT);
+  const id = 'V' + new Date().getTime();
+  const now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+  sheet.appendRow([
+    id,
+    body.facilityId || '',
+    body.facilityName || '',
+    body.visitDate || '',
+    body.rep || '',
+    body.memo || '',
+    body.nextVisit || '',
+    now
+  ]);
+  return { ok: true, id: id };
 }
 
-function openSchedule(){
-  renderSchedule();
-  document.getElementById('scheduleOverlay').classList.add('show');
-}
-function closeSchedule(){
-  document.getElementById('scheduleOverlay').classList.remove('show');
-}
-function renderSchedule(){
-  const today = todayStr();
-  const items = [];
-  visits.filter(v=>v.nextVisit && v.nextVisit>=today).forEach(v=>{
-    items.push({date:v.nextVisit, type:'訪問予定', label:v.facilityName, sub:'担当：'+v.rep, cls: v.nextVisit===today?'overdue':'upcoming'});
-  });
-  referrals.filter(r=>r.visitDate && r.visitDate>=today && r.status!=='キャンセル' && r.status!=='入居決定').forEach(r=>{
-    items.push({date:r.visitDate, type:'見学予定', label:(r.userName||'利用者未記入')+' → '+r.facilityName, sub:'担当：'+r.rep, cls:'upcoming'});
-  });
-  referrals.filter(r=>r.moveInDate && r.moveInDate>=today && r.status!=='キャンセル').forEach(r=>{
-    items.push({date:r.moveInDate, type:'入居予定', label:(r.userName||'利用者未記入')+' → '+r.facilityName, sub:'担当：'+r.rep, cls:'done'});
-  });
-  items.sort((a,b)=> a.date.localeCompare(b.date));
-  const el = document.getElementById('scheduleList');
-  if(items.length===0){ el.innerHTML = '<div class="empty">今後の予定はありません</div>'; return; }
-  el.innerHTML = items.map(it=>
-    '<div class="hist-item"><span class="hist-date">'+it.date+'</span> '
-    + '<span class="visit-status '+it.cls+'" style="margin-left:6px;">'+it.type+'</span>'
-    + '<div class="hist-memo">'+escapeHtml(it.label)+'</div>'
-    + '<div style="font-size:11px;color:var(--text-soft);">'+it.sub+'</div></div>'
-  ).join('');
-}
-
-/* ---------- 月別訪問実績 ---------- */
-function openMonthly(){
-  renderMonthly();
-  document.getElementById('monthlyOverlay').classList.add('show');
-}
-function closeMonthly(){
-  document.getElementById('monthlyOverlay').classList.remove('show');
-}
-function renderMonthly(){
-  const counts = {};
-  visits.forEach(v=>{
-    if(!v.visitDate) return;
-    const m = v.visitDate.slice(0,7);
-    if(!counts[m]) counts[m] = {total:0, facilities:new Set(), consult:0, moveIn:0};
-    counts[m].total++;
-    counts[m].facilities.add(v.facilityId);
-  });
-  referrals.forEach(r=>{
-    if(r.consultDate){
-      const m = r.consultDate.slice(0,7);
-      if(!counts[m]) counts[m] = {total:0, facilities:new Set(), consult:0, moveIn:0};
-      counts[m].consult++;
+function deleteVisit(body) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_VISIT);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === body.id) {
+      sheet.deleteRow(i + 1);
+      return { ok: true };
     }
-    if(r.moveInDate){
-      const m = r.moveInDate.slice(0,7);
-      if(!counts[m]) counts[m] = {total:0, facilities:new Set(), consult:0, moveIn:0};
-      counts[m].moveIn++;
+  }
+  return { ok: false, error: 'not found' };
+}
+
+/** 施設の緯度経度キャッシュを更新（フロント側でジオコーディングした結果を保存） */
+function updateLatLng(body) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_FACILITY);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === body.facilityId) {
+      sheet.getRange(i + 1, 7).setValue(body.lat);
+      sheet.getRange(i + 1, 8).setValue(body.lng);
+      return { ok: true };
     }
-  });
-  const months = Object.keys(counts).sort().reverse().slice(0,12);
-  const el = document.getElementById('monthlyList');
-  if(months.length===0){ el.innerHTML = '<div class="empty">まだ実績データがありません</div>'; return; }
-  const maxCount = Math.max(1, ...months.map(m=>counts[m].total));
-  el.innerHTML = months.map(m=>{
-    const c = counts[m];
-    const pct = Math.round(c.total / maxCount * 100);
-    const [y,mo] = m.split('-');
-    return '<div class="month-bar-row">'
-      + '<div class="month-bar-label">'+y+'年'+parseInt(mo)+'月</div>'
-      + '<div class="month-bar-track"><div class="month-bar-fill" style="width:'+pct+'%"></div></div>'
-      + '<div class="month-bar-value">訪問'+c.total+'件・紹介'+c.consult+'件・入居'+c.moveIn+'件</div>'
-      + '</div>';
-  }).join('');
-}
-
-/* ---------- パスワード変更 ---------- */
-function openPwChange(){
-  document.getElementById('pwOld').value = '';
-  document.getElementById('pwNew1').value = '';
-  document.getElementById('pwNew2').value = '';
-  document.getElementById('pwErr').textContent = '';
-  document.getElementById('repErr').textContent = '';
-  document.getElementById('repNewName').value = '';
-  repListDraft = repList.slice();
-  renderRepChips();
-  if(isAdmin()){
-    allowedAccountsDraft = allowedAccounts.slice();
-    document.getElementById('accErr').textContent = '';
-    document.getElementById('accNewEmail').value = '';
-    document.getElementById('accNewName').value = '';
-    renderAccountChips();
   }
-  document.getElementById('pwOverlay').classList.add('show');
-}
-function closePwChange(){
-  document.getElementById('pwOverlay').classList.remove('show');
-}
-async function submitPwChange(){
-  const oldPw = document.getElementById('pwOld').value;
-  const new1 = document.getElementById('pwNew1').value;
-  const new2 = document.getElementById('pwNew2').value;
-  const errEl = document.getElementById('pwErr');
-  errEl.textContent = '';
-  if(new1.length < 4){ errEl.textContent = '新しいパスワードは4文字以上にしてください'; return; }
-  if(new1 !== new2){ errEl.textContent = '新しいパスワードが一致しません'; return; }
-  const btn = document.getElementById('pwSaveBtn');
-  btn.disabled = true; btn.textContent = '変更中...';
-  try{
-    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'changePassword', oldPassword:oldPw, newPassword:new1})});
-    const data = await res.json();
-    if(data.ok){
-      currentPassword = new1;
-      closePwChange();
-      showToast('パスワードを変更しました');
-    } else {
-      errEl.textContent = data.error || '変更に失敗しました';
-    }
-  }catch(err){
-    errEl.textContent = '通信エラーが発生しました';
-    console.error(err);
-  }
-  btn.disabled = false; btn.textContent = '変更する';
+  return { ok: false, error: 'not found' };
 }
 
-/* ---------- 担当者管理 ---------- */
-function renderRepChips(){
-  const el = document.getElementById('repChips');
-  if(repListDraft.length===0){ el.innerHTML = '<span style="color:var(--text-soft);font-size:12px;">担当者がいません</span>'; return; }
-  el.innerHTML = repListDraft.map(r =>
-    '<span class="rep-chip">'+escapeHtml(r)+'<button onclick="removeRepLocal(\''+escapeHtml(r).replace(/'/g,"\\'")+'\')">×</button></span>'
-  ).join('');
+function jsonOut(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
-function addRepLocal(){
-  const input = document.getElementById('repNewName');
-  const name = input.value.trim();
-  if(!name) return;
-  if(repListDraft.includes(name)){ document.getElementById('repErr').textContent = 'すでに登録されています'; return; }
-  repListDraft.push(name);
-  input.value = '';
-  document.getElementById('repErr').textContent = '';
-  renderRepChips();
-}
-function removeRepLocal(name){
-  repListDraft = repListDraft.filter(r=>r!==name);
-  renderRepChips();
-}
-async function submitReps(){
-  const errEl = document.getElementById('repErr');
-  errEl.textContent = '';
-  if(repListDraft.length===0){ errEl.textContent = '担当者を1人以上登録してください'; return; }
-  const btn = document.getElementById('repSaveBtn');
-  btn.disabled = true; btn.textContent = '保存中...';
-  try{
-    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'saveReps', ...authPayload(), reps:repListDraft})});
-    const data = await res.json();
-    if(data.ok){
-      repList = repListDraft.slice();
-      populateVRepSelect();
-      populateDealStaffOptions();
-      showToast('担当者を更新しました');
-    } else {
-      errEl.textContent = data.error || '保存に失敗しました';
-    }
-  }catch(err){
-    errEl.textContent = '通信エラーが発生しました';
-    console.error(err);
-  }
-  btn.disabled = false; btn.textContent = 'この内容で保存する';
-}
-
-/* ---------- 許可アカウント管理（管理者のみ） ---------- */
-function renderAccountChips(){
-  const el = document.getElementById('accountChips');
-  if(!el) return;
-  if(allowedAccountsDraft.length===0){ el.innerHTML = '<span style="color:var(--text-soft);font-size:12px;">許可アカウントが登録されていません</span>'; return; }
-  el.innerHTML = allowedAccountsDraft.map((a,i) =>
-    '<div class="rep-chip" style="width:100%;justify-content:space-between;margin-bottom:6px;">'
-    + '<span>'+escapeHtml(a.name||a.email)+'（'+escapeHtml(a.email)+'／'+(a.role==='admin'?'管理者':'営業担当')+'）</span>'
-    + '<button onclick="removeAccountLocal('+i+')">×</button></div>'
-  ).join('');
-}
-function addAccountLocal(){
-  const email = document.getElementById('accNewEmail').value.trim().toLowerCase();
-  const name = document.getElementById('accNewName').value.trim();
-  const role = document.getElementById('accNewRole').value;
-  const errEl = document.getElementById('accErr');
-  if(!email || email.indexOf('@')===-1){ errEl.textContent = '正しいメールアドレスを入力してください'; return; }
-  if(allowedAccountsDraft.some(a=>a.email===email)){ errEl.textContent = 'すでに登録されています'; return; }
-  allowedAccountsDraft.push({email, name, role});
-  document.getElementById('accNewEmail').value = '';
-  document.getElementById('accNewName').value = '';
-  errEl.textContent = '';
-  renderAccountChips();
-}
-function removeAccountLocal(i){
-  allowedAccountsDraft.splice(i,1);
-  renderAccountChips();
-}
-async function submitAccounts(){
-  const errEl = document.getElementById('accErr');
-  errEl.textContent = '';
-  const btn = document.getElementById('accSaveBtn');
-  btn.disabled = true; btn.textContent = '保存中...';
-  try{
-    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'saveAllowedAccounts', ...authPayload(), accounts:allowedAccountsDraft})});
-    const data = await res.json();
-    if(data.ok){
-      allowedAccounts = allowedAccountsDraft.slice();
-      showToast('許可アカウントを更新しました');
-    } else {
-      errEl.textContent = data.error || '保存に失敗しました';
-    }
-  }catch(err){
-    errEl.textContent = '通信エラーが発生しました';
-    console.error(err);
-  }
-  btn.disabled = false; btn.textContent = 'この内容で保存する';
-}
-
-/* ---------- ログイン履歴・バックアップ（管理者のみ） ---------- */
-async function openLoginHistory(){
-  document.getElementById('loginHistoryOverlay').classList.add('show');
-  const el = document.getElementById('loginHistoryList');
-  el.innerHTML = '<div class="empty">読み込み中...</div>';
-  try{
-    const qs = currentSessionToken ? 'sessionToken='+encodeURIComponent(currentSessionToken) : 'password='+encodeURIComponent(currentPassword);
-    const res = await fetch(GAS_URL + '?action=getLoginHistory&' + qs);
-    const data = await res.json();
-    if(data.error){ el.innerHTML = '<div class="empty">'+escapeHtml(data.error)+'</div>'; return; }
-    const list = data.history || [];
-    if(list.length===0){ el.innerHTML = '<div class="empty">ログイン履歴がありません</div>'; return; }
-    el.innerHTML = list.map(h=>
-      '<div class="hist-item"><span class="hist-date">'+h.datetime+'</span> '
-      + '<span class="hist-rep">'+escapeHtml(h.name||h.email)+'（'+(h.role==='admin'?'管理者':h.role==='legacy'?'共通パスワード':'営業担当')+'）</span></div>'
-    ).join('');
-  }catch(err){
-    el.innerHTML = '<div class="empty">読み込みに失敗しました</div>';
-    console.error(err);
-  }
-}
-function closeLoginHistory(){
-  document.getElementById('loginHistoryOverlay').classList.remove('show');
-}
-async function runBackupNow(){
-  const errEl = document.getElementById('adminToolErr');
-  errEl.textContent = '';
-  try{
-    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'runBackup', ...authPayload()})});
-    const data = await res.json();
-    if(data.ok){
-      showToast('バックアップを作成しました');
-      errEl.innerHTML = '作成しました：<a href="'+data.url+'" target="_blank" rel="noopener" style="color:var(--navy);">'+escapeHtml(data.name)+'</a>';
-    } else {
-      errEl.textContent = data.error || 'バックアップに失敗しました';
-    }
-  }catch(err){
-    errEl.textContent = '通信エラーが発生しました';
-    console.error(err);
-  }
-}
-
-/* ================= 案件管理（元 営業記録.html を移植） ================= */
-const DEAL_TODAY = new Date();
-DEAL_TODAY.setHours(0,0,0,0);
-
-let dealRecords = [];
-let dealEditId = null;
-let dealActiveMonth = 'all';
-let dealCbCount = 0;
-let dealMonthlyShown = false;
-
-function dealSetSyncStatus(msg, ok=true){
-  const el = document.getElementById('dl-sync-status');
-  el.textContent = msg;
-  el.style.color = ok ? '' : 'var(--dl-red)';
-}
-
-// JSONPでGASを呼び出す（既存の案件管理バックエンドの仕様に合わせる）
-function dealGasCall(params){
-  return new Promise((resolve, reject) => {
-    const cbName = '__dealCb' + (dealCbCount++);
-    const timeout = setTimeout(() => {
-      delete window[cbName];
-      reject(new Error('timeout'));
-    }, 15000);
-
-    window[cbName] = function(data) {
-      clearTimeout(timeout);
-      delete window[cbName];
-      const el = document.getElementById('jsonp-' + cbName);
-      if (el) el.remove();
-      resolve(data);
-    };
-
-    params.callback = cbName;
-    const qs = Object.entries(params).map(([k,v]) => encodeURIComponent(k)+'='+encodeURIComponent(v)).join('&');
-    const script = document.createElement('script');
-    script.id = 'jsonp-' + cbName;
-    script.src = DEAL_GAS_URL + '?' + qs;
-    script.onerror = () => { clearTimeout(timeout); delete window[cbName]; reject(new Error('load error')); };
-    document.head.appendChild(script);
-  });
-}
-
-async function dealLoadAll(){
-  try{
-    dealSetSyncStatus('読み込み中...');
-    const data = await dealGasCall({action:'getAll'});
-    dealRecords = Array.isArray(data) ? data : [];
-    dealSetSyncStatus(`✓ 同期済み ${dealRecords.length}件`);
-    dealBuildMonthTabs();
-    dealRender();
-  }catch(e){
-    dealSetSyncStatus('⚠ 読み込みエラー', false);
-    document.getElementById('dl-table-body').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:30px;color:#dc2626">データの読み込みに失敗しました。再読み込みしてください。</td></tr>';
-  }
-}
-
-function dealGetMonth(r){ return r.consult ? r.consult.slice(0,7) : ''; }
-
-function dealBuildMonthTabs(){
-  const monthSet = new Set();
-  dealRecords.forEach(r => { if (r.consult) monthSet.add(r.consult.slice(0,7)); });
-  const months = Array.from(monthSet).sort().reverse();
-  const tabs = document.getElementById('dl-month-tabs');
-  tabs.innerHTML = `<button class="dl-month-tab ${dealActiveMonth==='all'?'active':''}" onclick="dealSetMonth('all')">すべて<span class="dl-tab-cnt">${dealRecords.length}</span></button>`;
-  months.forEach(m => {
-    const cnt = dealRecords.filter(r => dealGetMonth(r) === m).length;
-    const [y, mo] = m.split('-');
-    tabs.innerHTML += `<button class="dl-month-tab ${dealActiveMonth===m?'active':''}" onclick="dealSetMonth('${m}')">${y}年${parseInt(mo)}月<span class="dl-tab-cnt">${cnt}</span></button>`;
-  });
-}
-
-function dealSetMonth(m){ dealActiveMonth = m; dealBuildMonthTabs(); dealRender(); }
-
-function dealIsOverdue(rec){
-  if (rec.status === '成約' || rec.status === '失注') return false;
-  const ref = rec.closeDate || rec.consult;
-  if (!ref) return false;
-  const d = new Date(ref); d.setHours(0,0,0,0);
-  return (DEAL_TODAY - d) > 7 * 86400000;
-}
-
-function dealStatusClass(s){
-  return {商談中:'dl-s-active',成約:'dl-s-success',失注:'dl-s-lost',保留:'dl-s-hold'}[s] || 'dl-s-active';
-}
-
-function dealFmt(d){
-  if (!d) return '—';
-  const parts = d.split('-');
-  return `${parseInt(parts[1])}/${parseInt(parts[2])}`;
-}
-
-function dealRender(){
-  const q = document.getElementById('dl-search').value.toLowerCase();
-  const fs = document.getElementById('dl-filter-status').value;
-  const fc = document.getElementById('dl-filter-care').value;
-  const fg = document.getElementById('dl-filter-gender').value;
-
-  let filtered = dealRecords.filter(r => {
-    if (dealActiveMonth !== 'all' && dealGetMonth(r) !== dealActiveMonth) return false;
-    if (fs && r.status !== fs) return false;
-    if (fc && r.care !== fc) return false;
-    if (fg && r.gender !== fg) return false;
-    if (q && !`${r.name}${r.facility}${r.staff}${r.memo}`.toLowerCase().includes(q)) return false;
-    return true;
-  });
-
-  document.getElementById('dl-cnt-all').textContent = dealRecords.length;
-  document.getElementById('dl-cnt-active').textContent = dealRecords.filter(r=>r.status==='商談中').length;
-  document.getElementById('dl-cnt-alert').textContent = dealRecords.filter(dealIsOverdue).length;
-  document.getElementById('dl-cnt-success').textContent = dealRecords.filter(r=>r.status==='成約').length;
-  document.getElementById('dl-cnt-lost').textContent = dealRecords.filter(r=>r.status==='失注').length;
-
-  if(dealMonthlyShown) renderDealMonthly();
-
-  const tbody = document.getElementById('dl-table-body');
-  document.getElementById('dl-empty-msg').style.display = filtered.length ? 'none' : 'block';
-  if (filtered.length === 0) { tbody.innerHTML = ''; return; }
-
-  tbody.innerHTML = filtered.map((r, i) => {
-    const over = dealIsOverdue(r);
-    const closeDiff = r.closeDate ? Math.floor((DEAL_TODAY - new Date(r.closeDate)) / 86400000) : null;
-    const closeFmt = r.closeDate
-      ? `<span class="${closeDiff > 7 && r.status==='商談中' ? 'dl-date-overdue' : ''}">${dealFmt(r.closeDate)}</span>${over ? '<span class="dl-alert-badge">未対応</span>' : ''}`
-      : '—';
-    const memo = r.memo ? `<span title="${String(r.memo).replace(/"/g,'&quot;')}" style="cursor:default">📝</span>` : '—';
-    return `<tr class="${over ? 'dl-alert-row' : ''}">
-      <td style="color:var(--text-soft);font-size:11px">${i+1}</td>
-      <td>${dealFmt(r.consult)}</td>
-      <td style="font-weight:600">${r.name}</td>
-      <td><span class="dl-care">${r.care||'—'}</span></td>
-      <td>${r.gender||'—'}</td>
-      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${r.facility||'—'}</td>
-      <td>${closeFmt}</td>
-      <td><span class="dl-status ${dealStatusClass(r.status)}" onclick="dealCycleStatus(this.dataset.id)" data-id="${r.id}">${r.status}</span></td>
-      <td>${r.staff||'—'}</td>
-      <td>${memo}</td>
-      <td><div class="dl-action-btns">
-        <button class="dl-btn-icon" title="編集" onclick="dealEditRecord(this.dataset.id)" data-id="${r.id}">✏️</button>
-        <button class="dl-btn-icon" title="削除" onclick="dealDeleteRecord(this.dataset.id)" data-id="${r.id}">🗑️</button>
-      </div></td>
-    </tr>`;
-  }).join('');
-}
-
-async function dealCycleStatus(id){
-  const order = ['商談中','成約','失注','保留'];
-  const r = dealRecords.find(x=>String(x.id)===String(id));
-  if (!r) return;
-  r.status = order[(order.indexOf(r.status)+1) % order.length];
-  dealRender();
-  dealSetSyncStatus('保存中...');
-  try { await dealGasCall({action:'save', ...r}); dealSetSyncStatus('✓ 保存しました'); }
-  catch { dealSetSyncStatus('⚠ 保存エラー', false); }
-}
-
-function dealOpenModal(id=null){
-  dealEditId = id;
-  const m = id ? dealRecords.find(r=>String(r.id)===String(id)) : null;
-  document.getElementById('dl-modal-title').textContent = id ? '案件を編集' : '新規案件を追加';
-  document.getElementById('dl-f-consult').value = m?.consult || new Date().toISOString().slice(0,10);
-  document.getElementById('dl-f-close').value = m?.closeDate || '';
-  document.getElementById('dl-f-name').value = m?.name || '';
-  document.getElementById('dl-f-care').value = m?.care || '';
-  document.getElementById('dl-f-gender').value = m?.gender || '';
-  document.getElementById('dl-f-facility').value = m?.facility || '';
-  document.getElementById('dl-f-status').value = m?.status || '商談中';
-  document.getElementById('dl-f-staff').value = m?.staff || '';
-  document.getElementById('dl-f-memo').value = m?.memo || '';
-  document.getElementById('dl-modal').classList.add('open');
-}
-
-function dealCloseModal(){ document.getElementById('dl-modal').classList.remove('open'); dealEditId = null; }
-
-async function dealSaveRecord(){
-  const name = document.getElementById('dl-f-name').value.trim();
-  const consult = document.getElementById('dl-f-consult').value;
-  if (!name || !consult) { alert('相談日と利用者氏名は必須です'); return; }
-  const data = {
-    id: dealEditId || String(Date.now()),
-    consult, name,
-    care: document.getElementById('dl-f-care').value,
-    gender: document.getElementById('dl-f-gender').value,
-    facility: document.getElementById('dl-f-facility').value.trim(),
-    closeDate: document.getElementById('dl-f-close').value,
-    status: document.getElementById('dl-f-status').value,
-    staff: document.getElementById('dl-f-staff').value.trim(),
-    memo: document.getElementById('dl-f-memo').value.trim()
-  };
-  const btn = document.getElementById('dl-save-btn');
-  btn.textContent = '保存中...'; btn.disabled = true;
-  try{
-    await dealGasCall({action:'save', ...data});
-    if (dealEditId) { const i = dealRecords.findIndex(r=>String(r.id)===String(dealEditId)); dealRecords[i] = data; }
-    else { dealRecords.unshift(data); dealActiveMonth = data.consult.slice(0,7); }
-    dealSetSyncStatus('✓ 保存しました');
-    dealCloseModal(); dealBuildMonthTabs(); dealRender();
-  }catch{
-    dealSetSyncStatus('⚠ 保存エラー', false);
-    alert('保存に失敗しました。再度お試しください。');
-  }finally{ btn.textContent = '保存'; btn.disabled = false; }
-}
-
-function dealEditRecord(id){ dealOpenModal(id); }
-
-async function dealDeleteRecord(id){
-  const r = dealRecords.find(x=>String(x.id)===String(id));
-  if (!r || !confirm(`「${r.name}」を削除しますか？`)) return;
-  dealRecords = dealRecords.filter(x=>String(x.id)!==String(id));
-  dealBuildMonthTabs(); dealRender();
-  dealSetSyncStatus('削除中...');
-  try { await dealGasCall({action:'delete', id}); dealSetSyncStatus('✓ 削除しました'); }
-  catch { dealSetSyncStatus('⚠ 削除エラー', false); }
-}
-
-function toggleDealMonthly(){
-  dealMonthlyShown = !dealMonthlyShown;
-  document.getElementById('dl-monthly-compare').style.display = dealMonthlyShown ? 'block':'none';
-  if(dealMonthlyShown) renderDealMonthly();
-}
-
-function renderDealMonthly(){
-  const byMonth = {};
-  dealRecords.forEach(r=>{
-    const m = dealGetMonth(r);
-    if(!m) return;
-    if(!byMonth[m]) byMonth[m] = {total:0, success:0, lost:0};
-    byMonth[m].total++;
-    if(r.status==='成約') byMonth[m].success++;
-    if(r.status==='失注') byMonth[m].lost++;
-  });
-  const months = Object.keys(byMonth).sort().reverse();
-  const el = document.getElementById('dl-monthly-compare');
-  if(months.length===0){ el.innerHTML = '<div class="dl-empty">データがありません</div>'; return; }
-  let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
-    + '<thead><tr style="background:var(--dl-accent);color:#fff;">'
-    + '<th style="padding:6px 8px;text-align:left;">月</th><th style="padding:6px 8px;">相談件数</th>'
-    + '<th style="padding:6px 8px;">成約</th><th style="padding:6px 8px;">失注</th><th style="padding:6px 8px;">成約率</th>'
-    + '</tr></thead><tbody>';
-  months.forEach(m=>{
-    const d = byMonth[m];
-    const rate = d.total ? Math.round(d.success/d.total*100) : 0;
-    const [y,mo] = m.split('-');
-    html += '<tr style="border-bottom:1px solid var(--dl-border);">'
-      + '<td style="padding:6px 8px;">'+y+'年'+parseInt(mo)+'月</td>'
-      + '<td style="padding:6px 8px;text-align:center;">'+d.total+'</td>'
-      + '<td style="padding:6px 8px;text-align:center;color:var(--dl-green);font-weight:700;">'+d.success+'</td>'
-      + '<td style="padding:6px 8px;text-align:center;color:var(--dl-red);">'+d.lost+'</td>'
-      + '<td style="padding:6px 8px;text-align:center;font-weight:700;">'+rate+'%</td></tr>';
-  });
-  html += '</tbody></table>';
-  el.innerHTML = html;
-}
-
-function dealExportCSV(){
-  const header = ['id','相談日','利用者氏名','介護度','性別','希望施設','クロージング日','ステータス','担当者','メモ'];
-  const target = dealActiveMonth === 'all' ? dealRecords : dealRecords.filter(r => dealGetMonth(r) === dealActiveMonth);
-  const rows = target.map(r => [r.id,r.consult,r.name,r.care,r.gender,r.facility,r.closeDate,r.status,r.staff,r.memo].map(v=>`"${(v||'').replace(/"/g,'""')}"`));
-  const csv = '\uFEFF' + [header, ...rows].map(r=>r.join(',')).join('\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-  a.download = `営業記録_${dealActiveMonth === 'all' ? '全件' : dealActiveMonth}.csv`;
-  a.click();
-}
-
-['dl-search','dl-filter-status','dl-filter-care','dl-filter-gender'].forEach(id => {
-  document.getElementById(id).addEventListener('input', dealRender);
-});
-document.getElementById('dl-modal').addEventListener('click', e => {
-  if (e.target === document.getElementById('dl-modal')) dealCloseModal();
-});
-</script>
-</body>
-</html>
