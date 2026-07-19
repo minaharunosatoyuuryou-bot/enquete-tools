@@ -544,12 +544,28 @@
       <input type="date" id="vDate">
     </div>
     <div class="form-row">
-      <label>担当者</label>
+      <label>担当者（訪問者）</label>
       <select id="vRep"></select>
     </div>
     <div class="form-row">
+      <label>営業内容（複数選択可）</label>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" class="v-activity" value="パンフレットのお渡し">パンフレットのお渡し</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" class="v-activity" value="空床のご案内">空床のご案内</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" class="v-activity" value="新規紹介のお願い">新規紹介のお願い</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" class="v-activity" value="利用者相談あり">利用者相談あり</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" class="v-activity" value="見学のご案内">見学のご案内</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" class="v-activity" value="入居の相談あり">入居の相談あり</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" class="v-activity" value="その他">その他</label>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>面談者（相手先の担当者名・任意）</label>
+      <input type="text" id="vContactPerson" placeholder="例：田中様">
+    </div>
+    <div class="form-row">
       <label>メモ</label>
-      <textarea id="vMemo" placeholder="面談内容、相手担当者名、紹介状況など"></textarea>
+      <textarea id="vMemo" placeholder="面談内容の詳細など"></textarea>
     </div>
     <div class="form-row">
       <label>次回訪問予定日（任意）</label>
@@ -1403,6 +1419,8 @@ function openDetail(facilityId){
   document.getElementById('vRep').value = repList.includes(f.rep) ? f.rep : 'その他';
   document.getElementById('vMemo').value = '';
   document.getElementById('vNext').value = '';
+  document.getElementById('vContactPerson').value = '';
+  document.querySelectorAll('.v-activity').forEach(cb=>{ cb.checked = false; });
   document.getElementById('vPurposeCenter').checked = (appMode==='center');
   document.getElementById('vPurposeYukyu').checked = (appMode==='yukyu');
   renderHistory(facilityId);
@@ -1446,15 +1464,18 @@ function renderHistory(facilityId){
   const el = document.getElementById('dHistory');
   if(vs.length===0){ el.innerHTML = '<div class="empty">まだ訪問記録がありません</div>'; return; }
   const purposeLabel = {center:'紹介センター', yukyu:'悠久福祉会', both:'両方'};
-  el.innerHTML = vs.map(v=>
-    '<div class="hist-item">'
+  el.innerHTML = vs.map(v=>{
+    const acts = String(v.activities||'').split(',').filter(a=>a);
+    return '<div class="hist-item">'
     + '<button class="del-btn" onclick="removeVisit(\''+v.id+'\')">削除</button>'
     + '<span class="hist-date">'+v.visitDate+'</span><span class="hist-rep">'+v.rep+'</span>'
     + ' <span class="attr-tag on" style="font-size:10px;">'+ (purposeLabel[v.purpose] || '紹介センター') +'</span>'
+    + (v.contactPerson ? '<div style="font-size:11.5px;color:var(--text-soft);margin-top:2px;">面談：'+escapeHtml(v.contactPerson)+'</div>' : '')
+    + (acts.length ? '<div class="attr-tags" style="margin-top:4px;">'+acts.map(a=>'<span class="attr-tag on">'+escapeHtml(a)+'</span>').join('')+'</div>' : '')
     + (v.memo ? '<div class="hist-memo">'+escapeHtml(v.memo)+'</div>' : '')
     + (v.nextVisit ? '<div class="hist-next">次回予定：'+v.nextVisit+'</div>' : '')
-    + '</div>'
-  ).join('');
+    + '</div>';
+  }).join('');
 }
 
 function escapeHtml(s){
@@ -1470,15 +1491,21 @@ async function submitVisit(){
   const isYukyu = document.getElementById('vPurposeYukyu').checked;
   if(!isCenter && !isYukyu){ showToast('営業内容（高齢者紹介センター／悠久福祉会）を1つ以上選んでください'); return; }
   const purpose = (isCenter && isYukyu) ? 'both' : (isCenter ? 'center' : 'yukyu');
+  const activities = Array.from(document.querySelectorAll('.v-activity:checked')).map(cb=>cb.value);
+  const contactPerson = document.getElementById('vContactPerson').value.trim();
+  const memoText = document.getElementById('vMemo').value;
+  const rep = document.getElementById('vRep').value;
   const btn = document.getElementById('vSaveBtn');
   btn.disabled = true; btn.textContent = '保存中...';
   const payload = {
     action:'addVisit', ...authPayload(),
     facilityId: f.id, facilityName: f.name,
-    visitDate: date, rep: document.getElementById('vRep').value,
+    visitDate: date, rep: rep,
     memo: document.getElementById('vMemo').value,
     nextVisit: document.getElementById('vNext').value,
-    purpose: purpose
+    purpose: purpose,
+    activities: activities.join(','),
+    contactPerson: contactPerson
   };
   try{
     const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify(payload)});
@@ -1487,13 +1514,25 @@ async function submitVisit(){
       visits.push({
         id:data.id, facilityId:f.id, facilityName:f.name, visitDate:date,
         rep:payload.rep, memo:payload.memo, nextVisit:payload.nextVisit, createdAt: new Date().toISOString(),
-        purpose: purpose
+        purpose: purpose, activities: payload.activities, contactPerson: contactPerson
       });
       renderHistory(f.id);
       renderAll();
       showToast(purpose==='both' ? '訪問記録を保存しました（両方の実績に反映）' : '訪問記録を保存しました');
       document.getElementById('vMemo').value='';
       document.getElementById('vNext').value='';
+      document.getElementById('vContactPerson').value='';
+      document.querySelectorAll('.v-activity').forEach(cb=>{ cb.checked = false; });
+      if(activities.includes('利用者相談あり') && confirm('「利用者相談あり」が選ばれています。この内容を案件管理へ登録しますか？')){
+        closeDetail();
+        dealOpenModal();
+        setTimeout(()=>{
+          document.getElementById('dl-f-consult').value = date;
+          document.getElementById('dl-f-staff').value = rep;
+          document.getElementById('dl-f-facility').value = f.name;
+          document.getElementById('dl-f-memo').value = f.name + 'にて相談あり'+(contactPerson?'（対応：'+contactPerson+'）':'')+(memoText?'\n'+memoText:'');
+        }, 50);
+      }
     } else {
       showToast('保存に失敗しました: '+(data.error||''));
     }
