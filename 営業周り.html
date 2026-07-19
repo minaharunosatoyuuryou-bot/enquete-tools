@@ -236,11 +236,13 @@
     display:none;
   }
 
-  /* ================= 案件管理セクション（元 営業記録.html を移植・dl- プレフィックス） ================= */
-  #dealSection{
+  :root{
     --dl-accent:#2563c4; --dl-accent-light:#dbeafe; --dl-green:#16a34a; --dl-green-light:#dcfce7;
     --dl-red:#dc2626; --dl-yellow:#d97706; --dl-yellow-light:#fef3c7; --dl-gray-light:#e5e7eb;
     --dl-surface:#ffffff; --dl-surface2:#f7f9fc; --dl-border:#dde3ec; --dl-shadow:0 1px 4px rgba(0,0,0,0.08);
+  }
+  /* ================= 案件管理セクション（元 営業記録.html を移植・dl- プレフィックス） ================= */
+  #dealSection{
     padding:0 14px 20px; font-size:13px;
   }
   .dl-summary{ display:flex; gap:10px; margin:14px 0 12px; flex-wrap:wrap; }
