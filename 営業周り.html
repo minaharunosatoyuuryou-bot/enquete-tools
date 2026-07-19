@@ -816,6 +816,23 @@
 </div>
 
 <!-- 訪問記録 編集モーダル -->
+<!-- 訪問記録 削除確認モーダル -->
+<div class="overlay" id="deleteVisitConfirmOverlay">
+  <div class="sheet" style="max-width:360px;text-align:center;">
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;">削除しますか？</h2>
+    <div class="vacancy-box" style="text-align:left;margin-top:14px;">
+      <div class="vacancy-row"><span>施設名</span><span id="dvFacilityName" style="font-weight:700;"></span></div>
+      <div class="vacancy-row"><span>訪問日</span><span id="dvVisitDate"></span></div>
+      <div class="vacancy-row"><span>担当者</span><span id="dvRep"></span></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="save-btn" style="background:var(--paper);color:var(--text);border:1.3px solid var(--line);margin-top:0;" onclick="closeDeleteVisitConfirm()">いいえ</button>
+      <button class="save-btn" style="background:var(--danger);margin-top:0;" onclick="confirmRemoveVisit()">はい、削除する</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="visitEditOverlay">
   <div class="sheet">
     <button class="close-btn" onclick="closeVisitEdit()">×</button>
@@ -1635,8 +1652,24 @@ async function submitVisit(){
   btn.disabled = false; btn.textContent = 'この内容で記録する';
 }
 
-async function removeVisit(id){
-  if(!confirm('この訪問記録を削除しますか？')) return;
+let pendingDeleteVisitId = null;
+function removeVisit(id){
+  const v = visits.find(x=>x.id===id);
+  if(!v) return;
+  pendingDeleteVisitId = id;
+  document.getElementById('dvFacilityName').textContent = v.facilityName || '';
+  document.getElementById('dvVisitDate').textContent = v.visitDate || '';
+  document.getElementById('dvRep').textContent = v.rep || '';
+  document.getElementById('deleteVisitConfirmOverlay').classList.add('show');
+}
+function closeDeleteVisitConfirm(){
+  document.getElementById('deleteVisitConfirmOverlay').classList.remove('show');
+  pendingDeleteVisitId = null;
+}
+async function confirmRemoveVisit(){
+  const id = pendingDeleteVisitId;
+  if(!id) return;
+  closeDeleteVisitConfirm();
   try{
     const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'deleteVisit', ...authPayload(), id:id})});
     const data = await res.json();
@@ -1648,7 +1681,10 @@ async function removeVisit(id){
     } else {
       showToast('削除に失敗しました: '+(data.error||''));
     }
-  }catch(err){ console.error(err); }
+  }catch(err){
+    showToast('通信エラーが発生しました');
+    console.error(err);
+  }
 }
 
 /* ---------- 訪問記録の編集 ---------- */
@@ -2210,41 +2246,100 @@ function closeMeetingSummary(){
 function renderMeetingSummary(){
   const monthPre = thisMonthPrefix();
   const allTargets = visitTargetFacilities();
+  const monthVisits = visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre));
+
+  // 目標達成状況（全体・全担当者合計）
+  const totalThisMonth = monthVisits.length;
+  const rate = Math.min(Math.round(totalThisMonth / MONTHLY_VISIT_GOAL * 100), 100);
+  const remaining = Math.max(MONTHLY_VISIT_GOAL - totalThisMonth, 0);
 
   // 担当者別 件数
   const repCounts = repList.map(rep=>{
-    const cnt = visits.filter(v=>v.rep===rep && v.visitDate && v.visitDate.startsWith(monthPre)).length;
+    const cnt = monthVisits.filter(v=>v.rep===rep).length;
     return {rep, cnt};
   }).sort((a,b)=>b.cnt-a.cnt);
 
-  // 未訪問（今月まだ誰も行っていない施設）
-  const visitedThisMonthIds = new Set(visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre)).map(v=>v.facilityId));
+  // 施設ごとの訪問回数（今月・全担当者合計）
+  const byFacility = {};
+  monthVisits.forEach(v=>{
+    if(!byFacility[v.facilityId]) byFacility[v.facilityId] = {name:v.facilityName, count:0};
+    byFacility[v.facilityId].count++;
+  });
+  const facilityRows = Object.entries(byFacility).sort((a,b)=>b[1].count-a[1].count);
+
+  // 未訪問（今月まだ誰も行っていない施設、30/60/90日以上未訪問）
+  const visitedThisMonthIds = new Set(monthVisits.map(v=>v.facilityId));
   const unvisitedCount = allTargets.filter(f=>!visitedThisMonthIds.has(f.id)).length;
+  const over30 = allTargets.filter(f=>{ const vs=visitsFor(f.id); return vs.length===0 || daysBetween(vs[0].visitDate)>=30; });
+  const over60 = allTargets.filter(f=>{ const vs=visitsFor(f.id); return vs.length===0 || daysBetween(vs[0].visitDate)>=60; });
+  const over90 = allTargets.filter(f=>{ const vs=visitsFor(f.id); return vs.length===0 || daysBetween(vs[0].visitDate)>=90; });
 
-  // 要フォロー（次回予定日超過）
-  const overdueCount = allTargets.filter(f=>statusFor(f.id).status==='overdue').length;
+  // 要フォロー（次回予定日超過）一覧
+  const overdueFacilities = allTargets.filter(f=>statusFor(f.id).status==='overdue');
 
-  // 相談案件（紹介管理・今月の相談件数）
-  const consultCount = referrals.filter(r=>r.consultDate && r.consultDate.startsWith(monthPre)).length;
+  // 空床一覧（悠久福祉会）
+  const groupFacilities = facilities.filter(f=>f.group);
 
-  // 空床あり施設数（悠久福祉会）
-  const vacantCount = facilities.filter(f=>f.group && vacancyOf(f)!==null && vacancyOf(f)>0).length;
+  // 紹介案件（現在のステータス内訳）
+  const refStatusOrder = ['相談中','見学予定','入居決定','キャンセル'];
+  const refCounts = refStatusOrder.map(s=>({status:s, cnt: referrals.filter(r=>r.status===s).length}));
 
   const el = document.getElementById('meetingSummaryBody');
   let html = '';
-  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">担当者別 訪問件数</div>';
+
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">目標達成状況（目標'+MONTHLY_VISIT_GOAL+'件）</div>';
+  html += '<div class="month-bar-row" style="margin-bottom:4px;">'
+    + '<div class="month-bar-track" style="flex:1;"><div class="month-bar-fill" style="width:'+rate+'%"></div></div>'
+    + '<div class="month-bar-value" style="width:auto;">'+rate+'%</div></div>';
+  html += '<div class="vlist-row"><span>現在</span><span class="vlist-count">'+totalThisMonth+'件</span></div>';
+  html += '<div class="vlist-row"><span>残り</span><span class="vlist-count '+(remaining===0?'':'full')+'">'+(remaining===0?'達成🎉':remaining+'件')+'</span></div>';
+
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">担当者別</div>';
   html += repCounts.map(r=>'<div class="vlist-row"><span>'+escapeHtml(r.rep)+'</span><span class="vlist-count">'+r.cnt+'件</span></div>').join('');
 
   html += '<div class="divider"></div>';
-  html += '<div class="vlist-row"><span>未訪問（今月まだ誰も行っていない施設）</span><span class="vlist-count full">'+unvisitedCount+'件</span></div>';
-  html += '<div class="vlist-row"><span>要フォロー（次回予定超過）</span><span class="vlist-count full">'+overdueCount+'件</span></div>';
-  html += '<div class="vlist-row"><span>相談案件（今月・紹介管理）</span><span class="vlist-count">'+consultCount+'件</span></div>';
-  html += '<div class="vlist-row"><span>空床あり施設（悠久福祉会）</span><span class="vlist-count">'+vacantCount+'施設</span></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">訪問施設一覧（'+facilityRows.length+'施設・タップで詳細）</div>';
+  if(facilityRows.length===0){
+    html += '<div class="empty" style="padding:12px 0;">今月はまだ訪問記録がありません</div>';
+  } else {
+    html += facilityRows.map(([fid,d])=>
+      '<div class="vlist-row" onclick="closeMeetingSummary();openDetail(\''+fid+'\')"><span>○ '+escapeHtml(d.name)+'</span><span class="vlist-count">'+d.count+'回</span></div>'
+    ).join('');
+  }
 
   html += '<div class="divider"></div>';
-  html += '<button class="nearby-btn" style="width:100%;margin-bottom:8px;" onclick="closeMeetingSummary();openUnvisited();">⏰ 未訪問アラートの詳細を見る</button>';
-  html += '<button class="nearby-btn" style="width:100%;margin-bottom:8px;" onclick="closeMeetingSummary();openVacancyList();">🛏 空床一覧の詳細を見る</button>';
-  html += '<button class="nearby-btn" style="width:100%;" onclick="closeMeetingSummary();openMonthly();">📊 月別実績の詳細を見る</button>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">未訪問</div>';
+  html += '<div class="vlist-row"><span>今月未訪問</span><span class="vlist-count full">'+unvisitedCount+'件</span></div>';
+  html += '<div class="vlist-row"><span>30日以上</span><span class="vlist-count full">'+over30.length+'件</span></div>';
+  html += '<div class="vlist-row"><span>60日以上</span><span class="vlist-count full">'+over60.length+'件</span></div>';
+  html += '<div class="vlist-row"><span>90日以上</span><span class="vlist-count full">'+over90.length+'件</span></div>';
+
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">空床（悠久福祉会・タップで詳細）</div>';
+  if(groupFacilities.length===0){
+    html += '<div class="empty" style="padding:12px 0;">悠久福祉会の施設が登録されていません</div>';
+  } else {
+    html += groupFacilities.map(f=>{
+      const vac = vacancyOf(f);
+      const label = vac===null ? '未登録' : (vac<=0 ? '満床' : vac+'床');
+      return '<div class="vlist-row" onclick="closeMeetingSummary();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span><span class="vlist-count">'+label+'</span></div>';
+    }).join('');
+  }
+
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">紹介案件（現在の状況）</div>';
+  html += refCounts.map(r=>'<div class="vlist-row"><span>'+r.status+'</span><span class="vlist-count">'+r.cnt+'件</span></div>').join('');
+
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">要フォロー（次回予定超過・'+overdueFacilities.length+'件・タップで詳細）</div>';
+  if(overdueFacilities.length===0){
+    html += '<div class="empty" style="padding:12px 0;">要フォローの施設はありません👍</div>';
+  } else {
+    html += overdueFacilities.map(f=>
+      '<div class="vlist-row" onclick="closeMeetingSummary();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span></div>'
+    ).join('');
+  }
   el.innerHTML = html;
 }
 
