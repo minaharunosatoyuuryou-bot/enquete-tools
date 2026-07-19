@@ -169,7 +169,7 @@
 
   /* ---------- Modal (施設訪問側) ---------- */
   .overlay{
-    display:none;position:fixed;inset:0;background:rgba(21,42,61,.55);z-index:50;
+    display:none;position:fixed;inset:0;background:rgba(15,28,40,.78);z-index:50;
     align-items:flex-end;justify-content:center;
   }
   .overlay.show{display:flex;}
@@ -283,7 +283,7 @@
   .dl-action-btns{ display:flex; gap:4px; }
   .dl-btn-icon{ border:none; background:none; cursor:pointer; padding:4px 6px; border-radius:4px; font-size:13px; line-height:1; }
   .dl-btn-icon:hover{ background:var(--dl-surface2); }
-  .dl-modal-bg{ display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.4); z-index:100; align-items:center; justify-content:center; }
+  .dl-modal-bg{ display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(10,16,24,0.72); z-index:100; align-items:center; justify-content:center; }
   .dl-modal-bg.open{ display:flex; }
   .dl-modal{ background:var(--dl-surface); border-radius:12px; padding:22px; width:480px; max-width:92vw; max-height:88vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.18); }
   .dl-modal h2{ font-size:15px; margin-bottom:14px; color:var(--dl-accent); }
@@ -948,8 +948,9 @@ async function loadData(){
 }
 
 function populateFilterOptions(){
-  const cities = [...new Set(facilities.map(f=>f.city))];
-  const repsFromFacilities = [...new Set(facilities.map(f=>f.rep))];
+  const visitTargets = facilities.filter(f=>!f.group);
+  const cities = [...new Set(visitTargets.map(f=>f.city).filter(c=>c))];
+  const repsFromFacilities = [...new Set(visitTargets.map(f=>f.rep).filter(r=>r))];
   const cSel = document.getElementById('fCity');
   cSel.innerHTML = '<option value="">市区町村：すべて</option>';
   cities.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; cSel.appendChild(o); });
@@ -1067,6 +1068,7 @@ function getFiltered(){
   const tag = document.getElementById('fTag') ? document.getElementById('fTag').value : '';
 
   return facilities.filter(f=>{
+    if(f.group) return false; // 悠久福祉会など自法人の施設は施設訪問（営業先訪問）の対象外。施設管理タブでのみ扱う
     if(search && !f.name.includes(search)) return false;
     if(city && f.city!==city) return false;
     if(kind && f.kind!==kind) return false;
@@ -1093,11 +1095,12 @@ function renderAll(){
 
 function renderKpi(){
   const monthPre = thisMonthPrefix();
+  const visitTargets = facilities.filter(f=>!f.group);
   const visitedThisMonth = new Set(
     visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre)).map(v=>v.facilityId)
   ).size;
-  const overdueCount = facilities.filter(f=>statusFor(f.id).status==='overdue').length;
-  document.getElementById('kpiTotal').textContent = facilities.length;
+  const overdueCount = visitTargets.filter(f=>statusFor(f.id).status==='overdue').length;
+  document.getElementById('kpiTotal').textContent = visitTargets.length;
   document.getElementById('kpiVisited').textContent = visitedThisMonth;
   document.getElementById('kpiOverdue').textContent = overdueCount;
 }
