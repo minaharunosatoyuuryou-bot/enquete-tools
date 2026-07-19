@@ -2407,6 +2407,29 @@ function renderMeetingSummary(){
     html += refFacilityRows.map(([name,cnt])=>'<div class="vlist-row"><span>○ '+escapeHtml(name)+'</span><span class="vlist-count">'+cnt+'件</span></div>').join('');
   }
 
+  const byFacilitySuccess = {};
+  dealRecords.filter(r=>r.status==='成約').forEach(r=>{ if(r.facility) byFacilitySuccess[r.facility] = (byFacilitySuccess[r.facility]||0)+1; });
+  const successFacilityRows = Object.entries(byFacilitySuccess).sort((a,b)=>b[1]-a[1]);
+  if(successFacilityRows.length){
+    html += '<div style="font-size:11.5px;color:var(--text-soft);margin-top:8px;margin-bottom:4px;">施設ごとの成約件数</div>';
+    html += successFacilityRows.map(([name,cnt])=>'<div class="vlist-row"><span>○ '+escapeHtml(name)+'</span><span class="vlist-count">'+cnt+'件成約</span></div>').join('');
+  }
+
+  // キャンセル理由の集計（今月の案件管理データより）
+  const cancelledThisMonth = dealRecords.filter(r=>r.status==='キャンセル' && dealGetMonth(r)===monthPre);
+  if(cancelledThisMonth.length){
+    const reasonCounts = {};
+    cancelledThisMonth.forEach(r=>{
+      const reason = parseDealMemoTags(r.memo).reason || 'その他';
+      reasonCounts[reason] = (reasonCounts[reason]||0) + 1;
+    });
+    html += '<div class="divider"></div>';
+    html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">キャンセル理由の集計（今月・'+cancelledThisMonth.length+'件）</div>';
+    html += Object.entries(reasonCounts).sort((a,b)=>b[1]-a[1]).map(([reason,cnt])=>
+      '<div class="vlist-row"><span>'+escapeHtml(reason)+'</span><span class="vlist-count full">'+cnt+'件</span></div>'
+    ).join('');
+  }
+
   html += '<div class="divider"></div>';
   html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">要フォロー（次回予定超過・'+overdueFacilities.length+'件・タップで詳細）</div>';
   if(overdueFacilities.length===0){
