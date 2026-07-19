@@ -533,6 +533,13 @@
     <div class="divider"></div>
     <h3 style="font-size:13.5px;margin:0 0 8px;">訪問記録を追加</h3>
     <div class="form-row">
+      <label>今回の営業内容（両方チェックでもOK・1回の入力で両方に反映されます）</label>
+      <div style="display:flex;gap:14px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" id="vPurposeCenter">高齢者紹介センター</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" id="vPurposeYukyu">悠久福祉会</label>
+      </div>
+    </div>
+    <div class="form-row">
       <label>訪問日</label>
       <input type="date" id="vDate">
     </div>
@@ -1063,19 +1070,19 @@ function applyModeVisibility(){
   centerOnly.forEach(id=>{ document.getElementById(id).style.display = appMode==='center' ? '' : 'none'; });
   // 施設管理（空床管理）は悠久福祉会のときだけ表示（かつ管理者のみ。admin-onlyクラスに委ねる）
   document.getElementById('mainTabFacility').style.display = appMode==='yukyu' ? '' : 'none';
-  // 施設訪問タブ内のボタンも、大分高齢者紹介センター専用のものは悠久福祉会モードで隠す
+  // 「＋ 紹介施設を追加」は施設マスタ管理に関わるため、大分高齢者紹介センターのときだけ表示
   const addReferralBtn = document.getElementById('addReferralFacilityBtn');
   if(addReferralBtn) addReferralBtn.style.display = appMode==='center' ? '' : 'none';
-  const monthlyBtnEl = document.getElementById('monthlyBtn');
-  if(monthlyBtnEl) monthlyBtnEl.style.display = appMode==='center' ? '' : 'none';
+  // 月別実績は施設訪問と同じく共通機能。中身は開いたときのモードに応じて自動で切り替わる
   renderAll();
 }
 
 /** 現在のモードで「施設訪問（営業）」の対象となる施設一覧を返す
  *  ・大分高齢者紹介センター モード → 紹介先施設（法人グループ未設定）
  *  ・悠久福祉会 モード → 悠久福祉会グループの施設（法人グループ設定あり） */
+/** 施設訪問は共通機能のため、モードにかかわらず全施設が対象 */
 function visitTargetFacilities(){
-  return appMode==='yukyu' ? facilities.filter(f=>f.group) : facilities.filter(f=>!f.group);
+  return facilities;
 }
 
 async function loadData(){
@@ -1277,14 +1284,19 @@ function renderAll(){
 function renderKpi(){
   const monthPre = thisMonthPrefix();
   const visitTargets = visitTargetFacilities();
-  const targetIds = new Set(visitTargets.map(f=>f.id));
   const visitedThisMonth = new Set(
-    visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre) && targetIds.has(v.facilityId)).map(v=>v.facilityId)
+    visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre) && visitMatchesMode(v)).map(v=>v.facilityId)
   ).size;
   const overdueCount = visitTargets.filter(f=>statusFor(f.id).status==='overdue').length;
   document.getElementById('kpiTotal').textContent = visitTargets.length;
   document.getElementById('kpiVisited').textContent = visitedThisMonth;
   document.getElementById('kpiOverdue').textContent = overdueCount;
+}
+
+/** その訪問記録が、現在のモード（大分高齢者紹介センター／悠久福祉会）の実績としてカウントされるか */
+function visitMatchesMode(v){
+  const p = v.purpose || 'center';
+  return p === 'both' || p === appMode;
 }
 
 function renderList(){
@@ -1391,6 +1403,8 @@ function openDetail(facilityId){
   document.getElementById('vRep').value = repList.includes(f.rep) ? f.rep : 'その他';
   document.getElementById('vMemo').value = '';
   document.getElementById('vNext').value = '';
+  document.getElementById('vPurposeCenter').checked = (appMode==='center');
+  document.getElementById('vPurposeYukyu').checked = (appMode==='yukyu');
   renderHistory(facilityId);
   document.getElementById('detailOverlay').classList.add('show');
 }
@@ -1431,10 +1445,12 @@ function renderHistory(facilityId){
   const vs = visitsFor(facilityId);
   const el = document.getElementById('dHistory');
   if(vs.length===0){ el.innerHTML = '<div class="empty">まだ訪問記録がありません</div>'; return; }
+  const purposeLabel = {center:'紹介センター', yukyu:'悠久福祉会', both:'両方'};
   el.innerHTML = vs.map(v=>
     '<div class="hist-item">'
     + '<button class="del-btn" onclick="removeVisit(\''+v.id+'\')">削除</button>'
     + '<span class="hist-date">'+v.visitDate+'</span><span class="hist-rep">'+v.rep+'</span>'
+    + ' <span class="attr-tag on" style="font-size:10px;">'+ (purposeLabel[v.purpose] || '紹介センター') +'</span>'
     + (v.memo ? '<div class="hist-memo">'+escapeHtml(v.memo)+'</div>' : '')
     + (v.nextVisit ? '<div class="hist-next">次回予定：'+v.nextVisit+'</div>' : '')
     + '</div>'
@@ -1450,6 +1466,10 @@ async function submitVisit(){
   const f = facilities.find(x=>x.id===currentFacilityId);
   const date = document.getElementById('vDate').value;
   if(!date){ showToast('訪問日を入力してください'); return; }
+  const isCenter = document.getElementById('vPurposeCenter').checked;
+  const isYukyu = document.getElementById('vPurposeYukyu').checked;
+  if(!isCenter && !isYukyu){ showToast('営業内容（高齢者紹介センター／悠久福祉会）を1つ以上選んでください'); return; }
+  const purpose = (isCenter && isYukyu) ? 'both' : (isCenter ? 'center' : 'yukyu');
   const btn = document.getElementById('vSaveBtn');
   btn.disabled = true; btn.textContent = '保存中...';
   const payload = {
@@ -1457,7 +1477,8 @@ async function submitVisit(){
     facilityId: f.id, facilityName: f.name,
     visitDate: date, rep: document.getElementById('vRep').value,
     memo: document.getElementById('vMemo').value,
-    nextVisit: document.getElementById('vNext').value
+    nextVisit: document.getElementById('vNext').value,
+    purpose: purpose
   };
   try{
     const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify(payload)});
@@ -1465,11 +1486,12 @@ async function submitVisit(){
     if(data.ok){
       visits.push({
         id:data.id, facilityId:f.id, facilityName:f.name, visitDate:date,
-        rep:payload.rep, memo:payload.memo, nextVisit:payload.nextVisit, createdAt: new Date().toISOString()
+        rep:payload.rep, memo:payload.memo, nextVisit:payload.nextVisit, createdAt: new Date().toISOString(),
+        purpose: purpose
       });
       renderHistory(f.id);
       renderAll();
-      showToast('訪問記録を保存しました');
+      showToast(purpose==='both' ? '訪問記録を保存しました（両方の実績に反映）' : '訪問記録を保存しました');
       document.getElementById('vMemo').value='';
       document.getElementById('vNext').value='';
     } else {
@@ -1978,39 +2000,53 @@ function closeMonthly(){
   document.getElementById('monthlyOverlay').classList.remove('show');
 }
 function renderMonthly(){
-  const centerFacilityIds = new Set(facilities.filter(f=>!f.group).map(f=>f.id));
+  const el = document.getElementById('monthlyList');
   const counts = {};
   visits.forEach(v=>{
-    if(!v.visitDate || !centerFacilityIds.has(v.facilityId)) return;
+    if(!v.visitDate || !visitMatchesMode(v)) return;
     const m = v.visitDate.slice(0,7);
-    if(!counts[m]) counts[m] = {total:0, facilities:new Set(), consult:0, moveIn:0};
+    if(!counts[m]) counts[m] = {total:0, consult:0, moveIn:0};
     counts[m].total++;
-    counts[m].facilities.add(v.facilityId);
   });
-  referrals.forEach(r=>{
-    if(r.consultDate){
-      const m = r.consultDate.slice(0,7);
-      if(!counts[m]) counts[m] = {total:0, facilities:new Set(), consult:0, moveIn:0};
-      counts[m].consult++;
-    }
-    if(r.moveInDate){
-      const m = r.moveInDate.slice(0,7);
-      if(!counts[m]) counts[m] = {total:0, facilities:new Set(), consult:0, moveIn:0};
-      counts[m].moveIn++;
-    }
-  });
+
+  if(appMode==='center'){
+    referrals.forEach(r=>{
+      if(r.consultDate){
+        const m = r.consultDate.slice(0,7);
+        if(!counts[m]) counts[m] = {total:0, consult:0, moveIn:0};
+        counts[m].consult++;
+      }
+      if(r.moveInDate){
+        const m = r.moveInDate.slice(0,7);
+        if(!counts[m]) counts[m] = {total:0, consult:0, moveIn:0};
+        counts[m].moveIn++;
+      }
+    });
+  } else {
+    const groupFacilityIds = new Set(facilities.filter(f=>f.group).map(f=>f.id));
+    referrals.forEach(r=>{
+      if(r.moveInDate && groupFacilityIds.has(r.facilityId)){
+        const m = r.moveInDate.slice(0,7);
+        if(!counts[m]) counts[m] = {total:0, consult:0, moveIn:0};
+        counts[m].moveIn++;
+      }
+    });
+  }
+
   const months = Object.keys(counts).sort().reverse().slice(0,12);
-  const el = document.getElementById('monthlyList');
   if(months.length===0){ el.innerHTML = '<div class="empty">まだ実績データがありません</div>'; return; }
   const maxCount = Math.max(1, ...months.map(m=>counts[m].total));
   el.innerHTML = months.map(m=>{
     const c = counts[m];
     const pct = Math.round(c.total / maxCount * 100);
     const [y,mo] = m.split('-');
+    const detail = appMode==='center'
+      ? '訪問'+c.total+'件・紹介'+c.consult+'件・入居'+c.moveIn+'件'
+      : '訪問'+c.total+'件・入居'+c.moveIn+'件';
     return '<div class="month-bar-row">'
       + '<div class="month-bar-label">'+y+'年'+parseInt(mo)+'月</div>'
       + '<div class="month-bar-track"><div class="month-bar-fill" style="width:'+pct+'%"></div></div>'
-      + '<div class="month-bar-value">訪問'+c.total+'件・紹介'+c.consult+'件・入居'+c.moveIn+'件</div>'
+      + '<div class="month-bar-value">'+detail+'</div>'
       + '</div>';
   }).join('');
 }
