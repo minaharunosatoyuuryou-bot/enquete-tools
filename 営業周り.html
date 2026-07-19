@@ -2488,25 +2488,43 @@ function closeSchedule(){
 }
 function renderSchedule(){
   const today = todayStr();
-  const items = [];
+  const centerItems = [];
+  const yukyuItems = [];
+
   visits.filter(v=>v.nextVisit && v.nextVisit>=today).forEach(v=>{
-    items.push({date:v.nextVisit, type:'訪問予定', label:v.facilityName, sub:'担当：'+v.rep, cls: v.nextVisit===today?'overdue':'upcoming'});
+    const item = {date:v.nextVisit, type:'訪問予定', label:v.facilityName, sub:'担当：'+v.rep, cls: v.nextVisit===today?'overdue':'upcoming'};
+    const purpose = v.purpose || 'center';
+    if(purpose==='center' || purpose==='both') centerItems.push(item);
+    if(purpose==='yukyu' || purpose==='both') yukyuItems.push(item);
   });
+  // 紹介管理（見学予定・入居予定）は高齢者紹介センターの活動として分類
   referrals.filter(r=>r.visitDate && r.visitDate>=today && r.status!=='キャンセル' && r.status!=='入居決定').forEach(r=>{
-    items.push({date:r.visitDate, type:'見学予定', label:(r.userName||'利用者未記入')+' → '+r.facilityName, sub:'担当：'+r.rep, cls:'upcoming'});
+    centerItems.push({date:r.visitDate, type:'見学予定', label:(r.userName||'利用者未記入')+' → '+r.facilityName, sub:'担当：'+r.rep, cls:'upcoming'});
   });
   referrals.filter(r=>r.moveInDate && r.moveInDate>=today && r.status!=='キャンセル').forEach(r=>{
-    items.push({date:r.moveInDate, type:'入居予定', label:(r.userName||'利用者未記入')+' → '+r.facilityName, sub:'担当：'+r.rep, cls:'done'});
+    centerItems.push({date:r.moveInDate, type:'入居予定', label:(r.userName||'利用者未記入')+' → '+r.facilityName, sub:'担当：'+r.rep, cls:'done'});
   });
-  items.sort((a,b)=> a.date.localeCompare(b.date));
+  centerItems.sort((a,b)=> a.date.localeCompare(b.date));
+  yukyuItems.sort((a,b)=> a.date.localeCompare(b.date));
+
+  const renderGroup = (items)=>{
+    if(items.length===0) return '<div class="empty" style="padding:12px 0;">今後の予定はありません</div>';
+    return items.map(it=>
+      '<div class="hist-item"><span class="hist-date">'+it.date+'</span> '
+      + '<span class="visit-status '+it.cls+'" style="margin-left:6px;">'+it.type+'</span>'
+      + '<div class="hist-memo">'+escapeHtml(it.label)+'</div>'
+      + '<div style="font-size:11px;color:var(--text-soft);">'+it.sub+'</div></div>'
+    ).join('');
+  };
+
   const el = document.getElementById('scheduleList');
-  if(items.length===0){ el.innerHTML = '<div class="empty">今後の予定はありません</div>'; return; }
-  el.innerHTML = items.map(it=>
-    '<div class="hist-item"><span class="hist-date">'+it.date+'</span> '
-    + '<span class="visit-status '+it.cls+'" style="margin-left:6px;">'+it.type+'</span>'
-    + '<div class="hist-memo">'+escapeHtml(it.label)+'</div>'
-    + '<div style="font-size:11px;color:var(--text-soft);">'+it.sub+'</div></div>'
-  ).join('');
+  let html = '';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">高齢者紹介センター（'+centerItems.length+'件）</div>';
+  html += renderGroup(centerItems);
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">悠久福祉会（'+yukyuItems.length+'件）</div>';
+  html += renderGroup(yukyuItems);
+  el.innerHTML = html;
 }
 
 /* ---------- 悠久福祉会 月別入居実績 ---------- */
