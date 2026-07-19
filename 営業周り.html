@@ -410,6 +410,7 @@
 
   <!-- ============ 紹介管理セクション ============ -->
   <div id="referralSection" style="display:none;">
+    <div class="dl-month-tabs-wrap"><div class="dl-month-tabs" id="ref-month-tabs"></div></div>
     <div class="filters">
       <input type="text" id="refSearch" placeholder="利用者名・施設名で検索" oninput="renderReferralList()">
       <select id="refStatus" onchange="renderReferralList()">
@@ -1508,13 +1509,37 @@ function vacancyBadgeHtml(f){
 }
 
 /* ================= 紹介管理 ================= */
+let refActiveMonth = 'all';
+
+function refGetMonth(r){ return r.consultDate ? r.consultDate.slice(0,7) : ''; }
+
+function refBuildMonthTabs(){
+  const monthSet = new Set();
+  referrals.forEach(r=>{ if(r.consultDate) monthSet.add(r.consultDate.slice(0,7)); });
+  const months = Array.from(monthSet).sort().reverse();
+  const tabs = document.getElementById('ref-month-tabs');
+  tabs.innerHTML = '<button class="dl-month-tab '+(refActiveMonth==='all'?'active':'')+'" onclick="refSetMonth(\'all\')">すべて<span class="dl-tab-cnt">'+referrals.length+'</span></button>';
+  months.forEach(m=>{
+    const cnt = referrals.filter(r=>refGetMonth(r)===m).length;
+    const [y,mo] = m.split('-');
+    tabs.innerHTML += '<button class="dl-month-tab '+(refActiveMonth===m?'active':'')+'" onclick="refSetMonth(\''+m+'\')">'+y+'年'+parseInt(mo)+'月<span class="dl-tab-cnt">'+cnt+'</span></button>';
+  });
+}
+function refSetMonth(m){
+  refActiveMonth = m;
+  refBuildMonthTabs();
+  renderReferralList();
+}
+
 function renderReferralList(){
   populateReferralFacilitySelect();
   populateReferralSourceSelect();
+  refBuildMonthTabs();
   const q = (document.getElementById('refSearch').value||'').trim();
   const statusF = document.getElementById('refStatus').value;
   const sourceF = document.getElementById('refSourceFilter').value;
   const list = referrals.filter(r=>{
+    if(refActiveMonth!=='all' && refGetMonth(r)!==refActiveMonth) return false;
     if(statusF && r.status!==statusF) return false;
     if(sourceF && (r.sourceType||'当センター')!==sourceF) return false;
     if(q && !((r.userName||'').includes(q) || (r.facilityName||'').includes(q))) return false;
