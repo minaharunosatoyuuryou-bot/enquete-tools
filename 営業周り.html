@@ -1960,6 +1960,8 @@ function renderVacancyList(){
 
 /* ================= 未訪問アラート（30日以上訪問なし） ================= */
 /* ================= 今月の実績（個人サマリー） ================= */
+const MONTHLY_VISIT_GOAL = 200; // 月間の営業目標件数（必要に応じてここを変えるだけで調整できます）
+
 function openMyResult(){
   document.getElementById('myResultTitle').textContent = (currentUserName||'あなた') + ' の今月の実績';
   renderMyResult();
@@ -1975,12 +1977,71 @@ function renderMyResult(){
   const yukyuCount = myVisits.filter(v=>v.purpose==='yukyu').length;
   const bothCount = myVisits.filter(v=>v.purpose==='both').length;
   const total = myVisits.length;
-  const el = document.getElementById('myResultBody');
-  el.innerHTML =
-    '<div class="vlist-row"><span>高齢者紹介センター</span><span class="vlist-count">'+centerCount+'件</span></div>'
-    + '<div class="vlist-row"><span>悠久福祉会</span><span class="vlist-count">'+yukyuCount+'件</span></div>'
-    + '<div class="vlist-row"><span>両方の営業</span><span class="vlist-count">'+bothCount+'件</span></div>'
-    + '<div class="vlist-row" style="border-top:2px solid var(--line);margin-top:6px;padding-top:12px;"><span style="font-weight:700;">合計</span><span class="vlist-count" style="font-size:16px;">'+total+'件</span></div>';
+  const remaining = Math.max(MONTHLY_VISIT_GOAL - total, 0);
+  const rate = Math.min(Math.round(total / MONTHLY_VISIT_GOAL * 100), 100);
+
+  // 施設ごとの訪問回数（今月・このユーザー分）
+  const byFacility = {};
+  myVisits.forEach(v=>{
+    if(!byFacility[v.facilityName]) byFacility[v.facilityName] = 0;
+    byFacility[v.facilityName]++;
+  });
+  const facilityRows = Object.entries(byFacility).sort((a,b)=>b[1]-a[1]);
+
+  // 未訪問（今月・このユーザーがまだ行っていない施設数）
+  const visitedIds = new Set(myVisits.map(v=>v.facilityId));
+  const allTargets = visitTargetFacilities();
+  const unvisitedCount = allTargets.filter(f=>!visitedIds.has(f.id)).length;
+
+  let html = '';
+
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">今月の目標達成状況（目標'+MONTHLY_VISIT_GOAL+'件）</div>';
+  html += '<div class="month-bar-row" style="margin-bottom:4px;">'
+    + '<div class="month-bar-track" style="flex:1;"><div class="month-bar-fill" style="width:'+rate+'%"></div></div>'
+    + '<div class="month-bar-value" style="width:auto;">'+rate+'%</div>'
+    + '</div>';
+  html += '<div class="vlist-row"><span>現在の訪問件数</span><span class="vlist-count">'+total+'件</span></div>';
+  html += '<div class="vlist-row"><span>残り件数</span><span class="vlist-count '+(remaining===0?'':'full')+'">'+(remaining===0?'目標達成🎉':remaining+'件')+'</span></div>';
+
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">内訳（センター／悠久福祉会／両方）</div>';
+  html += '<div class="vlist-row"><span>高齢者紹介センター</span><span class="vlist-count">'+centerCount+'件</span></div>';
+  html += '<div class="vlist-row"><span>悠久福祉会</span><span class="vlist-count">'+yukyuCount+'件</span></div>';
+  html += '<div class="vlist-row"><span>両方の営業</span><span class="vlist-count">'+bothCount+'件</span></div>';
+
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">今月の訪問先一覧（'+facilityRows.length+'施設）</div>';
+  if(facilityRows.length===0){
+    html += '<div class="empty" style="padding:16px 0;">今月はまだ訪問記録がありません</div>';
+  } else {
+    html += facilityRows.map(([name,cnt])=>
+      '<div class="vlist-row"><span>○ '+escapeHtml(name)+'</span><span class="vlist-count">'+cnt+'回</span></div>'
+    ).join('');
+  }
+
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">未訪問状況</div>';
+  html += '<div class="vlist-row"><span>今月まだ行っていない施設</span><span class="vlist-count full">'+unvisitedCount+'施設</span></div>';
+  html += '<button class="nearby-btn" style="width:100%;margin-top:8px;" onclick="closeMyResult();openUnvisited();">⏰ 30日以上未訪問の施設を見る</button>';
+
+  if(isAdmin()){
+    html += '<div class="divider"></div>';
+    html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">担当者別 月間集計（管理者のみ）</div>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+      + '<thead><tr style="color:var(--text-soft);text-align:left;"><th style="padding:4px 0;">担当者</th><th style="text-align:center;">センター</th><th style="text-align:center;">悠久</th><th style="text-align:center;">両方</th><th style="text-align:center;">合計</th></tr></thead><tbody>';
+    repList.forEach(rep=>{
+      const rv = visits.filter(v=>v.rep===rep && v.visitDate && v.visitDate.startsWith(monthPre));
+      const c = rv.filter(v=>(v.purpose||'center')==='center').length;
+      const y = rv.filter(v=>v.purpose==='yukyu').length;
+      const b = rv.filter(v=>v.purpose==='both').length;
+      html += '<tr style="border-top:1px solid var(--line);"><td style="padding:6px 0;font-weight:600;">'+escapeHtml(rep)+'</td>'
+        + '<td style="text-align:center;">'+c+'</td><td style="text-align:center;">'+y+'</td><td style="text-align:center;">'+b+'</td>'
+        + '<td style="text-align:center;font-weight:700;">'+(c+y+b)+'</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  document.getElementById('myResultBody').innerHTML = html;
 }
 
 function openUnvisited(){
