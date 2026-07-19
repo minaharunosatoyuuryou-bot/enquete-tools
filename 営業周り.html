@@ -7,8 +7,6 @@
 <title>営業周り | 大分高齢者紹介センター</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root{
     --bg:#F6F4EE;
@@ -104,10 +102,7 @@
   .nearby-btn.active{background:var(--navy-deep);color:#fff;border-color:var(--navy-deep);}
   .card-dist{color:var(--navy);font-weight:700;}
 
-  #listView, #mapView{margin:0 14px;}
-  #mapView{display:none;}
-  #mapEl{height:62vh;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);}
-  .map-hint{font-size:11.5px;color:var(--text-soft);margin:8px 2px 0;}
+  #listView{margin:0 14px;}
 
   .city-group{margin:14px 0 4px;font-size:12.5px;font-weight:700;color:var(--navy);
     display:flex;align-items:center;gap:8px;}
@@ -139,7 +134,7 @@
 
   .empty{text-align:center;color:var(--text-soft);font-size:13px;padding:40px 10px;}
 
-  /* ---------- Modal ---------- */
+  /* ---------- Modal (施設訪問側) ---------- */
   .overlay{
     display:none;position:fixed;inset:0;background:rgba(21,42,61,.55);z-index:50;
     align-items:flex-end;justify-content:center;
@@ -147,7 +142,7 @@
   .overlay.show{display:flex;}
   .sheet{
     background:var(--paper);width:100%;max-width:480px;border-radius:20px 20px 0 0;
-    max-height:88vh;overflow-y:auto;padding:20px 20px 26px;
+    max-height:88vh;overflow-y:auto;padding:20px 20px 26px;position:relative;
   }
   .sheet-handle{width:38px;height:4px;background:var(--line);border-radius:3px;margin:0 auto 14px;}
   .sheet h2{font-size:17px;margin:0 0 2px;}
@@ -177,7 +172,6 @@
   .close-btn{
     position:absolute;top:16px;right:18px;background:none;border:none;font-size:20px;color:var(--text-soft);cursor:pointer;
   }
-  .sheet{position:relative;}
 
   .geo-toast{
     position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--navy-deep);color:#fff;
@@ -189,12 +183,65 @@
     padding:10px 20px;border-radius:20px;font-size:12.5px;z-index:70;box-shadow:0 6px 16px rgba(0,0,0,.25);
     display:none;
   }
-  .leaflet-popup-content{font-family:"Noto Sans JP",sans-serif;font-size:12.5px;}
-  .popup-title{font-weight:700;margin-bottom:4px;}
-  .popup-btn{
-    margin-top:6px;display:inline-block;background:var(--navy-deep);color:#fff;padding:5px 10px;
-    border-radius:8px;font-size:11px;cursor:pointer;border:none;
+
+  /* ================= 案件管理セクション（元 営業記録.html を移植・dl- プレフィックス） ================= */
+  #dealSection{
+    --dl-accent:#2563c4; --dl-accent-light:#dbeafe; --dl-green:#16a34a; --dl-green-light:#dcfce7;
+    --dl-red:#dc2626; --dl-yellow:#d97706; --dl-yellow-light:#fef3c7; --dl-gray-light:#e5e7eb;
+    --dl-surface:#ffffff; --dl-surface2:#f7f9fc; --dl-border:#dde3ec; --dl-shadow:0 1px 4px rgba(0,0,0,0.08);
+    padding:0 14px 20px; font-size:13px;
   }
+  .dl-summary{ display:flex; gap:10px; margin:14px 0 12px; flex-wrap:wrap; }
+  .dl-card{ background:var(--dl-surface); border-radius:10px; padding:12px 10px; box-shadow:var(--dl-shadow); flex:1; min-width:88px; text-align:center; }
+  .dl-card .dl-num{ font-size:20px; font-weight:700; color:var(--navy-deep); }
+  .dl-card .dl-label{ font-size:10.5px; color:var(--text-soft); margin-top:2px; }
+  .dl-card.dl-alert .dl-num{ color:var(--dl-red); }
+  .dl-card.dl-success .dl-num{ color:var(--dl-green); }
+  .dl-card.dl-warn .dl-num{ color:var(--dl-yellow); }
+  .dl-sync-row{ font-size:11px; color:var(--text-soft); margin-bottom:10px; text-align:right; }
+  .dl-month-tabs-wrap{ background:var(--dl-surface); border-radius:10px; box-shadow:var(--dl-shadow); margin-bottom:10px; padding:8px 10px 0; overflow-x:auto; }
+  .dl-month-tabs{ display:flex; gap:4px; min-width:max-content; border-bottom:2px solid var(--dl-border); }
+  .dl-month-tab{ padding:7px 12px; font-size:12px; font-weight:600; cursor:pointer; border:none; background:none; color:var(--text-soft); border-bottom:3px solid transparent; margin-bottom:-2px; white-space:nowrap; }
+  .dl-month-tab.active{ color:var(--dl-accent); border-bottom-color:var(--dl-accent); }
+  .dl-month-tab .dl-tab-cnt{ display:inline-block; background:var(--dl-gray-light); color:var(--text-soft); font-size:10px; font-weight:700; padding:1px 5px; border-radius:8px; margin-left:4px; }
+  .dl-month-tab.active .dl-tab-cnt{ background:var(--dl-accent-light); color:var(--dl-accent); }
+  .dl-toolbar{ background:var(--dl-surface); border-radius:10px; padding:10px 12px; box-shadow:var(--dl-shadow); margin-bottom:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .dl-toolbar input, .dl-toolbar select{ border:1px solid var(--dl-border); border-radius:6px; padding:6px 9px; font-size:12px; background:var(--dl-surface2); color:var(--text); height:32px; }
+  .dl-toolbar input{ flex:1; min-width:140px; }
+  .dl-btn{ padding:6px 13px; border-radius:6px; border:none; cursor:pointer; font-size:12px; font-weight:600; height:32px; white-space:nowrap; }
+  .dl-btn-primary{ background:var(--dl-accent); color:#fff; }
+  .dl-btn-success{ background:var(--dl-green); color:#fff; }
+  .dl-btn-outline{ background:transparent; border:1px solid var(--dl-border); color:var(--text-soft); }
+  .dl-table-wrap{ background:var(--dl-surface); border-radius:10px; box-shadow:var(--dl-shadow); overflow:auto; }
+  .dl-table-wrap table{ width:100%; border-collapse:collapse; }
+  .dl-table-wrap thead th{ background:var(--dl-accent); color:#fff; padding:8px 9px; font-size:11px; font-weight:600; text-align:left; white-space:nowrap; position:sticky; top:0; }
+  .dl-table-wrap tbody tr{ border-bottom:1px solid var(--dl-border); }
+  .dl-table-wrap tbody tr:hover{ background:#f0f6ff; }
+  .dl-table-wrap td{ padding:8px 9px; vertical-align:middle; white-space:nowrap; }
+  .dl-alert-row{ background:#fff5f5 !important; }
+  .dl-alert-row:hover{ background:#ffe4e4 !important; }
+  .dl-alert-badge{ display:inline-block; background:var(--dl-red); color:#fff; font-size:10px; font-weight:700; padding:2px 6px; border-radius:10px; margin-left:4px; }
+  .dl-status{ display:inline-block; padding:3px 8px; border-radius:10px; font-size:11px; font-weight:600; cursor:pointer; }
+  .dl-s-active{ background:var(--dl-accent-light); color:var(--dl-accent); }
+  .dl-s-success{ background:var(--dl-green-light); color:var(--dl-green); }
+  .dl-s-lost{ background:var(--dl-gray-light); color:var(--text-soft); }
+  .dl-s-hold{ background:var(--dl-yellow-light); color:var(--dl-yellow); }
+  .dl-care{ display:inline-block; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:700; background:#e0e7ff; color:#3730a3; }
+  .dl-date-overdue{ color:var(--dl-red); font-weight:700; }
+  .dl-action-btns{ display:flex; gap:4px; }
+  .dl-btn-icon{ border:none; background:none; cursor:pointer; padding:4px 6px; border-radius:4px; font-size:13px; line-height:1; }
+  .dl-btn-icon:hover{ background:var(--dl-surface2); }
+  .dl-modal-bg{ display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.4); z-index:100; align-items:center; justify-content:center; }
+  .dl-modal-bg.open{ display:flex; }
+  .dl-modal{ background:var(--dl-surface); border-radius:12px; padding:22px; width:480px; max-width:92vw; max-height:88vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.18); }
+  .dl-modal h2{ font-size:15px; margin-bottom:14px; color:var(--dl-accent); }
+  .dl-form-row{ margin-bottom:11px; }
+  .dl-form-row label{ display:block; font-size:11px; font-weight:600; color:var(--text-soft); margin-bottom:4px; }
+  .dl-form-row input, .dl-form-row select, .dl-form-row textarea{ width:100%; border:1px solid var(--dl-border); border-radius:6px; padding:7px 9px; font-size:13px; background:var(--dl-surface2); color:var(--text); font-family:inherit; }
+  .dl-form-row textarea{ resize:vertical; min-height:56px; }
+  .dl-form-2col{ display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+  .dl-modal-footer{ display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
+  .dl-empty{ text-align:center; padding:36px; color:var(--text-soft); }
 </style>
 </head>
 <body>
@@ -215,53 +262,91 @@
 <div id="app">
   <header class="top">
     <div class="brand"><span class="dot"></span>営業周り<button class="pw-gear" onclick="openPwChange()" title="パスワードを変更">⚙</button></div>
-    <div class="sub">大分高齢者紹介センター ／ 施設訪問管理</div>
+    <div class="sub">大分高齢者紹介センター ／ 施設訪問・案件管理</div>
   </header>
 
-  <div class="kpi-bar">
+  <div class="kpi-bar" id="visitKpiBar">
     <div class="kpi"><div class="kpi-num" id="kpiTotal">-</div><div class="kpi-label">対象施設</div></div>
     <div class="kpi"><div class="kpi-num" id="kpiVisited">-</div><div class="kpi-label">今月訪問済</div></div>
     <div class="kpi overdue"><div class="kpi-num" id="kpiOverdue">-</div><div class="kpi-label">要フォロー</div></div>
   </div>
 
   <div class="tabs">
-    <button id="tabList" class="active" onclick="switchTab('list')">一覧</button>
-    <button id="tabMap" onclick="switchTab('map')">地図</button>
+    <button id="mainTabVisit" class="active" onclick="switchMainTab('visit')">施設訪問</button>
+    <button id="mainTabDeal" onclick="switchMainTab('deal')">案件管理</button>
   </div>
 
-  <div class="filters">
-    <input type="text" id="fSearch" placeholder="施設名で検索" oninput="renderAll()">
-    <select id="fCity" onchange="renderAll()"><option value="">市区町村：すべて</option></select>
-    <select id="fKind" onchange="renderAll()">
-      <option value="">種別：すべて</option>
-      <option value="包括">包括</option><option value="居宅">居宅</option>
-      <option value="老健">老健</option><option value="病院">病院</option>
-    </select>
-    <select id="fRep" onchange="renderAll()"><option value="">担当者：すべて</option></select>
-    <select id="fStatus" onchange="renderAll()">
-      <option value="">状態：すべて</option>
-      <option value="overdue">要フォロー</option>
-      <option value="upcoming">次回予定あり</option>
-      <option value="none">未訪問</option>
-    </select>
+  <!-- ============ 施設訪問セクション ============ -->
+  <div id="visitSection">
+    <div class="filters">
+      <input type="text" id="fSearch" placeholder="施設名で検索" oninput="renderAll()">
+      <select id="fCity" onchange="renderAll()"><option value="">市区町村：すべて</option></select>
+      <select id="fKind" onchange="renderAll()">
+        <option value="">種別：すべて</option>
+        <option value="包括">包括</option><option value="居宅">居宅</option>
+        <option value="老健">老健</option><option value="病院">病院</option>
+      </select>
+      <select id="fRep" onchange="renderAll()"><option value="">担当者：すべて</option></select>
+      <select id="fStatus" onchange="renderAll()">
+        <option value="">状態：すべて</option>
+        <option value="overdue">要フォロー</option>
+        <option value="upcoming">次回予定あり</option>
+        <option value="none">未訪問</option>
+      </select>
+    </div>
+
+    <div class="filters" id="nearbyBar">
+      <button id="nearbyBtn" class="nearby-btn" onclick="toggleNearby()">📍 現在地から絞り込む</button>
+      <select id="fRadius" onchange="renderAll()" style="display:none;">
+        <option value="3">3km以内</option>
+        <option value="5" selected>5km以内</option>
+        <option value="10">10km以内</option>
+        <option value="30">30km以内</option>
+      </select>
+    </div>
+
+    <div id="listView"></div>
   </div>
 
-  <div class="filters" id="nearbyBar">
-    <button id="nearbyBtn" class="nearby-btn" onclick="toggleNearby()">📍 現在地から絞り込む</button>
-    <select id="fRadius" onchange="renderAll()" style="display:none;">
-      <option value="3">3km以内</option>
-      <option value="5" selected>5km以内</option>
-      <option value="10">10km以内</option>
-      <option value="30">30km以内</option>
-    </select>
-  </div>
-
-  <div id="listView"></div>
-
-  <div id="mapView">
-    <div id="mapEl"></div>
-    <div class="map-hint">マーカーの色：<span style="color:var(--k-houkatsu)">●包括</span> <span style="color:var(--k-kyotaku)">●居宅</span> <span style="color:var(--k-roken)">●老健</span> <span style="color:var(--k-byoin)">●病院</span></div>
-    <button id="locBtn" class="nearby-btn" style="margin-top:8px;width:100%;" onclick="locateOnMap()">📍 現在地を表示</button>
+  <!-- ============ 案件管理セクション ============ -->
+  <div id="dealSection" style="display:none;">
+    <div class="dl-sync-row" id="dl-sync-status">読み込み中...</div>
+    <div class="dl-summary">
+      <div class="dl-card"><div class="dl-num" id="dl-cnt-all">—</div><div class="dl-label">総件数</div></div>
+      <div class="dl-card dl-warn"><div class="dl-num" id="dl-cnt-active">—</div><div class="dl-label">商談中</div></div>
+      <div class="dl-card dl-alert"><div class="dl-num" id="dl-cnt-alert">—</div><div class="dl-label">⚠未対応7日超</div></div>
+      <div class="dl-card dl-success"><div class="dl-num" id="dl-cnt-success">—</div><div class="dl-label">成約</div></div>
+      <div class="dl-card"><div class="dl-num" id="dl-cnt-lost">—</div><div class="dl-label">失注</div></div>
+    </div>
+    <div class="dl-month-tabs-wrap"><div class="dl-month-tabs" id="dl-month-tabs"></div></div>
+    <div class="dl-toolbar">
+      <input type="text" id="dl-search" placeholder="🔍 氏名・施設・担当者で検索">
+      <select id="dl-filter-status">
+        <option value="">ステータス 全て</option>
+        <option value="商談中">商談中</option><option value="成約">成約</option>
+        <option value="失注">失注</option><option value="保留">保留</option>
+      </select>
+      <select id="dl-filter-care">
+        <option value="">介護度 全て</option>
+        <option value="要支援1">要支援1</option><option value="要支援2">要支援2</option>
+        <option value="要介護1">要介護1</option><option value="要介護2">要介護2</option>
+        <option value="要介護3">要介護3</option><option value="要介護4">要介護4</option><option value="要介護5">要介護5</option>
+      </select>
+      <select id="dl-filter-gender">
+        <option value="">性別 全て</option><option value="男性">男性</option><option value="女性">女性</option>
+      </select>
+      <button class="dl-btn dl-btn-success" onclick="dealOpenModal()">＋ 新規追加</button>
+      <button class="dl-btn dl-btn-outline" onclick="dealExportCSV()">⬇ CSV出力</button>
+    </div>
+    <div class="dl-table-wrap">
+      <table>
+        <thead>
+          <tr><th>#</th><th>相談日</th><th>利用者氏名</th><th>介護度</th><th>性別</th><th>希望施設</th><th>クロージング日</th><th>ステータス</th><th>担当者</th><th>メモ</th><th>操作</th></tr>
+        </thead>
+        <tbody id="dl-table-body"><tr><td colspan="11" style="text-align:center;padding:30px;color:var(--text-soft)">読み込み中...</td></tr></tbody>
+      </table>
+      <div class="dl-empty" id="dl-empty-msg" style="display:none">該当するデータがありません</div>
+    </div>
   </div>
 </div>
 
@@ -334,26 +419,55 @@
   </div>
 </div>
 
+<!-- 案件 新規追加/編集モーダル -->
+<div class="dl-modal-bg" id="dl-modal">
+  <div class="dl-modal">
+    <h2 id="dl-modal-title">新規案件を追加</h2>
+    <div class="dl-form-2col">
+      <div class="dl-form-row"><label>相談日 *</label><input type="date" id="dl-f-consult"></div>
+      <div class="dl-form-row"><label>クロージング日</label><input type="date" id="dl-f-close"></div>
+    </div>
+    <div class="dl-form-row"><label>利用者氏名 *</label><input type="text" id="dl-f-name" placeholder="例：山田 花子"></div>
+    <div class="dl-form-2col">
+      <div class="dl-form-row"><label>介護度</label>
+        <select id="dl-f-care"><option value="">未定</option><option>要支援1</option><option>要支援2</option><option>要介護1</option><option>要介護2</option><option>要介護3</option><option>要介護4</option><option>要介護5</option></select>
+      </div>
+      <div class="dl-form-row"><label>性別</label>
+        <select id="dl-f-gender"><option value="">未記入</option><option>男性</option><option>女性</option></select>
+      </div>
+    </div>
+    <div class="dl-form-row"><label>希望施設</label><input type="text" id="dl-f-facility" placeholder="例：みなはるの里、悠久の里"></div>
+    <div class="dl-form-2col">
+      <div class="dl-form-row"><label>ステータス</label>
+        <select id="dl-f-status"><option>商談中</option><option>成約</option><option>失注</option><option>保留</option></select>
+      </div>
+      <div class="dl-form-row"><label>担当者名</label><input type="text" id="dl-f-staff" placeholder="例：牧 良子"></div>
+    </div>
+    <div class="dl-form-row"><label>メモ</label><textarea id="dl-f-memo" placeholder="家族の状況、本人の希望など"></textarea></div>
+    <div class="dl-modal-footer">
+      <button class="dl-btn dl-btn-outline" onclick="dealCloseModal()">キャンセル</button>
+      <button class="dl-btn dl-btn-primary" id="dl-save-btn" onclick="dealSaveRecord()">保存</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============ 設定 ============
-   下記 GAS_URL を、Google Apps Script でデプロイした
-   ウェブアプリのURLに置き換えてください。
-   （Code.gs をスプレッドシートに設置 → デプロイ → URLをコピー）      */
+   施設訪問データ用 GAS（施設マスタ・訪問記録・設定シート）      */
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbxYLjGt7vlDkNylFRyD-_0ubXDkO4DCyukmlwsM8XkeHGdIZsMITaCvHpzBcv-s1vtq/exec';
+/* 案件管理データ用 GAS（既存の「営業記録」バックエンド。変更なしでそのまま利用） */
+const DEAL_GAS_URL = 'https://script.google.com/macros/s/AKfycbzvfCyfMX-xd862m77B1jNhJMQkDc6nv0iBd8UVGvyblooyL8UwtNR5yF2U87ZhZRzd/exec';
 let currentPassword = null; // ログイン成功時のパスワードを保持（書き込み系リクエストで使用）
 /* ============================== */
 
 let facilities = [];
 let visits = [];
-let currentTab = 'list';
 let currentFacilityId = null;
-let map = null;
-let markerLayer = null;
 const KIND_COLOR = {'包括':'#3B6EA5','居宅':'#4C8C63','老健':'#C9902E','病院':'#B14C4C'};
 let userLoc = null; // {lat, lng}
 let nearbyActive = false;
-let userMarker = null;
-let userCircle = null;
+let mainTab = 'visit';
+let dealLoaded = false;
 
 function distanceKm(lat1, lng1, lat2, lng2){
   const R = 6371;
@@ -400,27 +514,17 @@ async function toggleNearby(){
   }
 }
 
-async function locateOnMap(){
-  const btn = document.getElementById('locBtn');
-  btn.textContent = '取得中...';
-  try{
-    userLoc = await getCurrentPosition();
-    ensureMap();
-    if(userMarker) map.removeLayer(userMarker);
-    if(userCircle) map.removeLayer(userCircle);
-    userMarker = L.circleMarker([userLoc.lat, userLoc.lng], {
-      radius:9, color:'#fff', weight:3, fillColor:'#2E6FE8', fillOpacity:1
-    }).addTo(map).bindPopup('現在地');
-    userCircle = L.circle([userLoc.lat, userLoc.lng], {
-      radius: (nearbyActive ? Number(document.getElementById('fRadius').value) : 5) * 1000,
-      color:'#2E6FE8', weight:1, fillColor:'#2E6FE8', fillOpacity:.06
-    }).addTo(map);
-    map.setView([userLoc.lat, userLoc.lng], 13);
-  }catch(err){
-    showToast('位置情報を取得できませんでした（設定でブラウザの位置情報を許可してください）');
-    console.error(err);
+function switchMainTab(tab){
+  mainTab = tab;
+  document.getElementById('mainTabVisit').classList.toggle('active', tab==='visit');
+  document.getElementById('mainTabDeal').classList.toggle('active', tab==='deal');
+  document.getElementById('visitKpiBar').style.display = tab==='visit' ? 'flex':'none';
+  document.getElementById('visitSection').style.display = tab==='visit' ? 'block':'none';
+  document.getElementById('dealSection').style.display = tab==='deal' ? 'block':'none';
+  if(tab==='deal' && !dealLoaded){
+    dealLoaded = true;
+    dealLoadAll();
   }
-  btn.textContent = '📍 現在地を表示';
 }
 
 async function tryLogin(){
@@ -543,7 +647,7 @@ function getFiltered(){
 
 function renderAll(){
   renderKpi();
-  if(currentTab==='list') renderList(); else renderMap();
+  renderList();
 }
 
 function renderKpi(){
@@ -612,62 +716,6 @@ function renderList(){
     });
   });
   container.innerHTML = html;
-}
-
-function switchTab(tab){
-  currentTab = tab;
-  document.getElementById('tabList').classList.toggle('active', tab==='list');
-  document.getElementById('tabMap').classList.toggle('active', tab==='map');
-  document.getElementById('listView').style.display = tab==='list' ? 'block':'none';
-  document.getElementById('mapView').style.display = tab==='map' ? 'block':'none';
-  renderAll();
-  if(tab==='map') setTimeout(()=>{ if(map) map.invalidateSize(); }, 50);
-}
-
-function ensureMap(){
-  if(map) return;
-  map = L.map('mapEl').setView([33.28, 131.5], 10);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
-  }).addTo(map);
-  markerLayer = L.layerGroup().addTo(map);
-}
-
-function renderMap(){
-  ensureMap();
-  markerLayer.clearLayers();
-  const list = getFiltered().filter(f=>f.lat && f.lng);
-  const bounds = [];
-  list.forEach(f=>{
-    const color = KIND_COLOR[f.kind] || '#666';
-    const marker = L.circleMarker([f.lat, f.lng], {
-      radius:8, color:'#fff', weight:2, fillColor:color, fillOpacity:.95
-    });
-    const st = statusFor(f.id);
-    let statusLabel = st.status==='none' ? '未訪問' : (st.status==='overdue' ? '期限超過 '+st.next : (st.status==='upcoming' ? '次回 '+st.next : '前回 '+st.last));
-    const distLabel = (nearbyActive && f.__dist!=null) ? '（'+f.__dist.toFixed(1)+'km）' : '';
-    marker.bindPopup(
-      '<div class="popup-title">'+f.name+distLabel+'</div>'+f.addr+'<br>担当：'+f.rep+' ／ '+statusLabel
-      + '<br><button class="popup-btn" onclick="openDetail(\''+f.id+'\')">詳細を開く</button>'
-    );
-    marker.addTo(markerLayer);
-    bounds.push([f.lat, f.lng]);
-  });
-
-  if(userMarker) map.removeLayer(userMarker);
-  if(userCircle) map.removeLayer(userCircle);
-  if(nearbyActive && userLoc){
-    const radiusKm = Number(document.getElementById('fRadius').value);
-    userMarker = L.circleMarker([userLoc.lat, userLoc.lng], {
-      radius:9, color:'#fff', weight:3, fillColor:'#2E6FE8', fillOpacity:1
-    }).addTo(map).bindPopup('現在地');
-    userCircle = L.circle([userLoc.lat, userLoc.lng], {
-      radius: radiusKm * 1000, color:'#2E6FE8', weight:1, fillColor:'#2E6FE8', fillOpacity:.06
-    }).addTo(map);
-    bounds.push([userLoc.lat, userLoc.lng]);
-  }
-
-  if(bounds.length>0) map.fitBounds(bounds, {padding:[24,24]});
 }
 
 function openDetail(facilityId){
@@ -766,7 +814,7 @@ function showToast(msg){
   setTimeout(()=>{ t.style.display='none'; }, 2200);
 }
 
-/* ---------- ジオコーディング（住所→緯度経度）：初回のみ・順次キャッシュ ---------- */
+/* ---------- ジオコーディング（住所→緯度経度）：初回のみ・順次キャッシュ（現在地から絞り込む機能のために利用） ---------- */
 async function processGeocodeQueue(){
   const queue = facilities.filter(f=>!f.lat || !f.lng);
   if(queue.length===0) return;
@@ -774,7 +822,7 @@ async function processGeocodeQueue(){
   toastEl.style.display='block';
   for(let i=0;i<queue.length;i++){
     const f = queue[i];
-    toastEl.textContent = '地図情報を準備中 ('+(i+1)+'/'+queue.length+')';
+    toastEl.textContent = '位置情報を準備中 ('+(i+1)+'/'+queue.length+')';
     try{
       const q = encodeURIComponent(f.addr + (f.addr.includes('大分県')?'':' 大分県'));
       const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&q='+q);
@@ -783,7 +831,6 @@ async function processGeocodeQueue(){
         f.lat = parseFloat(arr[0].lat);
         f.lng = parseFloat(arr[0].lon);
         fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'updateLatLng', password:currentPassword, facilityId:f.id, lat:f.lat, lng:f.lng})}).catch(()=>{});
-        if(currentTab==='map') renderMap();
       }
     }catch(err){ console.error('geocode error', f.name, err); }
     await new Promise(r=>setTimeout(r, 1100)); // Nominatim利用ポリシー：1req/sec厳守
@@ -827,6 +874,236 @@ async function submitPwChange(){
   }
   btn.disabled = false; btn.textContent = '変更する';
 }
+
+/* ================= 案件管理（元 営業記録.html を移植） ================= */
+const DEAL_TODAY = new Date();
+DEAL_TODAY.setHours(0,0,0,0);
+
+let dealRecords = [];
+let dealEditId = null;
+let dealActiveMonth = 'all';
+let dealCbCount = 0;
+
+function dealSetSyncStatus(msg, ok=true){
+  const el = document.getElementById('dl-sync-status');
+  el.textContent = msg;
+  el.style.color = ok ? '' : 'var(--dl-red)';
+}
+
+// JSONPでGASを呼び出す（既存の案件管理バックエンドの仕様に合わせる）
+function dealGasCall(params){
+  return new Promise((resolve, reject) => {
+    const cbName = '__dealCb' + (dealCbCount++);
+    const timeout = setTimeout(() => {
+      delete window[cbName];
+      reject(new Error('timeout'));
+    }, 15000);
+
+    window[cbName] = function(data) {
+      clearTimeout(timeout);
+      delete window[cbName];
+      const el = document.getElementById('jsonp-' + cbName);
+      if (el) el.remove();
+      resolve(data);
+    };
+
+    params.callback = cbName;
+    const qs = Object.entries(params).map(([k,v]) => encodeURIComponent(k)+'='+encodeURIComponent(v)).join('&');
+    const script = document.createElement('script');
+    script.id = 'jsonp-' + cbName;
+    script.src = DEAL_GAS_URL + '?' + qs;
+    script.onerror = () => { clearTimeout(timeout); delete window[cbName]; reject(new Error('load error')); };
+    document.head.appendChild(script);
+  });
+}
+
+async function dealLoadAll(){
+  try{
+    dealSetSyncStatus('読み込み中...');
+    const data = await dealGasCall({action:'getAll'});
+    dealRecords = Array.isArray(data) ? data : [];
+    dealSetSyncStatus(`✓ 同期済み ${dealRecords.length}件`);
+    dealBuildMonthTabs();
+    dealRender();
+  }catch(e){
+    dealSetSyncStatus('⚠ 読み込みエラー', false);
+    document.getElementById('dl-table-body').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:30px;color:#dc2626">データの読み込みに失敗しました。再読み込みしてください。</td></tr>';
+  }
+}
+
+function dealGetMonth(r){ return r.consult ? r.consult.slice(0,7) : ''; }
+
+function dealBuildMonthTabs(){
+  const monthSet = new Set();
+  dealRecords.forEach(r => { if (r.consult) monthSet.add(r.consult.slice(0,7)); });
+  const months = Array.from(monthSet).sort().reverse();
+  const tabs = document.getElementById('dl-month-tabs');
+  tabs.innerHTML = `<button class="dl-month-tab ${dealActiveMonth==='all'?'active':''}" onclick="dealSetMonth('all')">すべて<span class="dl-tab-cnt">${dealRecords.length}</span></button>`;
+  months.forEach(m => {
+    const cnt = dealRecords.filter(r => dealGetMonth(r) === m).length;
+    const [y, mo] = m.split('-');
+    tabs.innerHTML += `<button class="dl-month-tab ${dealActiveMonth===m?'active':''}" onclick="dealSetMonth('${m}')">${y}年${parseInt(mo)}月<span class="dl-tab-cnt">${cnt}</span></button>`;
+  });
+}
+
+function dealSetMonth(m){ dealActiveMonth = m; dealBuildMonthTabs(); dealRender(); }
+
+function dealIsOverdue(rec){
+  if (rec.status === '成約' || rec.status === '失注') return false;
+  const ref = rec.closeDate || rec.consult;
+  if (!ref) return false;
+  const d = new Date(ref); d.setHours(0,0,0,0);
+  return (DEAL_TODAY - d) > 7 * 86400000;
+}
+
+function dealStatusClass(s){
+  return {商談中:'dl-s-active',成約:'dl-s-success',失注:'dl-s-lost',保留:'dl-s-hold'}[s] || 'dl-s-active';
+}
+
+function dealFmt(d){
+  if (!d) return '—';
+  const parts = d.split('-');
+  return `${parseInt(parts[1])}/${parseInt(parts[2])}`;
+}
+
+function dealRender(){
+  const q = document.getElementById('dl-search').value.toLowerCase();
+  const fs = document.getElementById('dl-filter-status').value;
+  const fc = document.getElementById('dl-filter-care').value;
+  const fg = document.getElementById('dl-filter-gender').value;
+
+  let filtered = dealRecords.filter(r => {
+    if (dealActiveMonth !== 'all' && dealGetMonth(r) !== dealActiveMonth) return false;
+    if (fs && r.status !== fs) return false;
+    if (fc && r.care !== fc) return false;
+    if (fg && r.gender !== fg) return false;
+    if (q && !`${r.name}${r.facility}${r.staff}${r.memo}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  document.getElementById('dl-cnt-all').textContent = dealRecords.length;
+  document.getElementById('dl-cnt-active').textContent = dealRecords.filter(r=>r.status==='商談中').length;
+  document.getElementById('dl-cnt-alert').textContent = dealRecords.filter(dealIsOverdue).length;
+  document.getElementById('dl-cnt-success').textContent = dealRecords.filter(r=>r.status==='成約').length;
+  document.getElementById('dl-cnt-lost').textContent = dealRecords.filter(r=>r.status==='失注').length;
+
+  const tbody = document.getElementById('dl-table-body');
+  document.getElementById('dl-empty-msg').style.display = filtered.length ? 'none' : 'block';
+  if (filtered.length === 0) { tbody.innerHTML = ''; return; }
+
+  tbody.innerHTML = filtered.map((r, i) => {
+    const over = dealIsOverdue(r);
+    const closeDiff = r.closeDate ? Math.floor((DEAL_TODAY - new Date(r.closeDate)) / 86400000) : null;
+    const closeFmt = r.closeDate
+      ? `<span class="${closeDiff > 7 && r.status==='商談中' ? 'dl-date-overdue' : ''}">${dealFmt(r.closeDate)}</span>${over ? '<span class="dl-alert-badge">未対応</span>' : ''}`
+      : '—';
+    const memo = r.memo ? `<span title="${String(r.memo).replace(/"/g,'&quot;')}" style="cursor:default">📝</span>` : '—';
+    return `<tr class="${over ? 'dl-alert-row' : ''}">
+      <td style="color:var(--text-soft);font-size:11px">${i+1}</td>
+      <td>${dealFmt(r.consult)}</td>
+      <td style="font-weight:600">${r.name}</td>
+      <td><span class="dl-care">${r.care||'—'}</span></td>
+      <td>${r.gender||'—'}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${r.facility||'—'}</td>
+      <td>${closeFmt}</td>
+      <td><span class="dl-status ${dealStatusClass(r.status)}" onclick="dealCycleStatus(this.dataset.id)" data-id="${r.id}">${r.status}</span></td>
+      <td>${r.staff||'—'}</td>
+      <td>${memo}</td>
+      <td><div class="dl-action-btns">
+        <button class="dl-btn-icon" title="編集" onclick="dealEditRecord(this.dataset.id)" data-id="${r.id}">✏️</button>
+        <button class="dl-btn-icon" title="削除" onclick="dealDeleteRecord(this.dataset.id)" data-id="${r.id}">🗑️</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+async function dealCycleStatus(id){
+  const order = ['商談中','成約','失注','保留'];
+  const r = dealRecords.find(x=>String(x.id)===String(id));
+  if (!r) return;
+  r.status = order[(order.indexOf(r.status)+1) % order.length];
+  dealRender();
+  dealSetSyncStatus('保存中...');
+  try { await dealGasCall({action:'save', ...r}); dealSetSyncStatus('✓ 保存しました'); }
+  catch { dealSetSyncStatus('⚠ 保存エラー', false); }
+}
+
+function dealOpenModal(id=null){
+  dealEditId = id;
+  const m = id ? dealRecords.find(r=>String(r.id)===String(id)) : null;
+  document.getElementById('dl-modal-title').textContent = id ? '案件を編集' : '新規案件を追加';
+  document.getElementById('dl-f-consult').value = m?.consult || new Date().toISOString().slice(0,10);
+  document.getElementById('dl-f-close').value = m?.closeDate || '';
+  document.getElementById('dl-f-name').value = m?.name || '';
+  document.getElementById('dl-f-care').value = m?.care || '';
+  document.getElementById('dl-f-gender').value = m?.gender || '';
+  document.getElementById('dl-f-facility').value = m?.facility || '';
+  document.getElementById('dl-f-status').value = m?.status || '商談中';
+  document.getElementById('dl-f-staff').value = m?.staff || '';
+  document.getElementById('dl-f-memo').value = m?.memo || '';
+  document.getElementById('dl-modal').classList.add('open');
+}
+
+function dealCloseModal(){ document.getElementById('dl-modal').classList.remove('open'); dealEditId = null; }
+
+async function dealSaveRecord(){
+  const name = document.getElementById('dl-f-name').value.trim();
+  const consult = document.getElementById('dl-f-consult').value;
+  if (!name || !consult) { alert('相談日と利用者氏名は必須です'); return; }
+  const data = {
+    id: dealEditId || String(Date.now()),
+    consult, name,
+    care: document.getElementById('dl-f-care').value,
+    gender: document.getElementById('dl-f-gender').value,
+    facility: document.getElementById('dl-f-facility').value.trim(),
+    closeDate: document.getElementById('dl-f-close').value,
+    status: document.getElementById('dl-f-status').value,
+    staff: document.getElementById('dl-f-staff').value.trim(),
+    memo: document.getElementById('dl-f-memo').value.trim()
+  };
+  const btn = document.getElementById('dl-save-btn');
+  btn.textContent = '保存中...'; btn.disabled = true;
+  try{
+    await dealGasCall({action:'save', ...data});
+    if (dealEditId) { const i = dealRecords.findIndex(r=>String(r.id)===String(dealEditId)); dealRecords[i] = data; }
+    else { dealRecords.unshift(data); dealActiveMonth = data.consult.slice(0,7); }
+    dealSetSyncStatus('✓ 保存しました');
+    dealCloseModal(); dealBuildMonthTabs(); dealRender();
+  }catch{
+    dealSetSyncStatus('⚠ 保存エラー', false);
+    alert('保存に失敗しました。再度お試しください。');
+  }finally{ btn.textContent = '保存'; btn.disabled = false; }
+}
+
+function dealEditRecord(id){ dealOpenModal(id); }
+
+async function dealDeleteRecord(id){
+  const r = dealRecords.find(x=>String(x.id)===String(id));
+  if (!r || !confirm(`「${r.name}」を削除しますか？`)) return;
+  dealRecords = dealRecords.filter(x=>String(x.id)!==String(id));
+  dealBuildMonthTabs(); dealRender();
+  dealSetSyncStatus('削除中...');
+  try { await dealGasCall({action:'delete', id}); dealSetSyncStatus('✓ 削除しました'); }
+  catch { dealSetSyncStatus('⚠ 削除エラー', false); }
+}
+
+function dealExportCSV(){
+  const header = ['id','相談日','利用者氏名','介護度','性別','希望施設','クロージング日','ステータス','担当者','メモ'];
+  const target = dealActiveMonth === 'all' ? dealRecords : dealRecords.filter(r => dealGetMonth(r) === dealActiveMonth);
+  const rows = target.map(r => [r.id,r.consult,r.name,r.care,r.gender,r.facility,r.closeDate,r.status,r.staff,r.memo].map(v=>`"${(v||'').replace(/"/g,'""')}"`));
+  const csv = '\uFEFF' + [header, ...rows].map(r=>r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = `営業記録_${dealActiveMonth === 'all' ? '全件' : dealActiveMonth}.csv`;
+  a.click();
+}
+
+['dl-search','dl-filter-status','dl-filter-care','dl-filter-gender'].forEach(id => {
+  document.getElementById(id).addEventListener('input', dealRender);
+});
+document.getElementById('dl-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('dl-modal')) dealCloseModal();
+});
 </script>
 </body>
 </html>
