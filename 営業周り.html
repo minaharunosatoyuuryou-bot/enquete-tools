@@ -32,7 +32,7 @@
   button{font-family:inherit;}
 
   /* ---------- Login ---------- */
-  #loginScreen{
+  #loginScreen, #modeSelectScreen{
     min-height:100vh;display:flex;align-items:center;justify-content:center;
     background:linear-gradient(160deg,var(--navy-deep) 0%, var(--navy) 55%, #2C4F6E 100%);
     padding:24px;
@@ -317,11 +317,25 @@
   </div>
 </div>
 
+<!-- モード選択画面 -->
+<div id="modeSelectScreen" style="display:none;">
+  <div class="login-card" style="max-width:400px;">
+    <div class="mark">診</div>
+    <h1>どちらで利用しますか？</h1>
+    <p>あとからいつでも切り替えられます</p>
+    <button onclick="selectMode('center')" style="margin-bottom:10px;">大分高齢者紹介センター<br><span style="font-weight:400;font-size:11.5px;opacity:.85;">施設訪問・紹介管理・案件管理</span></button>
+    <button onclick="selectMode('yukyu')" style="background:var(--navy-deep);">悠久福祉会<br><span style="font-weight:400;font-size:11.5px;opacity:.85;">空床管理・入居実績</span></button>
+  </div>
+</div>
+
 <!-- メイン画面 -->
 <div id="app">
   <header class="top">
     <div class="brand"><span class="dot"></span>営業周り<button class="pw-gear" onclick="openPwChange()" title="設定">⚙</button></div>
-    <div class="sub">大分高齢者紹介センター ／ 施設訪問・案件管理<span id="loginWhoami"></span></div>
+    <div class="sub">
+      <span id="modeLabel">大分高齢者紹介センター</span> ／ 施設訪問・案件管理<span id="loginWhoami"></span>
+      <a href="#" onclick="switchModePrompt();return false;" style="color:#B9C6D3;text-decoration:underline;margin-left:8px;">切替</a>
+    </div>
   </header>
 
   <div class="kpi-bar" id="visitKpiBar">
@@ -402,6 +416,10 @@
       <input type="text" id="fmSearch" placeholder="施設名で検索" oninput="renderFacilityAdminTable()">
       <button class="dl-btn dl-btn-success" onclick="openFacilityEdit(null, '悠久福祉会')">＋ 悠久福祉会の施設を追加</button>
       <button class="dl-btn dl-btn-outline" onclick="loadData().then(()=>{populateFilterOptions();renderAll();renderFacilityAdminTable();showToast('最新データを取得しました');})">🔄 再読み込み</button>
+    </div>
+    <div class="filters">
+      <button class="nearby-btn" onclick="openVacancyList()">🛏 空床一覧</button>
+      <button class="nearby-btn" onclick="openYukyuMonthly()">📊 月別入居実績</button>
     </div>
     <div class="dl-table-wrap">
       <table>
@@ -532,6 +550,16 @@
     <div class="sheet-handle"></div>
     <h2 style="font-size:16px;">月別実績（訪問・紹介・入居）</h2>
     <div id="monthlyList" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<!-- 悠久福祉会 月別入居実績モーダル -->
+<div class="overlay" id="yukyuMonthlyOverlay">
+  <div class="sheet">
+    <button class="close-btn" onclick="closeYukyuMonthly()">×</button>
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;">月別入居実績（悠久福祉会）</h2>
+    <div id="yukyuMonthlyList" style="margin-top:14px;"></div>
   </div>
 </div>
 
@@ -952,12 +980,36 @@ async function tryLogin(){
 }
 document.getElementById('pwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
 
+let appMode = 'center'; // 'center'（大分高齢者紹介センター） | 'yukyu'（悠久福祉会）
+let dataLoaded = false;
+
 function finishLogin(){
   document.getElementById('loginScreen').style.display='none';
-  document.getElementById('app').style.display='block';
   document.body.classList.toggle('is-admin', isAdmin());
   document.getElementById('loginWhoami').textContent = currentUserName ? '（' + currentUserName + '）' : '';
-  boot();
+  document.getElementById('modeSelectScreen').style.display='flex';
+}
+
+function selectMode(mode){
+  appMode = mode;
+  document.getElementById('modeSelectScreen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('modeLabel').textContent = mode==='center' ? '大分高齢者紹介センター' : '悠久福祉会';
+  applyModeVisibility();
+  if(!dataLoaded){ dataLoaded = true; boot(); }
+  else { switchMainTab(mode==='center' ? 'visit' : 'facility'); }
+}
+
+function switchModePrompt(){
+  document.getElementById('app').style.display='none';
+  document.getElementById('modeSelectScreen').style.display='flex';
+}
+
+function applyModeVisibility(){
+  const centerOnly = ['mainTabVisit','mainTabReferral','mainTabDeal'];
+  centerOnly.forEach(id=>{ document.getElementById(id).style.display = appMode==='center' ? '' : 'none'; });
+  // 施設管理（悠久福祉会の空床管理）は、悠久福祉会モードのときだけ表示（かつ管理者のみ。admin-onlyクラスに委ねる）
+  document.getElementById('mainTabFacility').style.display = appMode==='yukyu' ? '' : 'none';
 }
 
 async function boot(){
@@ -970,6 +1022,7 @@ async function boot(){
   populateFilterOptions();
   populateReferralFacilitySelect();
   renderAll();
+  switchMainTab(appMode==='center' ? 'visit' : 'facility');
 }
 
 async function loadData(){
@@ -1247,7 +1300,7 @@ function openDetail(facilityId){
     vBoxHtml += '</div>';
   }
   if(isAdmin()){
-    vBoxHtml += '<button class="fm-edit-btn" onclick="closeDetail();switchMainTab(\'facility\');openFacilityEdit(\''+f.id+'\')">この施設の情報を編集する（管理者）</button>';
+    vBoxHtml += '<button class="fm-edit-btn" onclick="closeDetail();openFacilityEdit(\''+f.id+'\')">この施設の情報を編集する（管理者）</button>';
   }
   document.getElementById('dVacancyBox').innerHTML = vBoxHtml;
 
@@ -1647,6 +1700,8 @@ async function submitReferral(){
   if(!consultDate || !facilityId){ errEl.textContent = '相談日と紹介施設は必須です'; return; }
   const btn = document.getElementById('refSaveBtn');
   btn.disabled = true; btn.textContent = '保存中...';
+  const previous = currentReferralId ? referrals.find(x=>x.id===currentReferralId) : null;
+  const becameMovedIn = status==='入居決定' && (!previous || previous.status!=='入居決定');
   const fields = {
     consultDate, userName, facilityId, facilityName: facility?facility.name:'', visitDate, moveInDate, cancelDate, status, rep, memo,
     sourceType, sourceFacilityId, sourceFacilityName: sourceFacility?sourceFacility.name:''
@@ -1663,9 +1718,20 @@ async function submitReferral(){
       } else {
         referrals.push({ id:data.id, ...fields, createdAt: new Date().toISOString() });
       }
+      let linkMsg = '';
+      if(becameMovedIn && facility && facility.group){
+        const newOccupied = (Number(facility.occupied)||0) + 1;
+        try{
+          await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'updateVacancy', ...authPayload(), id:facility.id, occupied:newOccupied, updatedBy: currentUserName||''})});
+          facility.occupied = newOccupied;
+          facility.updatedAt = todayStr();
+          facility.updatedBy = currentUserName||'';
+          linkMsg = '（'+facility.name+'の空床情報も自動更新しました）';
+        }catch(e){ console.error(e); }
+      }
       renderReferralList();
       closeReferralEdit();
-      showToast('紹介記録を保存しました');
+      showToast('紹介記録を保存しました'+linkMsg);
     } else {
       errEl.textContent = data.error || '保存に失敗しました';
     }
@@ -1786,7 +1852,41 @@ function renderSchedule(){
   ).join('');
 }
 
-/* ---------- 月別訪問実績 ---------- */
+/* ---------- 悠久福祉会 月別入居実績 ---------- */
+function openYukyuMonthly(){
+  renderYukyuMonthly();
+  document.getElementById('yukyuMonthlyOverlay').classList.add('show');
+}
+function closeYukyuMonthly(){
+  document.getElementById('yukyuMonthlyOverlay').classList.remove('show');
+}
+function renderYukyuMonthly(){
+  const groupFacilityIds = new Set(facilities.filter(f=>f.group).map(f=>f.id));
+  const counts = {};
+  referrals.forEach(r=>{
+    if(!r.moveInDate || !groupFacilityIds.has(r.facilityId)) return;
+    const m = r.moveInDate.slice(0,7);
+    if(!counts[m]) counts[m] = {moveIn:0, byFacility:{}};
+    counts[m].moveIn++;
+    counts[m].byFacility[r.facilityName] = (counts[m].byFacility[r.facilityName]||0) + 1;
+  });
+  const months = Object.keys(counts).sort().reverse().slice(0,12);
+  const el = document.getElementById('yukyuMonthlyList');
+  if(months.length===0){ el.innerHTML = '<div class="empty">紹介経由の入居実績がまだありません</div>'; return; }
+  const maxCount = Math.max(1, ...months.map(m=>counts[m].moveIn));
+  el.innerHTML = months.map(m=>{
+    const c = counts[m];
+    const pct = Math.round(c.moveIn / maxCount * 100);
+    const [y,mo] = m.split('-');
+    const detail = Object.entries(c.byFacility).map(([name,n])=>name+' '+n+'名').join('、');
+    return '<div class="month-bar-row">'
+      + '<div class="month-bar-label">'+y+'年'+parseInt(mo)+'月</div>'
+      + '<div class="month-bar-track"><div class="month-bar-fill" style="width:'+pct+'%"></div></div>'
+      + '<div class="month-bar-value">入居'+c.moveIn+'名</div>'
+      + '</div>'
+      + '<div style="font-size:10.5px;color:var(--text-soft);margin:-6px 0 8px 84px;">'+escapeHtml(detail)+'</div>';
+  }).join('');
+}
 function openMonthly(){
   renderMonthly();
   document.getElementById('monthlyOverlay').classList.add('show');
