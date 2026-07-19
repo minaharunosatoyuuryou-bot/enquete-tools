@@ -144,6 +144,10 @@
   .badge.居宅{background:var(--k-kyotaku);}
   .badge.老健{background:var(--k-roken);}
   .badge.病院{background:var(--k-byoin);}
+  .badge.特養{background:#7A5FBF;}
+  .badge.有料{background:#2E8C8C;}
+  .badge.ショート{background:#C97A3E;}
+  .group-badge{display:inline-block;background:var(--navy-deep);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:6px;}
   .card-name{font-size:14.5px;font-weight:700;margin:6px 0 3px;line-height:1.4;}
   .card-addr{font-size:12px;color:var(--text-soft);line-height:1.5;}
   .card-meta{display:flex;justify-content:space-between;margin-top:9px;font-size:11.5px;}
@@ -523,6 +527,11 @@
     <div class="sheet-handle"></div>
     <h2 style="font-size:16px;" id="afTitle">施設を追加</h2>
     <div class="form-row" style="margin-top:14px;">
+      <label>法人・グループ（例：悠久福祉会。入力すると空床管理の対象になります／空欄なら紹介施設として住所などのみ管理）</label>
+      <input type="text" id="afGroup" placeholder="例：悠久福祉会（空欄でも可）" list="groupDatalist">
+      <datalist id="groupDatalist"><option value="悠久福祉会"></option></datalist>
+    </div>
+    <div class="form-row">
       <label>施設名 *</label>
       <input type="text" id="afName" placeholder="例：〇〇居宅介護支援事業所">
     </div>
@@ -533,6 +542,10 @@
     <div class="form-row">
       <label>種別</label>
       <select id="afKind">
+        <option value="">未設定</option>
+        <option value="特養">特養</option>
+        <option value="有料">有料</option>
+        <option value="ショート">ショート</option>
         <option value="居宅">居宅</option>
         <option value="病院">病院</option>
         <option value="老健">老健</option>
@@ -1279,9 +1292,10 @@ function openFacilityEdit(id){
 
   const f = id ? facilities.find(x=>x.id===id) : null;
   document.getElementById('afTitle').textContent = id ? '施設情報を編集' : '施設を追加';
+  document.getElementById('afGroup').value = f ? (f.group||'') : '';
   document.getElementById('afName').value = f ? f.name : '';
   document.getElementById('afCity').value = f ? f.city : '';
-  document.getElementById('afKind').value = f ? f.kind : '居宅';
+  document.getElementById('afKind').value = f ? (f.kind||'') : '';
   document.getElementById('afAddr').value = f ? f.addr : '';
   document.getElementById('afTel').value = f ? (f.tel||'') : '';
   document.getElementById('afFax').value = f ? (f.fax||'') : '';
