@@ -421,6 +421,7 @@
 
     <div class="filters" id="actionBar">
       <button id="myResultBtn" class="nearby-btn" onclick="openMyResult()">📈 今月の実績</button>
+      <button id="meetingSummaryBtn" class="dl-btn dl-btn-outline admin-only-inline" onclick="openMeetingSummary()">📋 会議用一覧</button>
       <button id="addReferralFacilityBtn" class="dl-btn dl-btn-success admin-only-inline" onclick="openFacilityEdit(null, '')">＋ 紹介施設を追加</button>
       <button id="unvisitedBtn" class="nearby-btn" onclick="openUnvisited()">⏰ 未訪問アラート</button>
       <button id="vacancyListBtn" class="nearby-btn" onclick="openVacancyList()">🛏 空床一覧</button>
@@ -650,6 +651,16 @@
   </div>
 </div>
 
+<!-- 会議用一覧モーダル（管理者のみ） -->
+<div class="overlay" id="meetingSummaryOverlay">
+  <div class="sheet" style="max-width:520px;">
+    <button class="close-btn" onclick="closeMeetingSummary()">×</button>
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;" id="meetingSummaryTitle">会議用一覧</h2>
+    <div id="meetingSummaryBody" style="margin-top:14px;"></div>
+  </div>
+</div>
+
 <!-- 施設 新規追加/編集モーダル（管理者のみ） -->
 <div class="overlay" id="addFacilityOverlay">
   <div class="sheet">
@@ -801,6 +812,56 @@
     <div class="sheet-handle"></div>
     <h2 style="font-size:16px;">ログイン履歴</h2>
     <div id="loginHistoryList" style="margin-top:14px;font-size:12.5px;"></div>
+  </div>
+</div>
+
+<!-- 訪問記録 編集モーダル -->
+<div class="overlay" id="visitEditOverlay">
+  <div class="sheet">
+    <button class="close-btn" onclick="closeVisitEdit()">×</button>
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;">訪問記録を編集</h2>
+    <div class="form-row" style="margin-top:14px;">
+      <label>今回の営業内容</label>
+      <div style="display:flex;gap:14px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" id="vePurposeCenter">高齢者紹介センター</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13.5px;"><input type="checkbox" id="vePurposeYukyu">悠久福祉会</label>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>訪問日</label>
+      <input type="date" id="veDate">
+    </div>
+    <div class="form-row">
+      <label>担当者（訪問者）</label>
+      <select id="veRep"></select>
+    </div>
+    <div class="form-row">
+      <label>営業内容（複数選択可）</label>
+      <div class="v-activity-list">
+        <label class="v-activity-row"><input type="checkbox" class="ve-activity" value="パンフレットのお渡し"><span>パンフレットのお渡し</span></label>
+        <label class="v-activity-row"><input type="checkbox" class="ve-activity" value="空床のご案内"><span>空床のご案内</span></label>
+        <label class="v-activity-row"><input type="checkbox" class="ve-activity" value="新規紹介のお願い"><span>新規紹介のお願い</span></label>
+        <label class="v-activity-row"><input type="checkbox" class="ve-activity" value="利用者相談あり"><span>利用者相談あり</span></label>
+        <label class="v-activity-row"><input type="checkbox" class="ve-activity" value="見学のご案内"><span>見学のご案内</span></label>
+        <label class="v-activity-row"><input type="checkbox" class="ve-activity" value="入居の相談あり"><span>入居の相談あり</span></label>
+        <label class="v-activity-row"><input type="checkbox" class="ve-activity" value="その他"><span>その他</span></label>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>面談者（相手先の担当者名・任意）</label>
+      <input type="text" id="veContactPerson" placeholder="例：田中様">
+    </div>
+    <div class="form-row">
+      <label>メモ</label>
+      <textarea id="veMemo"></textarea>
+    </div>
+    <div class="form-row">
+      <label>次回訪問予定日（任意）</label>
+      <input type="date" id="veNext">
+    </div>
+    <button class="save-btn" id="veSaveBtn" onclick="submitVisitEdit()">この内容で更新する</button>
+    <div class="login-err" id="veErr" style="height:auto;margin-top:8px;"></div>
   </div>
 </div>
 
@@ -1497,7 +1558,8 @@ function renderHistory(facilityId){
   el.innerHTML = vs.map(v=>{
     const acts = String(v.activities||'').split(',').filter(a=>a);
     return '<div class="hist-item">'
-    + '<button class="del-btn" onclick="removeVisit(\''+v.id+'\')">削除</button>'
+    + '<button class="del-btn" style="color:var(--navy);" onclick="openVisitEdit(\''+v.id+'\')">編集</button>'
+    + (isAdmin() ? '<button class="del-btn" onclick="removeVisit(\''+v.id+'\')">削除</button>' : '')
     + '<span class="hist-date">'+v.visitDate+'</span><span class="hist-rep">'+v.rep+'</span>'
     + ' <span class="attr-tag on" style="font-size:10px;">'+ (purposeLabel[v.purpose] || '紹介センター') +'</span>'
     + (v.contactPerson ? '<div style="font-size:11.5px;color:var(--text-soft);margin-top:2px;">面談：'+escapeHtml(v.contactPerson)+'</div>' : '')
@@ -1583,8 +1645,76 @@ async function removeVisit(id){
       renderHistory(currentFacilityId);
       renderAll();
       showToast('削除しました');
+    } else {
+      showToast('削除に失敗しました: '+(data.error||''));
     }
   }catch(err){ console.error(err); }
+}
+
+/* ---------- 訪問記録の編集 ---------- */
+let editingVisitId = null;
+function openVisitEdit(id){
+  const v = visits.find(x=>x.id===id);
+  if(!v) return;
+  editingVisitId = id;
+  document.getElementById('veDate').value = v.visitDate || '';
+  const repSel = document.getElementById('veRep');
+  repSel.innerHTML = '';
+  repList.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; repSel.appendChild(o); });
+  const other=document.createElement('option'); other.value='その他'; other.textContent='その他'; repSel.appendChild(other);
+  repSel.value = repList.includes(v.rep) ? v.rep : 'その他';
+  document.getElementById('veMemo').value = v.memo || '';
+  document.getElementById('veNext').value = v.nextVisit || '';
+  document.getElementById('veContactPerson').value = v.contactPerson || '';
+  document.getElementById('vePurposeCenter').checked = (v.purpose||'center')==='center' || v.purpose==='both';
+  document.getElementById('vePurposeYukyu').checked = v.purpose==='yukyu' || v.purpose==='both';
+  const acts = String(v.activities||'').split(',').filter(a=>a);
+  document.querySelectorAll('.ve-activity').forEach(cb=>{ cb.checked = acts.includes(cb.value); });
+  document.getElementById('veErr').textContent = '';
+  document.getElementById('visitEditOverlay').classList.add('show');
+}
+function closeVisitEdit(){
+  document.getElementById('visitEditOverlay').classList.remove('show');
+  editingVisitId = null;
+}
+async function submitVisitEdit(){
+  if(!editingVisitId) return;
+  const date = document.getElementById('veDate').value;
+  const errEl = document.getElementById('veErr');
+  errEl.textContent = '';
+  if(!date){ errEl.textContent = '訪問日を入力してください'; return; }
+  const isCenter = document.getElementById('vePurposeCenter').checked;
+  const isYukyu = document.getElementById('vePurposeYukyu').checked;
+  if(!isCenter && !isYukyu){ errEl.textContent = '営業内容（高齢者紹介センター／悠久福祉会）を1つ以上選んでください'; return; }
+  const purpose = (isCenter && isYukyu) ? 'both' : (isCenter ? 'center' : 'yukyu');
+  const rep = document.getElementById('veRep').value;
+  const memo = document.getElementById('veMemo').value;
+  const nextVisit = document.getElementById('veNext').value;
+  const contactPerson = document.getElementById('veContactPerson').value.trim();
+  const activities = Array.from(document.querySelectorAll('.ve-activity:checked')).map(cb=>cb.value).join(',');
+  const btn = document.getElementById('veSaveBtn');
+  btn.disabled = true; btn.textContent = '更新中...';
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({
+      action:'updateVisit', ...authPayload(), id: editingVisitId,
+      visitDate: date, rep, memo, nextVisit, purpose, activities, contactPerson
+    })});
+    const data = await res.json();
+    if(data.ok){
+      const idx = visits.findIndex(v=>v.id===editingVisitId);
+      if(idx>-1) visits[idx] = { ...visits[idx], visitDate:date, rep, memo, nextVisit, purpose, activities, contactPerson };
+      renderHistory(currentFacilityId);
+      renderAll();
+      closeVisitEdit();
+      showToast('訪問記録を更新しました');
+    } else {
+      errEl.textContent = data.error || '更新に失敗しました';
+    }
+  }catch(err){
+    errEl.textContent = '通信エラーが発生しました';
+    console.error(err);
+  }
+  btn.disabled = false; btn.textContent = 'この内容で更新する';
 }
 
 function showToast(msg){
@@ -1980,18 +2110,30 @@ function renderMyResult(){
   const remaining = Math.max(MONTHLY_VISIT_GOAL - total, 0);
   const rate = Math.min(Math.round(total / MONTHLY_VISIT_GOAL * 100), 100);
 
-  // 施設ごとの訪問回数（今月・このユーザー分）
+  // 施設ごとの訪問回数・最終訪問日（今月・このユーザー分）
   const byFacility = {};
   myVisits.forEach(v=>{
-    if(!byFacility[v.facilityName]) byFacility[v.facilityName] = 0;
-    byFacility[v.facilityName]++;
+    if(!byFacility[v.facilityName]) byFacility[v.facilityName] = {count:0, last:''};
+    byFacility[v.facilityName].count++;
+    if(!byFacility[v.facilityName].last || v.visitDate > byFacility[v.facilityName].last) byFacility[v.facilityName].last = v.visitDate;
   });
-  const facilityRows = Object.entries(byFacility).sort((a,b)=>b[1]-a[1]);
+  const facilityRows = Object.entries(byFacility).sort((a,b)=>b[1].count-a[1].count);
 
-  // 未訪問（今月・このユーザーがまだ行っていない施設数）
+  // 施設種別ごとの訪問件数（今月・このユーザー分）
+  const byKind = {};
+  myVisits.forEach(v=>{
+    const f = facilities.find(x=>x.id===v.facilityId);
+    const kind = (f && f.kind) ? f.kind : (f && f.group ? '施設' : 'その他');
+    byKind[kind] = (byKind[kind]||0) + 1;
+  });
+  const kindRows = Object.entries(byKind).sort((a,b)=>b[1]-a[1]);
+
+  // 未訪問（今月・このユーザーがまだ行っていない施設数、30日/60日以上未訪問の件数）
   const visitedIds = new Set(myVisits.map(v=>v.facilityId));
   const allTargets = visitTargetFacilities();
   const unvisitedCount = allTargets.filter(f=>!visitedIds.has(f.id)).length;
+  const over30 = allTargets.filter(f=>{ const vs=visitsFor(f.id); return vs.length===0 || daysBetween(vs[0].visitDate)>=30; }).length;
+  const over60 = allTargets.filter(f=>{ const vs=visitsFor(f.id); return vs.length===0 || daysBetween(vs[0].visitDate)>=60; }).length;
 
   let html = '';
 
@@ -2010,19 +2152,29 @@ function renderMyResult(){
   html += '<div class="vlist-row"><span>両方の営業</span><span class="vlist-count">'+bothCount+'件</span></div>';
 
   html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">施設種別ごとの件数</div>';
+  if(kindRows.length===0){
+    html += '<div class="empty" style="padding:10px 0;">まだデータがありません</div>';
+  } else {
+    html += kindRows.map(([kind,cnt])=>'<div class="vlist-row"><span>'+escapeHtml(kind)+'</span><span class="vlist-count">'+cnt+'件</span></div>').join('');
+  }
+
+  html += '<div class="divider"></div>';
   html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">今月の訪問先一覧（'+facilityRows.length+'施設）</div>';
   if(facilityRows.length===0){
     html += '<div class="empty" style="padding:16px 0;">今月はまだ訪問記録がありません</div>';
   } else {
-    html += facilityRows.map(([name,cnt])=>
-      '<div class="vlist-row"><span>○ '+escapeHtml(name)+'</span><span class="vlist-count">'+cnt+'回</span></div>'
+    html += facilityRows.map(([name,d])=>
+      '<div class="vlist-row"><span>○ '+escapeHtml(name)+'</span><span class="vlist-count">'+d.count+'回<span style="font-weight:400;color:var(--text-soft);font-size:10.5px;margin-left:6px;">最終'+d.last+'</span></span></div>'
     ).join('');
   }
 
   html += '<div class="divider"></div>';
   html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">未訪問状況</div>';
   html += '<div class="vlist-row"><span>今月まだ行っていない施設</span><span class="vlist-count full">'+unvisitedCount+'施設</span></div>';
-  html += '<button class="nearby-btn" style="width:100%;margin-top:8px;" onclick="closeMyResult();openUnvisited();">⏰ 30日以上未訪問の施設を見る</button>';
+  html += '<div class="vlist-row"><span>30日以上未訪問</span><span class="vlist-count full">'+over30+'施設</span></div>';
+  html += '<div class="vlist-row"><span>60日以上未訪問</span><span class="vlist-count full">'+over60+'施設</span></div>';
+  html += '<button class="nearby-btn" style="width:100%;margin-top:8px;" onclick="closeMyResult();openUnvisited();">⏰ 未訪問アラートを見る</button>';
 
   if(isAdmin()){
     html += '<div class="divider"></div>';
@@ -2042,6 +2194,58 @@ function renderMyResult(){
   }
 
   document.getElementById('myResultBody').innerHTML = html;
+}
+
+/* ================= 会議用一覧（管理者のみ） ================= */
+function openMeetingSummary(){
+  const monthPre = thisMonthPrefix();
+  const [y,mo] = monthPre.split('-');
+  document.getElementById('meetingSummaryTitle').textContent = y+'年'+parseInt(mo)+'月　会議用一覧';
+  renderMeetingSummary();
+  document.getElementById('meetingSummaryOverlay').classList.add('show');
+}
+function closeMeetingSummary(){
+  document.getElementById('meetingSummaryOverlay').classList.remove('show');
+}
+function renderMeetingSummary(){
+  const monthPre = thisMonthPrefix();
+  const allTargets = visitTargetFacilities();
+
+  // 担当者別 件数
+  const repCounts = repList.map(rep=>{
+    const cnt = visits.filter(v=>v.rep===rep && v.visitDate && v.visitDate.startsWith(monthPre)).length;
+    return {rep, cnt};
+  }).sort((a,b)=>b.cnt-a.cnt);
+
+  // 未訪問（今月まだ誰も行っていない施設）
+  const visitedThisMonthIds = new Set(visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre)).map(v=>v.facilityId));
+  const unvisitedCount = allTargets.filter(f=>!visitedThisMonthIds.has(f.id)).length;
+
+  // 要フォロー（次回予定日超過）
+  const overdueCount = allTargets.filter(f=>statusFor(f.id).status==='overdue').length;
+
+  // 相談案件（紹介管理・今月の相談件数）
+  const consultCount = referrals.filter(r=>r.consultDate && r.consultDate.startsWith(monthPre)).length;
+
+  // 空床あり施設数（悠久福祉会）
+  const vacantCount = facilities.filter(f=>f.group && vacancyOf(f)!==null && vacancyOf(f)>0).length;
+
+  const el = document.getElementById('meetingSummaryBody');
+  let html = '';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">担当者別 訪問件数</div>';
+  html += repCounts.map(r=>'<div class="vlist-row"><span>'+escapeHtml(r.rep)+'</span><span class="vlist-count">'+r.cnt+'件</span></div>').join('');
+
+  html += '<div class="divider"></div>';
+  html += '<div class="vlist-row"><span>未訪問（今月まだ誰も行っていない施設）</span><span class="vlist-count full">'+unvisitedCount+'件</span></div>';
+  html += '<div class="vlist-row"><span>要フォロー（次回予定超過）</span><span class="vlist-count full">'+overdueCount+'件</span></div>';
+  html += '<div class="vlist-row"><span>相談案件（今月・紹介管理）</span><span class="vlist-count">'+consultCount+'件</span></div>';
+  html += '<div class="vlist-row"><span>空床あり施設（悠久福祉会）</span><span class="vlist-count">'+vacantCount+'施設</span></div>';
+
+  html += '<div class="divider"></div>';
+  html += '<button class="nearby-btn" style="width:100%;margin-bottom:8px;" onclick="closeMeetingSummary();openUnvisited();">⏰ 未訪問アラートの詳細を見る</button>';
+  html += '<button class="nearby-btn" style="width:100%;margin-bottom:8px;" onclick="closeMeetingSummary();openVacancyList();">🛏 空床一覧の詳細を見る</button>';
+  html += '<button class="nearby-btn" style="width:100%;" onclick="closeMeetingSummary();openMonthly();">📊 月別実績の詳細を見る</button>';
+  el.innerHTML = html;
 }
 
 function openUnvisited(){
