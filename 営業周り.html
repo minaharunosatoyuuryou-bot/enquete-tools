@@ -32,11 +32,16 @@
   button{font-family:inherit;}
 
   /* ---------- Login ---------- */
-  #loginScreen, #modeSelectScreen{
+  #loginScreen, #modeSelectScreen, #whoAmIScreen{
     min-height:100vh;display:flex;align-items:center;justify-content:center;
     background:linear-gradient(160deg,var(--navy-deep) 0%, var(--navy) 55%, #2C4F6E 100%);
     padding:24px;
   }
+  #whoAmIList button{
+    background:var(--bg);color:var(--navy-deep);border:1.5px solid var(--line);font-weight:700;
+    padding:13px;border-radius:10px;font-size:15px;cursor:pointer;transition:.15s;
+  }
+  #whoAmIList button:hover{background:var(--amber);color:#fff;border-color:var(--amber);}
   .login-card{
     background:var(--paper);border-radius:20px;padding:36px 28px;width:100%;max-width:360px;
     box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center;
@@ -314,6 +319,16 @@
       <button onclick="tryLogin()">開く</button>
     </div>
     <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- 担当者識別画面 -->
+<div id="whoAmIScreen" style="display:none;">
+  <div class="login-card" style="max-width:400px;">
+    <div class="mark">診</div>
+    <h1>あなたは誰ですか？</h1>
+    <p>訪問記録などの担当者欄に自動で使われます</p>
+    <div id="whoAmIList" style="display:flex;flex-direction:column;gap:8px;"></div>
   </div>
 </div>
 
@@ -774,6 +789,21 @@
     </div>
     <div class="form-row">
       <label>紹介施設 *</label>
+      <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;">
+        <select id="refFilterGender" onchange="populateReferralFacilitySelect()" style="flex:1;min-width:90px;padding:8px;border-radius:8px;border:1.3px solid var(--line);font-size:12px;">
+          <option value="">性別：問わない</option>
+          <option value="male">男性のみ</option>
+          <option value="female">女性のみ</option>
+        </select>
+        <select id="refFilterCare" onchange="populateReferralFacilitySelect()" style="flex:1;min-width:90px;padding:8px;border-radius:8px;border:1.3px solid var(--line);font-size:12px;">
+          <option value="">要介護度：問わない</option>
+          <option value="1">要介護1</option><option value="2">要介護2</option><option value="3">要介護3</option>
+          <option value="4">要介護4</option><option value="5">要介護5</option>
+        </select>
+        <select id="refFilterTag" onchange="populateReferralFacilitySelect()" style="flex:1;min-width:90px;padding:8px;border-radius:8px;border:1.3px solid var(--line);font-size:12px;">
+          <option value="">対応項目：問わない</option>
+        </select>
+      </div>
       <select id="refFacility"></select>
     </div>
     <div class="form-row">
@@ -983,10 +1013,30 @@ document.getElementById('pwInput').addEventListener('keydown', e=>{ if(e.key==='
 let appMode = 'center'; // 'center'（大分高齢者紹介センター） | 'yukyu'（悠久福祉会）
 let dataLoaded = false;
 
-function finishLogin(){
+async function finishLogin(){
   document.getElementById('loginScreen').style.display='none';
   document.body.classList.toggle('is-admin', isAdmin());
-  document.getElementById('loginWhoami').textContent = currentUserName ? '（' + currentUserName + '）' : '';
+  if(GAS_URL.indexOf('PASTE_YOUR') === 0){
+    document.getElementById('listView').innerHTML =
+      '<div class="empty">⚠ GAS_URL が未設定です。<br>営業周り.html 内の GAS_URL を、デプロイしたウェブアプリURLに書き換えてください。</div>';
+    return;
+  }
+  await loadData();
+  dataLoaded = true;
+  renderWhoAmIList();
+  document.getElementById('whoAmIScreen').style.display='flex';
+}
+
+function renderWhoAmIList(){
+  const el = document.getElementById('whoAmIList');
+  el.innerHTML = repList.map(r=>
+    '<button onclick="selectWho(\''+r.replace(/'/g,"\\'")+'\')">'+escapeHtml(r)+'</button>'
+  ).join('');
+}
+function selectWho(name){
+  currentUserName = name; // 表示名・担当者欄の初期値として使用（ログイン権限＝管理者/営業担当はログイン方法の結果を優先）
+  document.getElementById('whoAmIScreen').style.display='none';
+  document.getElementById('loginWhoami').textContent = '（' + currentUserName + '）';
   document.getElementById('modeSelectScreen').style.display='flex';
 }
 
@@ -996,9 +1046,10 @@ function selectMode(mode){
   document.getElementById('app').style.display='block';
   document.getElementById('modeLabel').textContent = mode==='center' ? '大分高齢者紹介センター' : '悠久福祉会';
   document.getElementById('modeSubLabel').textContent = mode==='center' ? '施設訪問・紹介管理・案件管理' : '施設訪問（自法人）・空床管理';
+  populateFilterOptions();
+  populateReferralFacilitySelect();
   applyModeVisibility();
-  if(!dataLoaded){ dataLoaded = true; boot(); }
-  else { switchMainTab('visit'); }
+  switchMainTab('visit');
 }
 
 function switchModePrompt(){
@@ -1025,19 +1076,6 @@ function applyModeVisibility(){
  *  ・悠久福祉会 モード → 悠久福祉会グループの施設（法人グループ設定あり） */
 function visitTargetFacilities(){
   return appMode==='yukyu' ? facilities.filter(f=>f.group) : facilities.filter(f=>!f.group);
-}
-
-async function boot(){
-  if(GAS_URL.indexOf('PASTE_YOUR') === 0){
-    document.getElementById('listView').innerHTML =
-      '<div class="empty">⚠ GAS_URL が未設定です。<br>営業周り.html 内の GAS_URL を、デプロイしたウェブアプリURLに書き換えてください。</div>';
-    return;
-  }
-  await loadData();
-  populateFilterOptions();
-  populateReferralFacilitySelect();
-  renderAll();
-  switchMainTab('visit');
 }
 
 async function loadData(){
@@ -1109,9 +1147,39 @@ function populateReferralFacilitySelect(){
   const sel = document.getElementById('refFacility');
   if(!sel) return;
   const current = sel.value;
+  const tagSel = document.getElementById('refFilterTag');
+  if(tagSel && tagSel.options.length <= 1){
+    FACILITY_TAGS.forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; tagSel.appendChild(o); });
+  }
+  const genderF = document.getElementById('refFilterGender') ? document.getElementById('refFilterGender').value : '';
+  const careF = document.getElementById('refFilterCare') ? document.getElementById('refFilterCare').value : '';
+  const tagF = document.getElementById('refFilterTag') ? document.getElementById('refFilterTag').value : '';
   sel.innerHTML = '';
-  facilities.slice().sort((a,b)=>a.name.localeCompare(b.name,'ja')).forEach(f=>{
-    const o = document.createElement('option'); o.value = f.id; o.textContent = f.name + '（'+f.city+'）';
+  const sorted = facilities.filter(f=>{
+    if(genderF==='male' && f.acceptMale!=='○') return false;
+    if(genderF==='female' && f.acceptFemale!=='○') return false;
+    if(careF && !String(f.careLevels||'').split(',').includes(careF)) return false;
+    if(tagF && !String(f.tags||'').split(',').includes(tagF)) return false;
+    return true;
+  }).sort((a,b)=>{
+    if(a.group && !b.group) return -1;
+    if(!a.group && b.group) return 1;
+    return a.name.localeCompare(b.name,'ja');
+  });
+  if(sorted.length===0){
+    const o = document.createElement('option'); o.value=''; o.textContent='条件に合う施設がありません';
+    sel.appendChild(o);
+    return;
+  }
+  sorted.forEach(f=>{
+    const o = document.createElement('option'); o.value = f.id;
+    if(f.group){
+      const vac = vacancyOf(f);
+      const vacLabel = vac===null ? '空床未登録' : (vac<=0 ? '満床' : '空床'+vac);
+      o.textContent = '★ '+f.name+'　['+vacLabel+']';
+    } else {
+      o.textContent = f.name + '（'+f.city+'）';
+    }
     sel.appendChild(o);
   });
   if(current) sel.value = current;
