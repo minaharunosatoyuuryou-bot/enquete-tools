@@ -490,18 +490,19 @@
     <div class="dl-sync-row" id="dl-sync-status">読み込み中...</div>
     <div class="dl-summary">
       <div class="dl-card"><div class="dl-num" id="dl-cnt-all">—</div><div class="dl-label">総件数</div></div>
-      <div class="dl-card dl-warn"><div class="dl-num" id="dl-cnt-active">—</div><div class="dl-label">商談中</div></div>
+      <div class="dl-card dl-warn"><div class="dl-num" id="dl-cnt-active">—</div><div class="dl-label">対応中</div></div>
       <div class="dl-card dl-alert"><div class="dl-num" id="dl-cnt-alert">—</div><div class="dl-label">⚠未対応7日超</div></div>
       <div class="dl-card dl-success"><div class="dl-num" id="dl-cnt-success">—</div><div class="dl-label">成約</div></div>
-      <div class="dl-card"><div class="dl-num" id="dl-cnt-lost">—</div><div class="dl-label">失注</div></div>
+      <div class="dl-card"><div class="dl-num" id="dl-cnt-lost">—</div><div class="dl-label">キャンセル</div></div>
     </div>
     <div class="dl-month-tabs-wrap"><div class="dl-month-tabs" id="dl-month-tabs"></div></div>
     <div class="dl-toolbar">
       <input type="text" id="dl-search" placeholder="🔍 氏名・施設・担当者で検索">
       <select id="dl-filter-status">
         <option value="">ステータス 全て</option>
-        <option value="商談中">商談中</option><option value="成約">成約</option>
-        <option value="失注">失注</option><option value="保留">保留</option>
+        <option value="相談中">相談中</option><option value="見学予定">見学予定</option>
+        <option value="申込み">申込み</option><option value="調整中">調整中</option>
+        <option value="入居">入居</option><option value="成約">成約</option><option value="キャンセル">キャンセル</option>
       </select>
       <select id="dl-filter-care">
         <option value="">介護度 全て</option>
@@ -955,7 +956,9 @@
       <label>メモ</label>
       <textarea id="refMemo" placeholder="紹介の経緯、状況など"></textarea>
     </div>
+    <div id="refDealLinkBox" style="margin-bottom:12px;"></div>
     <button class="save-btn" id="refSaveBtn" onclick="submitReferral()">この内容で保存する</button>
+    <button class="save-btn" id="refToDealBtn" style="background:var(--navy-deep);display:none;" onclick="convertReferralToDeal()">→ 案件にする</button>
     <button class="save-btn" id="refDeleteBtn" style="background:var(--danger);display:none;" onclick="submitDeleteReferral()">この紹介記録を削除する</button>
     <div class="login-err" id="refErr" style="height:auto;margin-top:8px;"></div>
   </div>
@@ -981,7 +984,7 @@
     <div class="dl-form-row"><label>希望施設</label><input type="text" id="dl-f-facility" placeholder="例：みなはるの里、悠久の里"></div>
     <div class="dl-form-2col">
       <div class="dl-form-row"><label>ステータス</label>
-        <select id="dl-f-status" onchange="toggleDealReason()"><option>商談中</option><option>成約</option><option>失注</option><option>保留</option></select>
+        <select id="dl-f-status" onchange="toggleDealReason()"><option>相談中</option><option>見学予定</option><option>申込み</option><option>調整中</option><option>入居</option><option>成約</option><option>キャンセル</option></select>
       </div>
       <div class="dl-form-row"><label>担当者名</label><input type="text" id="dl-f-staff" list="repDatalist" placeholder="例：牧 良子"></div>
       <datalist id="repDatalist"></datalist>
@@ -994,6 +997,7 @@
         <option value="本人希望">本人希望</option>
         <option value="家族希望">家族希望</option>
         <option value="医療対応不可">医療対応不可</option>
+        <option value="費用">費用</option>
         <option value="その他">その他</option>
       </select>
     </div>
@@ -2015,6 +2019,18 @@ function openReferralEdit(id){
   document.getElementById('refMemo').value = r ? (r.memo||'') : '';
   document.getElementById('refErr').textContent = '';
   document.getElementById('refDeleteBtn').style.display = id ? 'block' : 'none';
+  const linkBox = document.getElementById('refDealLinkBox');
+  const toDealBtn = document.getElementById('refToDealBtn');
+  if(!id){
+    linkBox.innerHTML = '';
+    toDealBtn.style.display = 'none';
+  } else if(r && r.dealId){
+    linkBox.innerHTML = '<div class="vacancy-box"><div class="vacancy-row"><span>案件管理</span><span style="color:var(--k-kyotaku);font-weight:700;">連携済み✓</span></div></div>';
+    toDealBtn.style.display = 'none';
+  } else {
+    linkBox.innerHTML = '<div class="vacancy-box"><div class="vacancy-row"><span>案件管理</span><span style="color:var(--text-soft);">未連携</span></div></div>';
+    toDealBtn.style.display = 'block';
+  }
   document.getElementById('referralOverlay').classList.add('show');
 }
 function closeReferralEdit(){
@@ -2081,6 +2097,44 @@ async function submitReferral(){
   }
   btn.disabled = false; btn.textContent = 'この内容で保存する';
 }
+/** 紹介記録を案件管理へ変換する（二重入力を避けるため、必要な項目を自動で引き継ぐ） */
+async function convertReferralToDeal(){
+  const r = referrals.find(x=>x.id===currentReferralId);
+  if(!r) return;
+  const userName = document.getElementById('refUserName').value.trim();
+  if(!userName){ document.getElementById('refErr').textContent = '案件にするには利用者名の入力が必要です'; return; }
+  if(r.dealId){ showToast('すでに案件化されています'); return; }
+  if(!confirm('この紹介記録を案件管理に登録しますか？（相談日・利用者名・施設名・担当者を引き継ぎます）')) return;
+
+  const dealId = 'D' + Date.now();
+  const dealData = {
+    id: dealId,
+    consult: r.consultDate,
+    name: userName,
+    care: '', gender: '',
+    facility: r.facilityName || '',
+    closeDate: '',
+    status: '相談中',
+    staff: r.rep || '',
+    memo: buildDealMemo(r.id, '', '紹介管理より自動作成')
+  };
+  const btn = document.getElementById('refToDealBtn');
+  btn.disabled = true; btn.textContent = '登録中...';
+  try{
+    await dealGasCall({action:'save', ...dealData});
+    dealRecords.unshift(dealData);
+    dealLoaded = true;
+    await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'updateReferral', ...authPayload(), id:r.id, dealId:dealId})});
+    r.dealId = dealId;
+    showToast('案件管理に登録しました');
+    openReferralEdit(currentReferralId);
+  }catch(err){
+    showToast('登録に失敗しました');
+    console.error(err);
+  }
+  btn.disabled = false; btn.textContent = '→ 案件にする';
+}
+
 async function submitDeleteReferral(){
   if(!currentReferralId) return;
   if(!confirm('この紹介記録を削除しますか？')) return;
@@ -2233,12 +2287,14 @@ function renderMyResult(){
 }
 
 /* ================= 会議用一覧（管理者のみ） ================= */
-function openMeetingSummary(){
+async function openMeetingSummary(){
   const monthPre = thisMonthPrefix();
   const [y,mo] = monthPre.split('-');
   document.getElementById('meetingSummaryTitle').textContent = y+'年'+parseInt(mo)+'月　会議用一覧';
-  renderMeetingSummary();
   document.getElementById('meetingSummaryOverlay').classList.add('show');
+  document.getElementById('meetingSummaryBody').innerHTML = '<div class="empty">読み込み中...</div>';
+  if(!dealLoaded){ dealLoaded = true; await dealLoadAll(); }
+  renderMeetingSummary();
 }
 function closeMeetingSummary(){
   document.getElementById('meetingSummaryOverlay').classList.remove('show');
@@ -2328,8 +2384,28 @@ function renderMeetingSummary(){
   }
 
   html += '<div class="divider"></div>';
-  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">紹介案件（現在の状況）</div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">紹介案件（現在の状況・紹介管理）</div>';
   html += refCounts.map(r=>'<div class="vlist-row"><span>'+r.status+'</span><span class="vlist-count">'+r.cnt+'件</span></div>').join('');
+
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">案件管理（成約率）</div>';
+  const dealTotal = dealRecords.length;
+  const dealSuccess = dealRecords.filter(r=>r.status==='成約').length;
+  const dealCancelled = dealRecords.filter(r=>r.status==='キャンセル').length;
+  const dealRate = dealTotal ? Math.round(dealSuccess/dealTotal*100) : 0;
+  html += '<div class="vlist-row"><span>紹介件数（紹介管理・全体）</span><span class="vlist-count">'+referrals.length+'件</span></div>';
+  html += '<div class="vlist-row"><span>案件件数</span><span class="vlist-count">'+dealTotal+'件</span></div>';
+  html += '<div class="vlist-row"><span>成約件数</span><span class="vlist-count">'+dealSuccess+'件</span></div>';
+  html += '<div class="vlist-row"><span>成約率</span><span class="vlist-count">'+dealRate+'%</span></div>';
+  html += '<div class="vlist-row"><span>キャンセル件数</span><span class="vlist-count full">'+dealCancelled+'件</span></div>';
+
+  const byFacilityRef = {};
+  referrals.forEach(r=>{ if(r.facilityName) byFacilityRef[r.facilityName] = (byFacilityRef[r.facilityName]||0)+1; });
+  const refFacilityRows = Object.entries(byFacilityRef).sort((a,b)=>b[1]-a[1]);
+  if(refFacilityRows.length){
+    html += '<div style="font-size:11.5px;color:var(--text-soft);margin-top:8px;margin-bottom:4px;">施設ごとの紹介件数</div>';
+    html += refFacilityRows.map(([name,cnt])=>'<div class="vlist-row"><span>○ '+escapeHtml(name)+'</span><span class="vlist-count">'+cnt+'件</span></div>').join('');
+  }
 
   html += '<div class="divider"></div>';
   html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">要フォロー（次回予定超過・'+overdueFacilities.length+'件・タップで詳細）</div>';
@@ -2765,7 +2841,7 @@ function dealBuildMonthTabs(){
 function dealSetMonth(m){ dealActiveMonth = m; dealBuildMonthTabs(); dealRender(); }
 
 function dealIsOverdue(rec){
-  if (rec.status === '成約' || rec.status === '失注') return false;
+  if (rec.status === '成約' || rec.status === 'キャンセル') return false;
   const ref = rec.closeDate || rec.consult;
   if (!ref) return false;
   const d = new Date(ref); d.setHours(0,0,0,0);
@@ -2773,7 +2849,10 @@ function dealIsOverdue(rec){
 }
 
 function dealStatusClass(s){
-  return {商談中:'dl-s-active',成約:'dl-s-success',失注:'dl-s-lost',保留:'dl-s-hold'}[s] || 'dl-s-active';
+  return {
+    相談中:'dl-s-active', 見学予定:'dl-s-hold', 申込み:'dl-s-hold', 調整中:'dl-s-active',
+    入居:'dl-s-success', 成約:'dl-s-success', キャンセル:'dl-s-lost'
+  }[s] || 'dl-s-active';
 }
 
 function dealFmt(d){
@@ -2798,10 +2877,10 @@ function dealRender(){
   });
 
   document.getElementById('dl-cnt-all').textContent = dealRecords.length;
-  document.getElementById('dl-cnt-active').textContent = dealRecords.filter(r=>r.status==='商談中').length;
+  document.getElementById('dl-cnt-active').textContent = dealRecords.filter(r=>r.status!=='成約' && r.status!=='キャンセル').length;
   document.getElementById('dl-cnt-alert').textContent = dealRecords.filter(dealIsOverdue).length;
   document.getElementById('dl-cnt-success').textContent = dealRecords.filter(r=>r.status==='成約').length;
-  document.getElementById('dl-cnt-lost').textContent = dealRecords.filter(r=>r.status==='失注').length;
+  document.getElementById('dl-cnt-lost').textContent = dealRecords.filter(r=>r.status==='キャンセル').length;
 
   if(dealMonthlyShown) renderDealMonthly();
 
@@ -2813,7 +2892,7 @@ function dealRender(){
     const over = dealIsOverdue(r);
     const closeDiff = r.closeDate ? Math.floor((DEAL_TODAY - new Date(r.closeDate)) / 86400000) : null;
     const closeFmt = r.closeDate
-      ? `<span class="${closeDiff > 7 && r.status==='商談中' ? 'dl-date-overdue' : ''}">${dealFmt(r.closeDate)}</span>${over ? '<span class="dl-alert-badge">未対応</span>' : ''}`
+      ? `<span class="${closeDiff > 7 && r.status!=='成約' && r.status!=='キャンセル' ? 'dl-date-overdue' : ''}">${dealFmt(r.closeDate)}</span>${over ? '<span class="dl-alert-badge">未対応</span>' : ''}`
       : '—';
     const memo = r.memo ? `<span title="${String(r.memo).replace(/"/g,'&quot;')}" style="cursor:default">📝</span>` : '—';
     return `<tr class="${over ? 'dl-alert-row' : ''}">
@@ -2824,7 +2903,7 @@ function dealRender(){
       <td>${r.gender||'—'}</td>
       <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${r.facility||'—'}</td>
       <td>${closeFmt}</td>
-      <td><span class="dl-status ${dealStatusClass(r.status)}" onclick="dealCycleStatus(this.dataset.id)" data-id="${r.id}">${r.status}</span>${r.status==='失注' && parseDealReason(r.memo).reason ? '<div style="font-size:10px;color:var(--text-soft);">'+parseDealReason(r.memo).reason+'</div>' : ''}</td>
+      <td><span class="dl-status ${dealStatusClass(r.status)}" onclick="dealCycleStatus(this.dataset.id)" data-id="${r.id}">${r.status}</span>${r.status==='キャンセル' && parseDealReason(r.memo).reason ? '<div style="font-size:10px;color:var(--text-soft);">'+parseDealReason(r.memo).reason+'</div>' : ''}</td>
       <td>${r.staff||'—'}</td>
       <td>${memo}</td>
       <td><div class="dl-action-btns">
@@ -2836,31 +2915,88 @@ function dealRender(){
 }
 
 async function dealCycleStatus(id){
-  const order = ['商談中','成約','失注','保留'];
+  const order = ['相談中','見学予定','申込み','調整中','入居','成約','キャンセル'];
   const r = dealRecords.find(x=>String(x.id)===String(id));
   if (!r) return;
   r.status = order[(order.indexOf(r.status)+1) % order.length];
   dealRender();
   dealSetSyncStatus('保存中...');
-  try { await dealGasCall({action:'save', ...r}); dealSetSyncStatus('✓ 保存しました'); }
+  try {
+    await dealGasCall({action:'save', ...r});
+    dealSetSyncStatus('✓ 保存しました');
+    await syncDealStatusToReferral(r);
+  }
   catch { dealSetSyncStatus('⚠ 保存エラー', false); }
 }
 
-/** メモ先頭の "[理由：〇〇] " タグから失注理由を取り出す（既存の営業記録バックエンドに列を増やさず、メモに埋め込んで管理） */
+/** メモ先頭の "[理由：〇〇] " タグからキャンセル理由を取り出す（既存の営業記録バックエンドに列を増やさず、メモに埋め込んで管理） */
 function parseDealReason(memo){
   const m = String(memo||'').match(/^\[理由：([^\]]+)\]\s*/);
   if(!m) return {reason:'', cleanMemo: memo||''};
   return {reason: m[1], cleanMemo: String(memo).slice(m[0].length)};
 }
+/** メモから "[紹介ID:R12345]" タグを取り出す（紹介管理との連携用リンク） */
+function parseDealReferralLink(memo){
+  const m = String(memo||'').match(/\[紹介ID:([^\]]+)\]\s*/);
+  return m ? m[1] : '';
+}
 function toggleDealReason(){
-  const isLost = document.getElementById('dl-f-status').value === '失注';
-  document.getElementById('dl-reason-row').style.display = isLost ? 'block' : 'none';
+  const isCancelled = document.getElementById('dl-f-status').value === 'キャンセル';
+  document.getElementById('dl-reason-row').style.display = isCancelled ? 'block' : 'none';
 }
 
+/** 案件管理の状態が「成約」「キャンセル」になったとき、紐づく紹介記録（紹介管理）へ自動反映する */
+async function syncDealStatusToReferral(dealRecord){
+  const refId = parseDealReferralLink(dealRecord.memo);
+  if(!refId) return;
+  const r = referrals.find(x=>x.id===refId);
+  if(!r) return;
+  const today = todayStr();
+  let changed = false;
+  let justMovedIn = false;
+  if(dealRecord.status==='成約' && r.status!=='入居決定'){
+    r.status = '入居決定';
+    if(!r.moveInDate) r.moveInDate = today;
+    changed = true;
+    justMovedIn = true;
+  } else if(dealRecord.status==='キャンセル' && r.status!=='キャンセル'){
+    r.status = 'キャンセル';
+    if(!r.cancelDate) r.cancelDate = today;
+    changed = true;
+  }
+  if(!changed) return;
+  try{
+    await fetch(GAS_URL, {method:'POST', body: JSON.stringify({
+      action:'updateReferral', ...authPayload(), id:r.id, status:r.status, moveInDate:r.moveInDate, cancelDate:r.cancelDate
+    })});
+    let linkMsg = '';
+    // 成約（入居決定）の場合、紹介先が悠久福祉会の施設なら空床数も自動で1つ減らす
+    if(justMovedIn){
+      const facility = facilities.find(f=>f.id===r.facilityId);
+      if(facility && facility.group){
+        const newOccupied = (Number(facility.occupied)||0) + 1;
+        await fetch(GAS_URL, {method:'POST', body: JSON.stringify({
+          action:'updateVacancy', ...authPayload(), id:facility.id, occupied:newOccupied, updatedBy: currentUserName||''
+        })});
+        facility.occupied = newOccupied;
+        facility.updatedAt = todayStr();
+        facility.updatedBy = currentUserName||'';
+        renderAll();
+        if(document.getElementById('facilitySection').style.display !== 'none') renderFacilityAdminTable();
+        linkMsg = '（'+facility.name+'の空床情報も自動更新）';
+      }
+    }
+    if(document.getElementById('referralSection').style.display !== 'none') renderReferralList();
+    showToast('紹介管理「'+r.userName+'」にも自動反映しました'+linkMsg);
+  }catch(err){ console.error(err); }
+}
+
+let dealEditingRefId = '';
 function dealOpenModal(id=null){
   dealEditId = id;
   const m = id ? dealRecords.find(r=>String(r.id)===String(id)) : null;
-  const parsed = parseDealReason(m?.memo);
+  const parsed = parseDealMemoTags(m?.memo);
+  dealEditingRefId = parsed.refId;
   document.getElementById('dl-modal-title').textContent = id ? '案件を編集' : '新規案件を追加';
   document.getElementById('dl-f-consult').value = m?.consult || new Date().toISOString().slice(0,10);
   document.getElementById('dl-f-close').value = m?.closeDate || '';
@@ -2868,7 +3004,7 @@ function dealOpenModal(id=null){
   document.getElementById('dl-f-care').value = m?.care || '';
   document.getElementById('dl-f-gender').value = m?.gender || '';
   document.getElementById('dl-f-facility').value = m?.facility || '';
-  document.getElementById('dl-f-status').value = m?.status || '商談中';
+  document.getElementById('dl-f-status').value = m?.status || '相談中';
   document.getElementById('dl-f-staff').value = m?.staff || '';
   document.getElementById('dl-f-reason').value = parsed.reason;
   document.getElementById('dl-f-memo').value = parsed.cleanMemo;
@@ -2876,7 +3012,7 @@ function dealOpenModal(id=null){
   document.getElementById('dl-modal').classList.add('open');
 }
 
-function dealCloseModal(){ document.getElementById('dl-modal').classList.remove('open'); dealEditId = null; }
+function dealCloseModal(){ document.getElementById('dl-modal').classList.remove('open'); dealEditId = null; dealEditingRefId = ''; }
 
 async function dealSaveRecord(){
   const name = document.getElementById('dl-f-name').value.trim();
@@ -2884,8 +3020,8 @@ async function dealSaveRecord(){
   if (!name || !consult) { alert('相談日と利用者氏名は必須です'); return; }
   const status = document.getElementById('dl-f-status').value;
   const reason = document.getElementById('dl-f-reason').value;
-  let memo = document.getElementById('dl-f-memo').value.trim();
-  if(status==='失注' && reason){ memo = '['+'理由：'+reason+'] ' + memo; }
+  const freeMemo = document.getElementById('dl-f-memo').value.trim();
+  const memo = buildDealMemo(dealEditingRefId, status==='キャンセル' ? reason : '', freeMemo);
   const data = {
     id: dealEditId || String(Date.now()),
     consult, name,
@@ -2905,6 +3041,7 @@ async function dealSaveRecord(){
     else { dealRecords.unshift(data); dealActiveMonth = data.consult.slice(0,7); }
     dealSetSyncStatus('✓ 保存しました');
     dealCloseModal(); dealBuildMonthTabs(); dealRender();
+    await syncDealStatusToReferral(data);
   }catch{
     dealSetSyncStatus('⚠ 保存エラー', false);
     alert('保存に失敗しました。再度お試しください。');
