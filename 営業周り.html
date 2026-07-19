@@ -173,6 +173,30 @@
     position:absolute;top:16px;right:18px;background:none;border:none;font-size:20px;color:var(--text-soft);cursor:pointer;
   }
 
+  .rep-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+  .rep-chip{
+    display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--line);
+    border-radius:20px;padding:5px 8px 5px 12px;font-size:12.5px;color:var(--text);
+  }
+  .rep-chip button{
+    background:var(--line);border:none;border-radius:50%;width:18px;height:18px;color:var(--text);
+    font-size:11px;cursor:pointer;line-height:1;
+  }
+  .rep-add-row{display:flex;gap:8px;}
+  .rep-add-row input{
+    flex:1;padding:10px 12px;border-radius:9px;border:1.3px solid var(--line);font-size:13.5px;
+  }
+  .rep-add-btn{
+    padding:0 16px;border-radius:9px;border:none;background:var(--navy-deep);color:#fff;font-weight:700;
+    font-size:13px;cursor:pointer;
+  }
+
+  .month-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:11px;font-size:12.5px;}
+  .month-bar-label{width:76px;flex-shrink:0;color:var(--text-soft);}
+  .month-bar-track{flex:1;background:var(--bg);border-radius:6px;height:14px;overflow:hidden;}
+  .month-bar-fill{height:100%;background:var(--navy);border-radius:6px;}
+  .month-bar-value{width:120px;flex-shrink:0;text-align:right;font-weight:700;color:var(--navy-deep);white-space:nowrap;}
+
   .geo-toast{
     position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--navy-deep);color:#fff;
     padding:9px 16px;border-radius:20px;font-size:11.5px;z-index:60;box-shadow:0 6px 16px rgba(0,0,0,.25);
@@ -303,6 +327,7 @@
         <option value="10">10km以内</option>
         <option value="30">30km以内</option>
       </select>
+      <button id="monthlyBtn" class="nearby-btn" onclick="openMonthly()">📊 月別実績を見る</button>
     </div>
 
     <div id="listView"></div>
@@ -337,7 +362,9 @@
       </select>
       <button class="dl-btn dl-btn-success" onclick="dealOpenModal()">＋ 新規追加</button>
       <button class="dl-btn dl-btn-outline" onclick="dealExportCSV()">⬇ CSV出力</button>
+      <button class="dl-btn dl-btn-outline" onclick="toggleDealMonthly()">📊 月別比較</button>
     </div>
+    <div class="dl-table-wrap" id="dl-monthly-compare" style="display:none;margin-bottom:10px;padding:10px 12px;"></div>
     <div class="dl-table-wrap">
       <table>
         <thead>
@@ -368,14 +395,7 @@
     </div>
     <div class="form-row">
       <label>担当者</label>
-      <select id="vRep">
-        <option value="牧">牧</option>
-        <option value="岡野">岡野</option>
-        <option value="岩矢">岩矢</option>
-        <option value="木﨑">木﨑</option>
-        <option value="高田">高田</option>
-        <option value="その他">その他</option>
-      </select>
+      <select id="vRep"></select>
     </div>
     <div class="form-row">
       <label>メモ</label>
@@ -395,6 +415,16 @@
 
 <div class="geo-toast" id="geoToast"></div>
 <div class="toast" id="toast"></div>
+
+<!-- 月別訪問実績モーダル -->
+<div class="overlay" id="monthlyOverlay">
+  <div class="sheet">
+    <button class="close-btn" onclick="closeMonthly()">×</button>
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;">月別訪問実績</h2>
+    <div id="monthlyList" style="margin-top:14px;"></div>
+  </div>
+</div>
 
 <!-- パスワード変更モーダル -->
 <div class="overlay" id="pwOverlay">
@@ -416,6 +446,16 @@
     </div>
     <button class="save-btn" id="pwSaveBtn" onclick="submitPwChange()">変更する</button>
     <div class="login-err" id="pwErr" style="height:auto;margin-top:8px;"></div>
+
+    <div class="divider"></div>
+    <h3 style="font-size:13.5px;margin:0 0 8px;">担当者の管理</h3>
+    <div id="repChips" class="rep-chips"></div>
+    <div class="rep-add-row">
+      <input type="text" id="repNewName" placeholder="新しい担当者名">
+      <button class="rep-add-btn" onclick="addRepLocal()">＋追加</button>
+    </div>
+    <button class="save-btn" id="repSaveBtn" onclick="submitReps()" style="margin-top:10px;">この内容で保存する</button>
+    <div class="login-err" id="repErr" style="height:auto;margin-top:8px;"></div>
   </div>
 </div>
 
@@ -441,7 +481,8 @@
       <div class="dl-form-row"><label>ステータス</label>
         <select id="dl-f-status"><option>商談中</option><option>成約</option><option>失注</option><option>保留</option></select>
       </div>
-      <div class="dl-form-row"><label>担当者名</label><input type="text" id="dl-f-staff" placeholder="例：牧 良子"></div>
+      <div class="dl-form-row"><label>担当者名</label><input type="text" id="dl-f-staff" list="repDatalist" placeholder="例：牧 良子"></div>
+      <datalist id="repDatalist"></datalist>
     </div>
     <div class="dl-form-row"><label>メモ</label><textarea id="dl-f-memo" placeholder="家族の状況、本人の希望など"></textarea></div>
     <div class="dl-modal-footer">
@@ -462,6 +503,8 @@ let currentPassword = null; // ログイン成功時のパスワードを保持�
 
 let facilities = [];
 let visits = [];
+let repList = [];
+let repListDraft = [];
 let currentFacilityId = null;
 const KIND_COLOR = {'包括':'#3B6EA5','居宅':'#4C8C63','老健':'#C9902E','病院':'#B14C4C'};
 let userLoc = null; // {lat, lng}
@@ -574,6 +617,7 @@ async function loadData(){
     const data = await res.json();
     facilities = data.facilities || [];
     visits = data.visits || [];
+    repList = data.reps && data.reps.length ? data.reps : ['牧','岡野','岩矢','木﨑','高田'];
   }catch(err){
     showToast('データ取得に失敗しました');
     console.error(err);
@@ -582,11 +626,27 @@ async function loadData(){
 
 function populateFilterOptions(){
   const cities = [...new Set(facilities.map(f=>f.city))];
-  const reps = [...new Set(facilities.map(f=>f.rep))];
+  const repsFromFacilities = [...new Set(facilities.map(f=>f.rep))];
   const cSel = document.getElementById('fCity');
   cities.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; cSel.appendChild(o); });
   const rSel = document.getElementById('fRep');
-  reps.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; rSel.appendChild(o); });
+  repsFromFacilities.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; rSel.appendChild(o); });
+  populateVRepSelect();
+  populateDealStaffOptions();
+}
+
+function populateVRepSelect(){
+  const sel = document.getElementById('vRep');
+  sel.innerHTML = '';
+  repList.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; sel.appendChild(o); });
+  const other = document.createElement('option'); other.value='その他'; other.textContent='その他';
+  sel.appendChild(other);
+}
+
+function populateDealStaffOptions(){
+  const dl = document.getElementById('repDatalist');
+  if(!dl) return;
+  dl.innerHTML = repList.map(r=>'<option value="'+escapeHtml(r)+'">').join('');
 }
 
 function todayStr(){
@@ -728,7 +788,7 @@ function openDetail(facilityId){
   document.getElementById('dAddr').textContent = f.addr;
   document.getElementById('dMapLink').href = 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(f.addr);
   document.getElementById('vDate').value = todayStr();
-  document.getElementById('vRep').value = ['牧','岡野','岩矢','木﨑','高田'].includes(f.rep) ? f.rep : 'その他';
+  document.getElementById('vRep').value = repList.includes(f.rep) ? f.rep : 'その他';
   document.getElementById('vMemo').value = '';
   document.getElementById('vNext').value = '';
   renderHistory(facilityId);
@@ -837,12 +897,49 @@ async function processGeocodeQueue(){
   }
   toastEl.style.display='none';
 }
+/* ---------- 月別訪問実績 ---------- */
+function openMonthly(){
+  renderMonthly();
+  document.getElementById('monthlyOverlay').classList.add('show');
+}
+function closeMonthly(){
+  document.getElementById('monthlyOverlay').classList.remove('show');
+}
+function renderMonthly(){
+  const counts = {};
+  visits.forEach(v=>{
+    if(!v.visitDate) return;
+    const m = v.visitDate.slice(0,7);
+    if(!counts[m]) counts[m] = {total:0, facilities:new Set()};
+    counts[m].total++;
+    counts[m].facilities.add(v.facilityId);
+  });
+  const months = Object.keys(counts).sort().reverse().slice(0,12);
+  const el = document.getElementById('monthlyList');
+  if(months.length===0){ el.innerHTML = '<div class="empty">まだ訪問記録がありません</div>'; return; }
+  const maxCount = Math.max(1, ...months.map(m=>counts[m].total));
+  el.innerHTML = months.map(m=>{
+    const c = counts[m];
+    const pct = Math.round(c.total / maxCount * 100);
+    const [y,mo] = m.split('-');
+    return '<div class="month-bar-row">'
+      + '<div class="month-bar-label">'+y+'年'+parseInt(mo)+'月</div>'
+      + '<div class="month-bar-track"><div class="month-bar-fill" style="width:'+pct+'%"></div></div>'
+      + '<div class="month-bar-value">'+c.total+'件（'+c.facilities.size+'施設）</div>'
+      + '</div>';
+  }).join('');
+}
+
 /* ---------- パスワード変更 ---------- */
 function openPwChange(){
   document.getElementById('pwOld').value = '';
   document.getElementById('pwNew1').value = '';
   document.getElementById('pwNew2').value = '';
   document.getElementById('pwErr').textContent = '';
+  document.getElementById('repErr').textContent = '';
+  document.getElementById('repNewName').value = '';
+  repListDraft = repList.slice();
+  renderRepChips();
   document.getElementById('pwOverlay').classList.add('show');
 }
 function closePwChange(){
@@ -875,6 +972,52 @@ async function submitPwChange(){
   btn.disabled = false; btn.textContent = '変更する';
 }
 
+/* ---------- 担当者管理 ---------- */
+function renderRepChips(){
+  const el = document.getElementById('repChips');
+  if(repListDraft.length===0){ el.innerHTML = '<span style="color:var(--text-soft);font-size:12px;">担当者がいません</span>'; return; }
+  el.innerHTML = repListDraft.map(r =>
+    '<span class="rep-chip">'+escapeHtml(r)+'<button onclick="removeRepLocal(\''+escapeHtml(r).replace(/'/g,"\\'")+'\')">×</button></span>'
+  ).join('');
+}
+function addRepLocal(){
+  const input = document.getElementById('repNewName');
+  const name = input.value.trim();
+  if(!name) return;
+  if(repListDraft.includes(name)){ document.getElementById('repErr').textContent = 'すでに登録されています'; return; }
+  repListDraft.push(name);
+  input.value = '';
+  document.getElementById('repErr').textContent = '';
+  renderRepChips();
+}
+function removeRepLocal(name){
+  repListDraft = repListDraft.filter(r=>r!==name);
+  renderRepChips();
+}
+async function submitReps(){
+  const errEl = document.getElementById('repErr');
+  errEl.textContent = '';
+  if(repListDraft.length===0){ errEl.textContent = '担当者を1人以上登録してください'; return; }
+  const btn = document.getElementById('repSaveBtn');
+  btn.disabled = true; btn.textContent = '保存中...';
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'saveReps', password:currentPassword, reps:repListDraft})});
+    const data = await res.json();
+    if(data.ok){
+      repList = repListDraft.slice();
+      populateVRepSelect();
+      populateDealStaffOptions();
+      showToast('担当者を更新しました');
+    } else {
+      errEl.textContent = data.error || '保存に失敗しました';
+    }
+  }catch(err){
+    errEl.textContent = '通信エラーが発生しました';
+    console.error(err);
+  }
+  btn.disabled = false; btn.textContent = 'この内容で保存する';
+}
+
 /* ================= 案件管理（元 営業記録.html を移植） ================= */
 const DEAL_TODAY = new Date();
 DEAL_TODAY.setHours(0,0,0,0);
@@ -883,6 +1026,7 @@ let dealRecords = [];
 let dealEditId = null;
 let dealActiveMonth = 'all';
 let dealCbCount = 0;
+let dealMonthlyShown = false;
 
 function dealSetSyncStatus(msg, ok=true){
   const el = document.getElementById('dl-sync-status');
@@ -987,6 +1131,8 @@ function dealRender(){
   document.getElementById('dl-cnt-success').textContent = dealRecords.filter(r=>r.status==='成約').length;
   document.getElementById('dl-cnt-lost').textContent = dealRecords.filter(r=>r.status==='失注').length;
 
+  if(dealMonthlyShown) renderDealMonthly();
+
   const tbody = document.getElementById('dl-table-body');
   document.getElementById('dl-empty-msg').style.display = filtered.length ? 'none' : 'block';
   if (filtered.length === 0) { tbody.innerHTML = ''; return; }
@@ -1085,6 +1231,45 @@ async function dealDeleteRecord(id){
   dealSetSyncStatus('削除中...');
   try { await dealGasCall({action:'delete', id}); dealSetSyncStatus('✓ 削除しました'); }
   catch { dealSetSyncStatus('⚠ 削除エラー', false); }
+}
+
+function toggleDealMonthly(){
+  dealMonthlyShown = !dealMonthlyShown;
+  document.getElementById('dl-monthly-compare').style.display = dealMonthlyShown ? 'block':'none';
+  if(dealMonthlyShown) renderDealMonthly();
+}
+
+function renderDealMonthly(){
+  const byMonth = {};
+  dealRecords.forEach(r=>{
+    const m = dealGetMonth(r);
+    if(!m) return;
+    if(!byMonth[m]) byMonth[m] = {total:0, success:0, lost:0};
+    byMonth[m].total++;
+    if(r.status==='成約') byMonth[m].success++;
+    if(r.status==='失注') byMonth[m].lost++;
+  });
+  const months = Object.keys(byMonth).sort().reverse();
+  const el = document.getElementById('dl-monthly-compare');
+  if(months.length===0){ el.innerHTML = '<div class="dl-empty">データがありません</div>'; return; }
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+    + '<thead><tr style="background:var(--dl-accent);color:#fff;">'
+    + '<th style="padding:6px 8px;text-align:left;">月</th><th style="padding:6px 8px;">相談件数</th>'
+    + '<th style="padding:6px 8px;">成約</th><th style="padding:6px 8px;">失注</th><th style="padding:6px 8px;">成約率</th>'
+    + '</tr></thead><tbody>';
+  months.forEach(m=>{
+    const d = byMonth[m];
+    const rate = d.total ? Math.round(d.success/d.total*100) : 0;
+    const [y,mo] = m.split('-');
+    html += '<tr style="border-bottom:1px solid var(--dl-border);">'
+      + '<td style="padding:6px 8px;">'+y+'年'+parseInt(mo)+'月</td>'
+      + '<td style="padding:6px 8px;text-align:center;">'+d.total+'</td>'
+      + '<td style="padding:6px 8px;text-align:center;color:var(--dl-green);font-weight:700;">'+d.success+'</td>'
+      + '<td style="padding:6px 8px;text-align:center;color:var(--dl-red);">'+d.lost+'</td>'
+      + '<td style="padding:6px 8px;text-align:center;font-weight:700;">'+rate+'%</td></tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
 }
 
 function dealExportCSV(){
