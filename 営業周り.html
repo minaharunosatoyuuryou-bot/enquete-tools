@@ -2931,104 +2931,97 @@ function renderMeetingSummary(){
   const el = document.getElementById('meetingSummaryBody');
   let html = '';
 
-  // ------- 一目で分かる要約ブロック -------
-  html += '<div class="vacancy-box" style="margin-bottom:14px;">';
+  // 今日の予定（自動振り分けの提案 or 営業予定表に確定済みの予定を、担当者ごとに表示）
+  const todayPlansAll = schedulePlans.filter(p=>p.date===today);
+  const autoResultForToday = computeAutoAssignment();
+
+  html += '<div class="empty" style="padding:0 0 10px;text-align:left;font-size:11px;">'
+    + '会議・日々の確認に使う一覧です。上から順に「今月→今日→今週→空床→紹介→案件→入居予定→担当者別」の流れで見られます。</div>';
+
+  // ------- ① 今月の実績 -------
+  html += '<div style="font-size:13px;font-weight:900;color:var(--navy-deep);margin-bottom:6px;">📅 今月の実績</div>';
+  html += '<div class="vacancy-box" style="margin-bottom:8px;">';
   html += '<div class="vacancy-row"><span>目標</span><span style="font-weight:700;">'+MONTHLY_VISIT_GOAL+'件</span></div>';
   html += '<div class="vacancy-row"><span>現在</span><span style="font-weight:700;">'+totalThisMonth+'件</span></div>';
   html += '<div class="vacancy-row"><span>残り</span><span style="font-weight:700;color:'+(remaining===0?'var(--k-kyotaku)':'var(--danger)')+';">'+(remaining===0?'達成🎉':remaining+'件')+'</span></div>';
   html += '</div>';
-  html += '<div class="attr-tags" style="margin-bottom:14px;">'
-    + '<span class="attr-tag on">紹介 '+referrals.length+'件</span>'
-    + '<span class="attr-tag on">案件 '+dealRecords.length+'件</span>'
-    + '<span class="attr-tag on">入居決定 '+referrals.filter(r=>r.status==='入居決定').length+'件</span>'
-    + '</div>';
-  html += '<div class="vlist-row"><span>空床あり</span><span class="vlist-count">'+facilities.filter(f=>f.group && vacancyOf(f)!==null && vacancyOf(f)>0).length+'施設</span></div>';
-  html += '<div class="vlist-row"><span>未訪問</span><span class="vlist-count full">'+unvisitedCount+'施設</span></div>';
-  html += '<div class="vlist-row"><span>今週の予定</span><span class="vlist-count">'+thisWeekCount+'件</span></div>';
+  html += '<div class="month-bar-row" style="margin-bottom:8px;">'
+    + '<div class="month-bar-track" style="flex:1;"><div class="month-bar-fill" style="width:'+rate+'%"></div></div>'
+    + '<div class="month-bar-value" style="width:auto;">'+rate+'%</div></div>';
+  html += '<div class="vlist-row"><span>未訪問</span><span class="vlist-count full">'+unvisitedCount+'施設（30日以上'+over30.length+'／60日以上'+over60.length+'／90日以上'+over90.length+'）</span></div>';
+  html += '<div style="font-size:11.5px;color:var(--text-soft);margin:6px 0 2px;">今月の訪問先（'+facilityRows.length+'施設・タップで詳細）</div>';
+  if(facilityRows.length===0){
+    html += '<div class="empty" style="padding:8px 0;">今月はまだ訪問記録がありません</div>';
+  } else {
+    html += facilityRows.slice(0,10).map(([fid,d])=>
+      '<div class="vlist-row" onclick="closeMeetingSummary();openDetail(\''+fid+'\')"><span>○ '+escapeHtml(d.name)+'</span><span class="vlist-count">'+d.count+'回</span></div>'
+    ).join('');
+    if(facilityRows.length>10){
+      html += '<div style="font-size:11px;color:var(--text-soft);text-align:center;padding:4px 0;">他'+(facilityRows.length-10)+'施設</div>';
+    }
+  }
+
+  // ------- ② 今日の予定 -------
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:13px;font-weight:900;color:var(--navy-deep);margin-bottom:6px;">☀️ 今日の予定</div>';
+  if(todayPlansAll.length>0){
+    const byRepToday = {};
+    todayPlansAll.forEach(p=>{ (byRepToday[p.rep] = byRepToday[p.rep]||[]).push(p); });
+    Object.keys(byRepToday).forEach(rep=>{
+      const list = byRepToday[rep];
+      const doneCnt = list.filter(p=>p.status==='訪問済').length;
+      html += '<div style="font-size:12px;font-weight:700;color:var(--text);margin:6px 0 2px;">'+escapeHtml(rep)+'さん（'+doneCnt+'/'+list.length+'件済）</div>';
+      html += list.map(p=>'<div class="vlist-row"><span>○ '+escapeHtml(p.facilityName)+'</span><span class="vlist-count'+(p.status==='延期'||p.status==='キャンセル'?' full':'')+'">'+p.status+'</span></div>').join('');
+    });
+  } else if(autoResultForToday){
+    html += '<div class="empty" style="padding:6px 0;">まだ本日の予定が確定していません（自動振り分けの提案）</div>';
+    autoResultForToday.activeReps.forEach(m=>{
+      const list = autoResultForToday.assigned[m.name];
+      const { todayList } = splitByPace(list);
+      if(todayList.length===0) return;
+      html += '<div style="font-size:12px;font-weight:700;color:var(--text);margin:6px 0 2px;">'+escapeHtml(m.name)+'さん（提案・'+todayList.length+'件）</div>';
+      html += todayList.map(item=>'<div class="vlist-row"><span>'+(item.fixed?'📌':'○')+' '+escapeHtml(item.f.name)+'</span></div>').join('');
+    });
+  } else {
+    html += '<div class="empty" style="padding:6px 0;">稼働中の担当者がいません</div>';
+  }
+
+  // ------- ③ 今週の予定 -------
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:13px;font-weight:900;color:var(--navy-deep);margin-bottom:6px;">📆 今週の予定</div>';
+  html += '<div class="vlist-row"><span>今週</span><span class="vlist-count">'+thisWeekCount+'件</span></div>';
   if(thisWeekRepRows.length>0){
     html += '<div style="font-size:11px;color:var(--text-soft);padding:2px 0 6px 4px;">'
       + thisWeekRepRows.map(([rep,cnt])=>escapeHtml(rep)+' '+cnt+'件').join('　')
       + '</div>';
   }
   html += '<div class="vlist-row"><span>来月予定</span><span class="vlist-count">'+nextMonthCount+'件</span></div>';
-  html += '<div class="vlist-row"><span>要フォロー</span><span class="vlist-count full">'+overdueFacilities.length+'件</span></div>';
-  // ------- ここまで要約ブロック -------
-
-  html += '<div class="divider"></div>';
-  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">目標達成状況（目標'+MONTHLY_VISIT_GOAL+'件）</div>';
-  html += '<div class="month-bar-row" style="margin-bottom:4px;">'
-    + '<div class="month-bar-track" style="flex:1;"><div class="month-bar-fill" style="width:'+rate+'%"></div></div>'
-    + '<div class="month-bar-value" style="width:auto;">'+rate+'%</div></div>';
-  html += '<div class="vlist-row"><span>現在</span><span class="vlist-count">'+totalThisMonth+'件</span></div>';
-  html += '<div class="vlist-row"><span>残り</span><span class="vlist-count '+(remaining===0?'':'full')+'">'+(remaining===0?'達成🎉':remaining+'件')+'</span></div>';
-
-  html += '<div class="divider"></div>';
-  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">担当者別（達成率）</div>';
-  html += repCounts.map(r=>{
-    const label = (r.status!=='勤務中' && r.status!=='応援のみ') ? '（'+r.status+'中）' : '';
-    const targetLabel = r.target!==null ? r.cnt+'/'+r.target+'件' : r.cnt+'件';
-    const pct = (r.target && r.target>0) ? Math.round(r.cnt/r.target*100)+'%' : '—';
-    return '<div class="vlist-row"><span>'+escapeHtml(r.rep)+label+'</span><span class="vlist-count">'+targetLabel+'　'+pct+'</span></div>';
-  }).join('');
-
-  html += '<div class="divider"></div>';
-  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">営業予定表（今月・予定と実績）</div>';
-  if(monthPlans.length===0){
-    html += '<div class="empty" style="padding:10px 0;">まだ営業予定表への登録がありません（営業予定表の「本日の予定を確定する」で登録されます）</div>';
+  html += '<div style="font-size:11.5px;color:var(--text-soft);margin:6px 0 2px;">要フォロー（次回予定超過・'+overdueFacilities.length+'件・タップで詳細）</div>';
+  if(overdueFacilities.length===0){
+    html += '<div class="empty" style="padding:8px 0;">要フォローの施設はありません👍</div>';
   } else {
+    html += overdueFacilities.map(f=>
+      '<div class="vlist-row" onclick="closeMeetingSummary();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span></div>'
+    ).join('');
+  }
+  if(monthPlans.length>0){
+    html += '<div style="font-size:11.5px;color:var(--text-soft);margin:8px 0 2px;">営業予定表（今月・状態別件数）</div>';
     html += planStatusCounts.map(p=>'<div class="vlist-row"><span>'+p.status+'</span><span class="vlist-count'+(p.status==='延期'||p.status==='キャンセル'?' full':'')+'">'+p.cnt+'件</span></div>').join('');
     if(delayRows.length>0){
-      html += '<div style="font-size:11.5px;color:var(--text-soft);margin-top:8px;margin-bottom:4px;">要フォロー（延期の多い施設）</div>';
+      html += '<div style="font-size:11px;color:var(--text-soft);margin-top:6px;margin-bottom:2px;">延期の多い施設</div>';
       html += delayRows.map(([name,cnt])=>'<div class="vlist-row"><span>○ '+escapeHtml(name)+'</span><span class="vlist-count full">延期'+cnt+'回</span></div>').join('');
     }
   }
 
+  // ------- ④ 空床状況 -------
   html += '<div class="divider"></div>';
-  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">訪問施設一覧（'+facilityRows.length+'施設・タップで詳細）</div>';
-  if(facilityRows.length===0){
-    html += '<div class="empty" style="padding:12px 0;">今月はまだ訪問記録がありません</div>';
-  } else {
-    html += facilityRows.map(([fid,d])=>
-      '<div class="vlist-row" onclick="closeMeetingSummary();openDetail(\''+fid+'\')"><span>○ '+escapeHtml(d.name)+'</span><span class="vlist-count">'+d.count+'回</span></div>'
-    ).join('');
-  }
-
-  html += '<div class="divider"></div>';
-  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">未訪問施設一覧（'+unvisitedCount+'件・タップで詳細）</div>';
-  const unvisitedFacilities = allTargets.filter(f=>!visitedThisMonthIds.has(f.id));
-  if(unvisitedFacilities.length===0){
-    html += '<div class="empty" style="padding:10px 0;">今月はすべて訪問済みです👍</div>';
-  } else {
-    html += unvisitedFacilities.map(f=>'<div class="vlist-row" onclick="closeMeetingSummary();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span></div>').join('');
-  }
-  html += '<div style="font-size:11.5px;color:var(--text-soft);margin-top:8px;">';
-  html += '30日以上'+over30.length+'件／60日以上'+over60.length+'件／90日以上'+over90.length+'件';
-  html += '</div>';
-
-  html += '<div class="divider"></div>';
-  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">紹介待ち（相談中・'+waitingReferralsList.length+'件）</div>';
-  if(waitingReferralsList.length===0){
-    html += '<div class="empty" style="padding:10px 0;">紹介待ちの方はいません</div>';
-  } else {
-    html += waitingReferralsList.map(r=>'<div class="vlist-row"><span>○ '+escapeHtml(r.userName||'利用者未記入')+'</span><span style="font-size:11px;color:var(--text-soft);">'+escapeHtml(r.facilityName||'')+'</span></div>').join('');
-  }
-
-  html += '<div class="divider"></div>';
-  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">入居予定（'+moveInList.length+'件）</div>';
-  if(moveInList.length===0){
-    html += '<div class="empty" style="padding:10px 0;">入居予定はありません</div>';
-  } else {
-    html += moveInList.map(r=>'<div class="vlist-row"><span>○ '+escapeHtml(r.userName||'利用者未記入')+'（'+escapeHtml(r.facilityName||'')+'）</span><span class="vlist-count">'+r.moveInDate+'</span></div>').join('');
-  }
-
-  html += '<div class="divider"></div>';
-  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">空床（悠久福祉会・タップで詳細）</div>';
+  html += '<div style="font-size:13px;font-weight:900;color:var(--navy-deep);margin-bottom:6px;">🛏 空床状況（悠久福祉会）</div>';
   const totalVacancy = groupFacilities.reduce((sum,f)=>{ const v=vacancyOf(f); return sum + (v!==null && v>0 ? v : 0); }, 0);
   const waitingCount = dealRecords.filter(d=>d.status!=='成約' && d.status!=='キャンセル').length;
   html += '<div class="vlist-row"><span>空床数（合計）</span><span class="vlist-count">'+totalVacancy+'床</span></div>';
   html += '<div class="vlist-row"><span>空床待ち人数（対応中の案件）</span><span class="vlist-count full">'+waitingCount+'人</span></div>';
   if(groupFacilities.length===0){
-    html += '<div class="empty" style="padding:12px 0;">悠久福祉会の施設が登録されていません</div>';
+    html += '<div class="empty" style="padding:8px 0;">悠久福祉会の施設が登録されていません</div>';
   } else {
     html += groupFacilities.map(f=>{
       const vac = vacancyOf(f);
@@ -3039,39 +3032,48 @@ function renderMeetingSummary(){
     }).join('');
   }
 
+  // ------- ⑤ 紹介状況 -------
   html += '<div class="divider"></div>';
-  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">紹介案件（現在の状況・紹介管理）</div>';
+  html += '<div style="font-size:13px;font-weight:900;color:var(--navy-deep);margin-bottom:6px;">🤝 紹介状況</div>';
   html += refCounts.map(r=>'<div class="vlist-row"><span>'+r.status+'</span><span class="vlist-count">'+r.cnt+'件</span></div>').join('');
-
-  html += '<div class="divider"></div>';
-  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">案件管理（成約率）</div>';
-  const dealTotal = dealRecords.length;
-  const dealSuccess = dealRecords.filter(r=>r.status==='成約').length;
-  const dealCancelled = dealRecords.filter(r=>r.status==='キャンセル').length;
-  const dealRate = dealTotal ? Math.round(dealSuccess/dealTotal*100) : 0;
-  html += '<div class="vlist-row"><span>紹介件数（紹介管理・全体）</span><span class="vlist-count">'+referrals.length+'件</span></div>';
-  html += '<div class="vlist-row"><span>案件件数</span><span class="vlist-count">'+dealTotal+'件</span></div>';
-  html += '<div class="vlist-row"><span>成約件数</span><span class="vlist-count">'+dealSuccess+'件</span></div>';
-  html += '<div class="vlist-row"><span>成約率</span><span class="vlist-count">'+dealRate+'%</span></div>';
-  html += '<div class="vlist-row"><span>キャンセル件数</span><span class="vlist-count full">'+dealCancelled+'件</span></div>';
-
+  html += '<div style="font-size:11.5px;color:var(--text-soft);margin:8px 0 2px;">紹介待ち（相談中・'+waitingReferralsList.length+'件）</div>';
+  if(waitingReferralsList.length===0){
+    html += '<div class="empty" style="padding:8px 0;">紹介待ちの方はいません</div>';
+  } else {
+    html += waitingReferralsList.map(r=>'<div class="vlist-row"><span>○ '+escapeHtml(r.userName||'利用者未記入')+'</span><span style="font-size:11px;color:var(--text-soft);">'+escapeHtml(r.facilityName||'')+'</span></div>').join('');
+  }
   const byFacilityRef = {};
   referrals.forEach(r=>{ if(r.facilityName) byFacilityRef[r.facilityName] = (byFacilityRef[r.facilityName]||0)+1; });
   const refFacilityRows = Object.entries(byFacilityRef).sort((a,b)=>b[1]-a[1]);
   if(refFacilityRows.length){
-    html += '<div style="font-size:11.5px;color:var(--text-soft);margin-top:8px;margin-bottom:4px;">施設ごとの紹介件数</div>';
-    html += refFacilityRows.map(([name,cnt])=>'<div class="vlist-row"><span>○ '+escapeHtml(name)+'</span><span class="vlist-count">'+cnt+'件</span></div>').join('');
+    html += '<div style="font-size:11px;color:var(--text-soft);margin-top:8px;margin-bottom:4px;">施設ごとの紹介件数</div>';
+    html += refFacilityRows.slice(0,8).map(([name,cnt])=>'<div class="vlist-row"><span>○ '+escapeHtml(name)+'</span><span class="vlist-count">'+cnt+'件</span></div>').join('');
   }
 
-  const byFacilitySuccess = {};
-  dealRecords.filter(r=>r.status==='成約').forEach(r=>{ if(r.facility) byFacilitySuccess[r.facility] = (byFacilitySuccess[r.facility]||0)+1; });
-  const successFacilityRows = Object.entries(byFacilitySuccess).sort((a,b)=>b[1]-a[1]);
-  if(successFacilityRows.length){
-    html += '<div style="font-size:11.5px;color:var(--text-soft);margin-top:8px;margin-bottom:4px;">施設ごとの成約件数</div>';
-    html += successFacilityRows.map(([name,cnt])=>'<div class="vlist-row"><span>○ '+escapeHtml(name)+'</span><span class="vlist-count">'+cnt+'件成約</span></div>').join('');
+  // ------- ⑥ 案件状況 -------
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:13px;font-weight:900;color:var(--navy-deep);margin-bottom:6px;">📋 案件状況</div>';
+  const dealTotal = dealRecords.length;
+  const dealSuccess = dealRecords.filter(r=>r.status==='成約').length;
+  const dealCancelled = dealRecords.filter(r=>r.status==='キャンセル').length;
+  const dealRate = dealTotal ? Math.round(dealSuccess/dealTotal*100) : 0;
+  html += '<div class="vlist-row"><span>案件件数</span><span class="vlist-count">'+dealTotal+'件</span></div>';
+  html += '<div class="vlist-row"><span>成約件数</span><span class="vlist-count">'+dealSuccess+'件</span></div>';
+  html += '<div class="vlist-row"><span>成約率</span><span class="vlist-count">'+dealRate+'%</span></div>';
+  html += '<div class="vlist-row"><span>キャンセル件数</span><span class="vlist-count full">'+dealCancelled+'件</span></div>';
+  const urgentDeals = dealRecords.filter(d=>{
+    const p = Number(parseDealMemoTags(d.memo).priority)||3;
+    return p>=4 && d.status!=='成約' && d.status!=='キャンセル';
+  }).sort((a,b)=>(Number(parseDealMemoTags(b.memo).priority)||3) - (Number(parseDealMemoTags(a.memo).priority)||3));
+  html += '<div style="font-size:11.5px;color:var(--text-soft);margin:8px 0 2px;">急ぎの案件（優先度★4以上・'+urgentDeals.length+'件）</div>';
+  if(urgentDeals.length===0){
+    html += '<div class="empty" style="padding:8px 0;">急ぎの案件はありません</div>';
+  } else {
+    html += urgentDeals.map(d=>{
+      const p = Number(parseDealMemoTags(d.memo).priority)||3;
+      return '<div class="vlist-row"><span>'+'★'.repeat(p)+' '+escapeHtml(d.name)+'（'+escapeHtml(d.facility||'施設未定')+'）</span><span class="vlist-count full">'+d.status+'</span></div>';
+    }).join('');
   }
-
-  // キャンセル理由の集計（今月の案件管理データより）
   const cancelledThisMonth = dealRecords.filter(r=>r.status==='キャンセル' && dealGetMonth(r)===monthPre);
   if(cancelledThisMonth.length){
     const reasonCounts = {};
@@ -3079,37 +3081,38 @@ function renderMeetingSummary(){
       const reason = parseDealMemoTags(r.memo).reason || 'その他';
       reasonCounts[reason] = (reasonCounts[reason]||0) + 1;
     });
-    html += '<div class="divider"></div>';
-    html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">キャンセル理由の集計（今月・'+cancelledThisMonth.length+'件）</div>';
+    html += '<div style="font-size:11px;color:var(--text-soft);margin-top:8px;margin-bottom:4px;">キャンセル理由（今月・'+cancelledThisMonth.length+'件）</div>';
     html += Object.entries(reasonCounts).sort((a,b)=>b[1]-a[1]).map(([reason,cnt])=>
       '<div class="vlist-row"><span>'+escapeHtml(reason)+'</span><span class="vlist-count full">'+cnt+'件</span></div>'
     ).join('');
   }
 
-  const urgentDeals = dealRecords.filter(d=>{
-    const p = Number(parseDealMemoTags(d.memo).priority)||3;
-    return p>=4 && d.status!=='成約' && d.status!=='キャンセル';
-  }).sort((a,b)=>(Number(parseDealMemoTags(b.memo).priority)||3) - (Number(parseDealMemoTags(a.memo).priority)||3));
+  // ------- ⑦ 入居予定 -------
   html += '<div class="divider"></div>';
-  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">急ぎの案件（優先度★4以上・'+urgentDeals.length+'件）</div>';
-  if(urgentDeals.length===0){
-    html += '<div class="empty" style="padding:12px 0;">急ぎの案件はありません</div>';
+  html += '<div style="font-size:13px;font-weight:900;color:var(--navy-deep);margin-bottom:6px;">🏠 入居予定（'+moveInList.length+'件）</div>';
+  if(moveInList.length===0){
+    html += '<div class="empty" style="padding:8px 0;">入居予定はありません</div>';
   } else {
-    html += urgentDeals.map(d=>{
-      const p = Number(parseDealMemoTags(d.memo).priority)||3;
-      return '<div class="vlist-row"><span>'+'★'.repeat(p)+' '+escapeHtml(d.name)+'（'+escapeHtml(d.facility||'施設未定')+'）</span><span class="vlist-count full">'+d.status+'</span></div>';
-    }).join('');
+    html += moveInList.map(r=>'<div class="vlist-row"><span>○ '+escapeHtml(r.userName||'利用者未記入')+'（'+escapeHtml(r.facilityName||'')+'）</span><span class="vlist-count">'+r.moveInDate+'</span></div>').join('');
+  }
+  const byFacilitySuccess = {};
+  dealRecords.filter(r=>r.status==='成約').forEach(r=>{ if(r.facility) byFacilitySuccess[r.facility] = (byFacilitySuccess[r.facility]||0)+1; });
+  const successFacilityRows = Object.entries(byFacilitySuccess).sort((a,b)=>b[1]-a[1]);
+  if(successFacilityRows.length){
+    html += '<div style="font-size:11px;color:var(--text-soft);margin-top:8px;margin-bottom:4px;">施設ごとの成約件数</div>';
+    html += successFacilityRows.slice(0,8).map(([name,cnt])=>'<div class="vlist-row"><span>○ '+escapeHtml(name)+'</span><span class="vlist-count">'+cnt+'件成約</span></div>').join('');
   }
 
+  // ------- ⑧ 担当者別達成率 -------
   html += '<div class="divider"></div>';
-  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">要フォロー（次回予定超過・'+overdueFacilities.length+'件・タップで詳細）</div>';
-  if(overdueFacilities.length===0){
-    html += '<div class="empty" style="padding:12px 0;">要フォローの施設はありません👍</div>';
-  } else {
-    html += overdueFacilities.map(f=>
-      '<div class="vlist-row" onclick="closeMeetingSummary();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span></div>'
-    ).join('');
-  }
+  html += '<div style="font-size:13px;font-weight:900;color:var(--navy-deep);margin-bottom:6px;">👥 担当者別達成率</div>';
+  html += repCounts.map(r=>{
+    const label = (r.status!=='勤務中' && r.status!=='応援のみ') ? '（'+r.status+'中）' : '';
+    const targetLabel = r.target!==null ? r.cnt+'/'+r.target+'件' : r.cnt+'件';
+    const pct = (r.target && r.target>0) ? Math.round(r.cnt/r.target*100)+'%' : '—';
+    return '<div class="vlist-row"><span>'+escapeHtml(r.rep)+label+'</span><span class="vlist-count">'+targetLabel+'　'+pct+'</span></div>';
+  }).join('');
+
   el.innerHTML = html;
 }
 
