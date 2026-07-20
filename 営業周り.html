@@ -502,7 +502,7 @@
         <option value="">ステータス 全て</option>
         <option value="相談中">相談中</option><option value="見学予定">見学予定</option>
         <option value="申込み">申込み</option><option value="調整中">調整中</option>
-        <option value="入居">入居</option><option value="成約">成約</option><option value="キャンセル">キャンセル</option>
+        <option value="入居予定">入居予定</option><option value="入居">入居</option><option value="成約">成約</option><option value="キャンセル">キャンセル</option>
       </select>
       <select id="dl-filter-care">
         <option value="">介護度 全て</option>
@@ -521,9 +521,9 @@
     <div class="dl-table-wrap">
       <table>
         <thead>
-          <tr><th>#</th><th>相談日</th><th>利用者氏名</th><th>介護度</th><th>性別</th><th>希望施設</th><th>クロージング日</th><th>ステータス</th><th>担当者</th><th>メモ</th><th>操作</th></tr>
+          <tr><th>#</th><th>優先度</th><th>相談日</th><th>利用者氏名</th><th>介護度</th><th>性別</th><th>希望施設</th><th>クロージング日</th><th>ステータス</th><th>担当者</th><th>メモ</th><th>操作</th></tr>
         </thead>
-        <tbody id="dl-table-body"><tr><td colspan="11" style="text-align:center;padding:30px;color:var(--text-soft)">読み込み中...</td></tr></tbody>
+        <tbody id="dl-table-body"><tr><td colspan="12" style="text-align:center;padding:30px;color:var(--text-soft)">読み込み中...</td></tr></tbody>
       </table>
       <div class="dl-empty" id="dl-empty-msg" style="display:none">該当するデータがありません</div>
     </div>
@@ -984,10 +984,20 @@
     <div class="dl-form-row"><label>希望施設</label><input type="text" id="dl-f-facility" placeholder="例：みなはるの里、悠久の里"></div>
     <div class="dl-form-2col">
       <div class="dl-form-row"><label>ステータス</label>
-        <select id="dl-f-status" onchange="toggleDealReason()"><option>相談中</option><option>見学予定</option><option>申込み</option><option>調整中</option><option>入居</option><option>成約</option><option>キャンセル</option></select>
+        <select id="dl-f-status" onchange="toggleDealReason()"><option>相談中</option><option>見学予定</option><option>申込み</option><option>調整中</option><option>入居予定</option><option>入居</option><option>成約</option><option>キャンセル</option></select>
       </div>
       <div class="dl-form-row"><label>担当者名</label><input type="text" id="dl-f-staff" list="repDatalist" placeholder="例：牧 良子"></div>
       <datalist id="repDatalist"></datalist>
+    </div>
+    <div class="dl-form-row">
+      <label>優先度</label>
+      <select id="dl-f-priority">
+        <option value="3">★★★（通常）</option>
+        <option value="5">★★★★★（最優先）</option>
+        <option value="4">★★★★</option>
+        <option value="2">★★</option>
+        <option value="1">★（低）</option>
+      </select>
     </div>
     <div class="dl-form-row" id="dl-reason-row" style="display:none;">
       <label>紹介できなかった理由</label>
@@ -2116,7 +2126,7 @@ async function convertReferralToDeal(){
     closeDate: '',
     status: '相談中',
     staff: r.rep || '',
-    memo: buildDealMemo(r.id, '', '紹介管理より自動作成')
+    memo: buildDealMemo(r.id, '', '紹介管理より自動作成', '3')
   };
   const btn = document.getElementById('refToDealBtn');
   btn.disabled = true; btn.textContent = '登録中...';
@@ -2152,9 +2162,11 @@ async function submitDeleteReferral(){
 
 /* ================= 営業予定表 ================= */
 /* ================= 空床一覧（悠久福祉会＝空床管理対象施設のみ） ================= */
-function openVacancyList(){
-  renderVacancyList();
+async function openVacancyList(){
   document.getElementById('vacancyListOverlay').classList.add('show');
+  document.getElementById('vacancyListBody').innerHTML = '<div class="empty">読み込み中...</div>';
+  if(!dealLoaded){ dealLoaded = true; await dealLoadAll(); }
+  renderVacancyList();
 }
 function closeVacancyList(){
   document.getElementById('vacancyListOverlay').classList.remove('show');
@@ -2171,8 +2183,10 @@ function renderVacancyList(){
     const st = vacancyStatus(f);
     const numLine = (f.capacity && f.occupied!=='') ? (f.capacity+'/'+(f.occupied||0)) : '';
     const statusLabel = vac===null ? '未登録' : (vac<=0 ? '満床' : '空床'+vac);
+    const dealCount = dealRecords.filter(d=>d.facility===f.name && d.status!=='成約' && d.status!=='キャンセル').length;
+    const dealLine = dealCount>0 ? '<div style="font-size:11px;color:var(--navy);">案件'+dealCount+'件</div>' : '';
     return '<div class="vlist-row" onclick="closeVacancyList();openDetail(\''+f.id+'\')">'
-      + '<span>○ '+escapeHtml(f.name)+(numLine?'<div style="font-size:11px;color:var(--text-soft);">'+numLine+'</div>':'')+'</span>'
+      + '<span>○ '+escapeHtml(f.name)+(numLine?'<div style="font-size:11px;color:var(--text-soft);">'+numLine+'</div>':'')+dealLine+'</span>'
       + '<span class="vlist-count '+(st.cls==='full'?'full':'')+'">'+statusLabel+'</span>'
       + '</div>';
   }).join('');
@@ -2373,13 +2387,19 @@ function renderMeetingSummary(){
 
   html += '<div class="divider"></div>';
   html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">空床（悠久福祉会・タップで詳細）</div>';
+  const totalVacancy = groupFacilities.reduce((sum,f)=>{ const v=vacancyOf(f); return sum + (v!==null && v>0 ? v : 0); }, 0);
+  const waitingCount = dealRecords.filter(d=>d.status!=='成約' && d.status!=='キャンセル').length;
+  html += '<div class="vlist-row"><span>空床数（合計）</span><span class="vlist-count">'+totalVacancy+'床</span></div>';
+  html += '<div class="vlist-row"><span>空床待ち人数（対応中の案件）</span><span class="vlist-count full">'+waitingCount+'人</span></div>';
   if(groupFacilities.length===0){
     html += '<div class="empty" style="padding:12px 0;">悠久福祉会の施設が登録されていません</div>';
   } else {
     html += groupFacilities.map(f=>{
       const vac = vacancyOf(f);
       const label = vac===null ? '未登録' : (vac<=0 ? '満床' : vac+'床');
-      return '<div class="vlist-row" onclick="closeMeetingSummary();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span><span class="vlist-count">'+label+'</span></div>';
+      const dealCount = dealRecords.filter(d=>d.facility===f.name && d.status!=='成約' && d.status!=='キャンセル').length;
+      const dealLabel = dealCount>0 ? '<span style="color:var(--navy);font-weight:400;font-size:10.5px;margin-left:6px;">案件'+dealCount+'件</span>' : '';
+      return '<div class="vlist-row" onclick="closeMeetingSummary();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span><span class="vlist-count">'+label+dealLabel+'</span></div>';
     }).join('');
   }
 
@@ -2428,6 +2448,21 @@ function renderMeetingSummary(){
     html += Object.entries(reasonCounts).sort((a,b)=>b[1]-a[1]).map(([reason,cnt])=>
       '<div class="vlist-row"><span>'+escapeHtml(reason)+'</span><span class="vlist-count full">'+cnt+'件</span></div>'
     ).join('');
+  }
+
+  const urgentDeals = dealRecords.filter(d=>{
+    const p = Number(parseDealMemoTags(d.memo).priority)||3;
+    return p>=4 && d.status!=='成約' && d.status!=='キャンセル';
+  }).sort((a,b)=>(Number(parseDealMemoTags(b.memo).priority)||3) - (Number(parseDealMemoTags(a.memo).priority)||3));
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">急ぎの案件（優先度★4以上・'+urgentDeals.length+'件）</div>';
+  if(urgentDeals.length===0){
+    html += '<div class="empty" style="padding:12px 0;">急ぎの案件はありません</div>';
+  } else {
+    html += urgentDeals.map(d=>{
+      const p = Number(parseDealMemoTags(d.memo).priority)||3;
+      return '<div class="vlist-row"><span>'+'★'.repeat(p)+' '+escapeHtml(d.name)+'（'+escapeHtml(d.facility||'施設未定')+'）</span><span class="vlist-count full">'+d.status+'</span></div>';
+    }).join('');
   }
 
   html += '<div class="divider"></div>';
@@ -2860,7 +2895,7 @@ async function dealLoadAll(){
     dealRender();
   }catch(e){
     dealSetSyncStatus('⚠ 読み込みエラー', false);
-    document.getElementById('dl-table-body').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:30px;color:#dc2626">データの読み込みに失敗しました。再読み込みしてください。</td></tr>';
+    document.getElementById('dl-table-body').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:30px;color:#dc2626">データの読み込みに失敗しました。再読み込みしてください。</td></tr>';
   }
 }
 
@@ -2892,7 +2927,7 @@ function dealIsOverdue(rec){
 function dealStatusClass(s){
   return {
     相談中:'dl-s-active', 見学予定:'dl-s-hold', 申込み:'dl-s-hold', 調整中:'dl-s-active',
-    入居:'dl-s-success', 成約:'dl-s-success', キャンセル:'dl-s-lost'
+    入居予定:'dl-s-hold', 入居:'dl-s-success', 成約:'dl-s-success', キャンセル:'dl-s-lost'
   }[s] || 'dl-s-active';
 }
 
@@ -2915,7 +2950,7 @@ function dealRender(){
     if (fg && r.gender !== fg) return false;
     if (q && !`${r.name}${r.facility}${r.staff}${r.memo}`.toLowerCase().includes(q)) return false;
     return true;
-  });
+  }).sort((a,b) => (Number(parseDealMemoTags(b.memo).priority)||3) - (Number(parseDealMemoTags(a.memo).priority)||3));
 
   document.getElementById('dl-cnt-all').textContent = dealRecords.length;
   document.getElementById('dl-cnt-active').textContent = dealRecords.filter(r=>r.status!=='成約' && r.status!=='キャンセル').length;
@@ -2931,6 +2966,7 @@ function dealRender(){
 
   tbody.innerHTML = filtered.map((r, i) => {
     const over = dealIsOverdue(r);
+    const priority = parseDealMemoTags(r.memo).priority || '3';
     const closeDiff = r.closeDate ? Math.floor((DEAL_TODAY - new Date(r.closeDate)) / 86400000) : null;
     const closeFmt = r.closeDate
       ? `<span class="${closeDiff > 7 && r.status!=='成約' && r.status!=='キャンセル' ? 'dl-date-overdue' : ''}">${dealFmt(r.closeDate)}</span>${over ? '<span class="dl-alert-badge">未対応</span>' : ''}`
@@ -2938,6 +2974,7 @@ function dealRender(){
     const memo = r.memo ? `<span title="${String(r.memo).replace(/"/g,'&quot;')}" style="cursor:default">📝</span>` : '—';
     return `<tr class="${over ? 'dl-alert-row' : ''}">
       <td style="color:var(--text-soft);font-size:11px">${i+1}</td>
+      <td style="color:${priority>=4?'var(--dl-red)':'inherit'};font-weight:${priority>=4?'700':'400'};white-space:nowrap;">${'★'.repeat(priority)}</td>
       <td>${dealFmt(r.consult)}</td>
       <td style="font-weight:600">${r.name}</td>
       <td><span class="dl-care">${r.care||'—'}</span></td>
@@ -2956,7 +2993,7 @@ function dealRender(){
 }
 
 async function dealCycleStatus(id){
-  const order = ['相談中','見学予定','申込み','調整中','入居','成約','キャンセル'];
+  const order = ['相談中','見学予定','申込み','調整中','入居予定','入居','成約','キャンセル'];
   const r = dealRecords.find(x=>String(x.id)===String(id));
   if (!r) return;
   r.status = order[(order.indexOf(r.status)+1) % order.length];
@@ -2973,17 +3010,20 @@ async function dealCycleStatus(id){
 /** メモ内の埋め込みタグ（[紹介ID:...] [理由：...]）をまとめて解析する */
 function parseDealMemoTags(memo){
   let text = String(memo||'');
-  let refId = '', reason = '';
+  let refId = '', reason = '', priority = '';
   const refMatch = text.match(/\[紹介ID:([^\]]+)\]\s*/);
   if(refMatch){ refId = refMatch[1]; text = text.replace(refMatch[0], ''); }
+  const priorityMatch = text.match(/^\[優先度:([1-5])\]\s*/);
+  if(priorityMatch){ priority = priorityMatch[1]; text = text.replace(priorityMatch[0], ''); }
   const reasonMatch = text.match(/^\[理由：([^\]]+)\]\s*/);
   if(reasonMatch){ reason = reasonMatch[1]; text = text.slice(reasonMatch[0].length); }
-  return {refId, reason, cleanMemo: text};
+  return {refId, reason, priority, cleanMemo: text};
 }
-/** [紹介ID:...] [理由：...] タグを組み立ててメモ本文の先頭に付与する */
-function buildDealMemo(refId, reason, freeText){
+/** [紹介ID:...] [優先度:N] [理由：...] タグを組み立ててメモ本文の先頭に付与する */
+function buildDealMemo(refId, reason, freeText, priority){
   let tags = '';
   if(refId) tags += '['+'紹介ID:'+refId+'] ';
+  if(priority) tags += '['+'優先度:'+priority+'] ';
   if(reason) tags += '['+'理由：'+reason+'] ';
   return tags + (freeText||'');
 }
@@ -3066,6 +3106,7 @@ function dealOpenModal(id=null){
   document.getElementById('dl-f-status').value = m?.status || '相談中';
   document.getElementById('dl-f-staff').value = m?.staff || '';
   document.getElementById('dl-f-reason').value = parsed.reason;
+  document.getElementById('dl-f-priority').value = parsed.priority || '3';
   document.getElementById('dl-f-memo').value = parsed.cleanMemo;
   toggleDealReason();
   document.getElementById('dl-modal').classList.add('open');
@@ -3079,8 +3120,9 @@ async function dealSaveRecord(){
   if (!name || !consult) { alert('相談日と利用者氏名は必須です'); return; }
   const status = document.getElementById('dl-f-status').value;
   const reason = document.getElementById('dl-f-reason').value;
+  const priority = document.getElementById('dl-f-priority').value;
   const freeMemo = document.getElementById('dl-f-memo').value.trim();
-  const memo = buildDealMemo(dealEditingRefId, status==='キャンセル' ? reason : '', freeMemo);
+  const memo = buildDealMemo(dealEditingRefId, status==='キャンセル' ? reason : '', freeMemo, priority);
   const data = {
     id: dealEditId || String(Date.now()),
     consult, name,
