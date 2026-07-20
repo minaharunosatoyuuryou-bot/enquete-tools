@@ -643,6 +643,16 @@
 </div>
 
 <!-- 今月の実績モーダル -->
+<!-- 本日の確認事項（ログイン直後に自動表示） -->
+<div class="overlay" id="todayBriefOverlay">
+  <div class="sheet">
+    <button class="close-btn" onclick="closeTodayBrief()">×</button>
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;" id="todayBriefTitle">本日の確認事項</h2>
+    <div id="todayBriefBody" style="margin-top:14px;"></div>
+  </div>
+</div>
+
 <div class="overlay" id="myResultOverlay">
   <div class="sheet">
     <button class="close-btn" onclick="closeMyResult()">×</button>
@@ -1195,6 +1205,7 @@ function selectMode(mode){
   populateReferralFacilitySelect();
   applyModeVisibility();
   switchMainTab('visit');
+  openTodayBrief();
 }
 
 function switchModePrompt(){
@@ -2195,6 +2206,46 @@ function renderVacancyList(){
 /* ================= 未訪問アラート（30日以上訪問なし） ================= */
 /* ================= 今月の実績（個人サマリー） ================= */
 const MONTHLY_VISIT_GOAL = 200; // 月間の営業目標件数（必要に応じてここを変えるだけで調整できます）
+
+/* ================= 本日の確認事項（ログイン直後に自動表示） ================= */
+async function openTodayBrief(){
+  const d = new Date();
+  const weekday = ['日','月','火','水','木','金','土'][d.getDay()];
+  document.getElementById('todayBriefTitle').textContent = (d.getMonth()+1)+'/'+d.getDate()+'（'+weekday+'）本日の確認事項';
+  document.getElementById('todayBriefBody').innerHTML = '<div class="empty">読み込み中...</div>';
+  document.getElementById('todayBriefOverlay').classList.add('show');
+  if(!dealLoaded){ dealLoaded = true; await dealLoadAll(); }
+  renderTodayBrief();
+}
+function closeTodayBrief(){
+  document.getElementById('todayBriefOverlay').classList.remove('show');
+}
+function renderTodayBrief(){
+  const today = todayStr();
+  const monthPre = thisMonthPrefix();
+  const targets = visitTargetFacilities();
+
+  const visitedThisMonthIds = new Set(visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre)).map(v=>v.facilityId));
+  const unvisitedCount = targets.filter(f=>!visitedThisMonthIds.has(f.id)).length;
+  const overdueCount = targets.filter(f=>statusFor(f.id).status==='overdue').length;
+  const vacantCount = facilities.filter(f=>f.group && vacancyOf(f)!==null && vacancyOf(f)>0).length;
+  const tourCount = referrals.filter(r=>r.visitDate && r.visitDate>=today && r.status!=='キャンセル' && r.status!=='入居決定').length;
+  const moveInCount = referrals.filter(r=>r.moveInDate && r.moveInDate>=today && r.status!=='キャンセル').length;
+  const todayVisitCount = visits.filter(v=>v.nextVisit===today && visitMatchesMode(v)).length
+    + referrals.filter(r=>(r.visitDate===today || r.moveInDate===today) && r.status!=='キャンセル').length;
+  const activeDeals = dealRecords.filter(d=>d.status!=='成約' && d.status!=='キャンセル');
+  const urgentDeals = activeDeals.filter(d=>(Number(parseDealMemoTags(d.memo).priority)||3)>=4).length;
+
+  const el = document.getElementById('todayBriefBody');
+  el.innerHTML =
+    '<div class="vlist-row"><span>未訪問施設</span><span class="vlist-count full">'+unvisitedCount+'件</span></div>'
+    + '<div class="vlist-row"><span>要フォロー</span><span class="vlist-count full">'+overdueCount+'件</span></div>'
+    + '<div class="vlist-row"><span>空床あり</span><span class="vlist-count">'+vacantCount+'施設</span></div>'
+    + '<div class="vlist-row"><span>見学予定</span><span class="vlist-count">'+tourCount+'件</span></div>'
+    + '<div class="vlist-row"><span>入居予定</span><span class="vlist-count">'+moveInCount+'件</span></div>'
+    + '<div class="vlist-row"><span>本日の営業予定</span><span class="vlist-count">'+todayVisitCount+'件</span></div>'
+    + '<div class="vlist-row"><span>案件</span><span class="vlist-count">'+activeDeals.length+'件'+(urgentDeals>0?'（急ぎ'+urgentDeals+'件）':'')+'</span></div>';
+}
 
 function openMyResult(){
   document.getElementById('myResultTitle').textContent = (currentUserName||'あなた') + ' の今月の実績';
