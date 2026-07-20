@@ -2240,19 +2240,36 @@ function renderVacancyList(){
     ).join('');
     html += '<div class="divider"></div>';
   }
-  html += managed.map(f=>{
+
+  const rowHtml = (f)=>{
     const vac = vacancyOf(f);
     const st = vacancyStatus(f);
-    const numLine = (f.capacity && f.occupied!=='') ? (f.capacity+'/'+(f.occupied||0)) : '';
-    const statusLabel = vac===null ? '未登録' : (vac<=0 ? '満床' : '空床'+vac);
+    const statusLabel = vac===null ? '未登録' : (vac<=0 ? '満床' : '残り'+vac+'床');
     const dealCount = dealRecords.filter(d=>d.facility===f.name && d.status!=='成約' && d.status!=='キャンセル').length;
     const dealLine = dealCount>0 ? '<div style="font-size:11px;color:var(--navy);">案件'+dealCount+'件</div>' : '';
-    const updateLine = f.updatedAt ? '<div style="font-size:10.5px;color:'+(isStale(f)?'var(--danger)':'var(--text-soft)')+';">更新日 '+f.updatedAt+(f.updatedBy?'（'+escapeHtml(f.updatedBy)+'）':'')+'</div>' : '';
+    const updateLine = f.updatedAt ? '<div style="font-size:10.5px;color:'+(isStale(f)?'var(--danger)':'var(--text-soft)')+';">'+f.updatedAt+'更新</div>' : '';
     return '<div class="vlist-row" onclick="closeVacancyList();openDetail(\''+f.id+'\')">'
-      + '<span>○ '+escapeHtml(f.name)+(numLine?'<div style="font-size:11px;color:var(--text-soft);">'+numLine+'</div>':'')+dealLine+updateLine+'</span>'
-      + '<span class="vlist-count '+(st.cls==='full'?'full':'')+'">'+statusLabel+'</span>'
+      + '<span>○ '+escapeHtml(f.name)+dealLine+updateLine+'</span>'
+      + '<span class="vlist-count '+(st.cls==='full'?'full':'')+'" style="font-weight:900;">'+statusLabel+'</span>'
       + '</div>';
-  }).join('');
+  };
+
+  const available = managed.filter(f=>{ const v=vacancyOf(f); return v!==null && v>0; }).sort((a,b)=>vacancyOf(b)-vacancyOf(a));
+  const others = managed.filter(f=>{ const v=vacancyOf(f); return v===null || v<=0; });
+
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--k-kyotaku);margin-bottom:8px;">空床あり（'+available.length+'施設）</div>';
+  if(available.length===0){
+    html += '<div class="empty" style="padding:10px 0;">現在、空床のある施設はありません</div>';
+  } else {
+    html += available.map(rowHtml).join('');
+  }
+
+  if(others.length>0){
+    html += '<div class="divider"></div>';
+    html += '<div style="font-size:11.5px;color:var(--text-soft);margin-bottom:6px;">満床・未登録</div>';
+    html += others.map(rowHtml).join('');
+  }
+
   el.innerHTML = html;
 }
 
@@ -2396,17 +2413,6 @@ function renderMyResult(){
     + '<div class="month-bar-value" style="width:auto;">'+rate+'%</div>'
     + '</div>';
   html += '<div class="vlist-row"><span>現在の訪問件数</span><span class="vlist-count">'+total+'件</span></div>';
-  html += '<div class="vlist-row"><span>残り件数</span><span class="vlist-count '+(remaining===0?'':'full')+'">'+(remaining===0?'目標達成🎉':remaining+'件')+'</span></div>';
-
-  if(remaining>0){
-    html += '<div class="divider"></div>';
-    html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">ペース計算</div>';
-    html += '<div class="vlist-row"><span>今月の残り日数</span><span class="vlist-count">'+remainingDays+'日</span></div>';
-    html += '<div class="vlist-row"><span>1日に必要な件数</span><span class="vlist-count full">'+dailyNeeded+'件</span></div>';
-    html += '<div class="vlist-row"><span>今週の目標</span><span class="vlist-count">'+weeklyTarget+'件</span></div>';
-    html += '<div class="vlist-row"><span>今週の現在件数</span><span class="vlist-count">'+weekVisits+'件</span></div>';
-    html += '<div class="vlist-row"><span>今週の不足</span><span class="vlist-count '+(weekShortfall===0?'':'full')+'">'+(weekShortfall===0?'順調です👍':weekShortfall+'件')+'</span></div>';
-  }
 
   html += '<div class="divider"></div>';
   html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">担当者別（今月）</div>';
@@ -2429,6 +2435,20 @@ function renderMyResult(){
     html += '<div class="empty" style="padding:10px 0;">本日はまだ訪問記録がありません</div>';
   } else {
     html += todayFacilities.map(name=>'<div class="vlist-row"><span>○ '+escapeHtml(name)+'</span></div>').join('');
+  }
+
+  html += '<div class="divider"></div>';
+  html += '<div class="vlist-row"><span style="font-weight:700;">残り</span><span class="vlist-count '+(remaining===0?'':'full')+'" style="font-size:16px;">'+(remaining===0?'目標達成🎉':remaining+'件')+'</span></div>';
+  html += '<div class="vlist-row"><span style="font-weight:700;">達成率</span><span class="vlist-count" style="font-size:16px;">'+rate+'%</span></div>';
+
+  if(remaining>0){
+    html += '<div class="divider"></div>';
+    html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">ペース計算</div>';
+    html += '<div class="vlist-row"><span>今月の残り日数</span><span class="vlist-count">'+remainingDays+'日</span></div>';
+    html += '<div class="vlist-row"><span>1日に必要な件数</span><span class="vlist-count full">'+dailyNeeded+'件</span></div>';
+    html += '<div class="vlist-row"><span>今週の目標</span><span class="vlist-count">'+weeklyTarget+'件</span></div>';
+    html += '<div class="vlist-row"><span>今週の現在件数</span><span class="vlist-count">'+weekVisits+'件</span></div>';
+    html += '<div class="vlist-row"><span>今週の不足</span><span class="vlist-count '+(weekShortfall===0?'':'full')+'">'+(weekShortfall===0?'順調です👍':weekShortfall+'件')+'</span></div>';
   }
 
   html += '<div class="divider"></div>';
@@ -2523,9 +2543,43 @@ function renderMeetingSummary(){
   const waitingReferralsList = referrals.filter(r=>r.status==='相談中');
   const moveInList = referrals.filter(r=>r.moveInDate && r.status!=='キャンセル').sort((a,b)=>a.moveInDate.localeCompare(b.moveInDate));
 
+  // 今週の予定・来月予定（件数）
+  const today = todayStr();
+  const now = new Date();
+  const mondayOffset = (now.getDay()===0 ? -6 : 1-now.getDay());
+  const monday = new Date(now); monday.setDate(now.getDate()+mondayOffset); monday.setHours(0,0,0,0);
+  const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
+  const mondayStr = monday.getFullYear()+'-'+String(monday.getMonth()+1).padStart(2,'0')+'-'+String(monday.getDate()).padStart(2,'0');
+  const sundayStr = sunday.getFullYear()+'-'+String(sunday.getMonth()+1).padStart(2,'0')+'-'+String(sunday.getDate()).padStart(2,'0');
+  const thisWeekCount = visits.filter(v=>v.nextVisit && v.nextVisit>=mondayStr && v.nextVisit<=sundayStr).length
+    + referrals.filter(r=>((r.visitDate && r.visitDate>=mondayStr && r.visitDate<=sundayStr) || (r.moveInDate && r.moveInDate>=mondayStr && r.moveInDate<=sundayStr)) && r.status!=='キャンセル').length;
+  const nextMonthDate = new Date(now.getFullYear(), now.getMonth()+1, 1);
+  const nextMonthPre = nextMonthDate.getFullYear()+'-'+String(nextMonthDate.getMonth()+1).padStart(2,'0');
+  const nextMonthCount = visits.filter(v=>v.nextVisit && v.nextVisit.startsWith(nextMonthPre)).length
+    + referrals.filter(r=>((r.visitDate && r.visitDate.startsWith(nextMonthPre)) || (r.moveInDate && r.moveInDate.startsWith(nextMonthPre))) && r.status!=='キャンセル').length;
+
   const el = document.getElementById('meetingSummaryBody');
   let html = '';
 
+  // ------- 一目で分かる要約ブロック -------
+  html += '<div class="vacancy-box" style="margin-bottom:14px;">';
+  html += '<div class="vacancy-row"><span>目標</span><span style="font-weight:700;">'+MONTHLY_VISIT_GOAL+'件</span></div>';
+  html += '<div class="vacancy-row"><span>現在</span><span style="font-weight:700;">'+totalThisMonth+'件</span></div>';
+  html += '<div class="vacancy-row"><span>残り</span><span style="font-weight:700;color:'+(remaining===0?'var(--k-kyotaku)':'var(--danger)')+';">'+(remaining===0?'達成🎉':remaining+'件')+'</span></div>';
+  html += '</div>';
+  html += '<div class="attr-tags" style="margin-bottom:14px;">'
+    + '<span class="attr-tag on">紹介 '+referrals.length+'件</span>'
+    + '<span class="attr-tag on">案件 '+dealRecords.length+'件</span>'
+    + '<span class="attr-tag on">入居決定 '+referrals.filter(r=>r.status==='入居決定').length+'件</span>'
+    + '</div>';
+  html += '<div class="vlist-row"><span>空床あり</span><span class="vlist-count">'+facilities.filter(f=>f.group && vacancyOf(f)!==null && vacancyOf(f)>0).length+'施設</span></div>';
+  html += '<div class="vlist-row"><span>未訪問</span><span class="vlist-count full">'+unvisitedCount+'施設</span></div>';
+  html += '<div class="vlist-row"><span>今週の予定</span><span class="vlist-count">'+thisWeekCount+'件</span></div>';
+  html += '<div class="vlist-row"><span>来月予定</span><span class="vlist-count">'+nextMonthCount+'件</span></div>';
+  html += '<div class="vlist-row"><span>要フォロー</span><span class="vlist-count full">'+overdueFacilities.length+'件</span></div>';
+  // ------- ここまで要約ブロック -------
+
+  html += '<div class="divider"></div>';
   html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">目標達成状況（目標'+MONTHLY_VISIT_GOAL+'件）</div>';
   html += '<div class="month-bar-row" style="margin-bottom:4px;">'
     + '<div class="month-bar-track" style="flex:1;"><div class="month-bar-fill" style="width:'+rate+'%"></div></div>'
@@ -2781,6 +2835,58 @@ function renderSchedule(){
 
   const el = document.getElementById('scheduleList');
   let html = '';
+
+  // ------- 明日の予定（担当者別） -------
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  const tomorrowStr = tomorrow.getFullYear()+'-'+String(tomorrow.getMonth()+1).padStart(2,'0')+'-'+String(tomorrow.getDate()).padStart(2,'0');
+  const tomorrowByRep = {};
+  visits.filter(v=>v.nextVisit===tomorrowStr).forEach(v=>{
+    (tomorrowByRep[v.rep] = tomorrowByRep[v.rep]||[]).push(v.facilityName);
+  });
+  referrals.filter(r=>(r.visitDate===tomorrowStr || r.moveInDate===tomorrowStr) && r.status!=='キャンセル').forEach(r=>{
+    (tomorrowByRep[r.rep] = tomorrowByRep[r.rep]||[]).push((r.userName||'利用者')+'様（'+r.facilityName+'）');
+  });
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">明日（'+(tomorrow.getMonth()+1)+'/'+tomorrow.getDate()+'）の予定</div>';
+  const tomorrowReps = Object.keys(tomorrowByRep);
+  if(tomorrowReps.length===0){
+    html += '<div class="empty" style="padding:10px 0;">明日の予定はありません</div>';
+  } else {
+    html += tomorrowReps.map(rep=>
+      '<div class="vlist-row" style="align-items:flex-start;"><span style="font-weight:700;">'+escapeHtml(rep)+'</span>'
+      + '<span style="text-align:right;">'+tomorrowByRep[rep].map(n=>escapeHtml(n)).join('<br>')+'</span></div>'
+    ).join('');
+  }
+
+  // ------- 今週・来週の件数 -------
+  const today2 = todayStr();
+  const now2 = new Date();
+  const mOffset = (now2.getDay()===0 ? -6 : 1-now2.getDay());
+  const thisMonday = new Date(now2); thisMonday.setDate(now2.getDate()+mOffset); thisMonday.setHours(0,0,0,0);
+  const thisSunday = new Date(thisMonday); thisSunday.setDate(thisMonday.getDate()+6);
+  const nextMonday = new Date(thisMonday); nextMonday.setDate(thisMonday.getDate()+7);
+  const nextSunday = new Date(nextMonday); nextSunday.setDate(nextMonday.getDate()+6);
+  const fmt = (d)=> d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const countInRange = (startStr, endStr)=>
+    visits.filter(v=>v.nextVisit && v.nextVisit>=startStr && v.nextVisit<=endStr).length
+    + referrals.filter(r=>((r.visitDate && r.visitDate>=startStr && r.visitDate<=endStr) || (r.moveInDate && r.moveInDate>=startStr && r.moveInDate<=endStr)) && r.status!=='キャンセル').length;
+  const thisWeekCount = countInRange(fmt(thisMonday), fmt(thisSunday));
+  const nextWeekCount = countInRange(fmt(nextMonday), fmt(nextSunday));
+
+  const targets2 = visitTargetFacilities();
+  const monthPre2 = thisMonthPrefix();
+  const visitedThisMonthIds2 = new Set(visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre2)).map(v=>v.facilityId));
+  const unvisitedCount2 = targets2.filter(f=>!visitedThisMonthIds2.has(f.id)).length;
+  const thisMonthTotal = visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre2) && visitMatchesMode(v)).length;
+  const remaining2 = Math.max(MONTHLY_VISIT_GOAL - thisMonthTotal, 0);
+
+  html += '<div class="divider"></div>';
+  html += '<div class="vlist-row"><span>今週</span><span class="vlist-count">'+thisWeekCount+'件</span></div>';
+  html += '<div class="vlist-row"><span>来週</span><span class="vlist-count">'+nextWeekCount+'件</span></div>';
+  html += '<div class="divider"></div>';
+  html += '<div class="vlist-row"><span>未訪問</span><span class="vlist-count full">'+unvisitedCount2+'施設</span></div>';
+  html += '<div class="vlist-row"><span>残り</span><span class="vlist-count '+(remaining2===0?'':'full')+'">'+(remaining2===0?'目標達成🎉':remaining2+'件')+'</span></div>';
+
+  html += '<div class="divider"></div>';
   html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">高齢者紹介センター（'+centerItems.length+'件）</div>';
   html += renderGroup(centerItems);
   html += '<div class="divider"></div>';
