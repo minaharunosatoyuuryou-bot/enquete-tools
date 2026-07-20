@@ -77,14 +77,14 @@
   header.top .sub{font-size:11px;color:#B9C6D3;margin-top:2px;}
 
   .kpi-bar{
-    display:flex;gap:10px;margin:-32px 14px 0;position:relative;z-index:2;
+    display:flex;gap:7px;margin:-32px 14px 0;position:relative;z-index:2;
   }
   .kpi{
-    flex:1;background:var(--paper);border-radius:var(--radius);padding:12px 10px;text-align:center;
-    box-shadow:0 6px 18px rgba(31,58,84,.10);
+    flex:1;background:var(--paper);border-radius:var(--radius);padding:12px 6px;text-align:center;
+    box-shadow:0 6px 18px rgba(31,58,84,.10);min-width:0;
   }
-  .kpi-num{font-size:22px;font-weight:900;color:var(--navy-deep);}
-  .kpi-label{font-size:10.5px;color:var(--text-soft);margin-top:2px;}
+  .kpi-num{font-size:20px;font-weight:900;color:var(--navy-deep);white-space:nowrap;}
+  .kpi-label{font-size:10px;color:var(--text-soft);margin-top:2px;}
   .kpi.overdue .kpi-num{color:var(--danger);}
 
   .tabs{display:flex;gap:6px;margin:16px 14px 8px;background:#EAE6D8;border-radius:12px;padding:4px;overflow-x:auto;}
@@ -309,6 +309,13 @@
   .dl-form-2col{ display:grid; grid-template-columns:1fr 1fr; gap:9px; }
   .dl-modal-footer{ display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
   .dl-empty{ text-align:center; padding:36px; color:var(--text-soft); }
+  @media print{
+    body *{ visibility:hidden; }
+    .overlay.show, .overlay.show .sheet, .overlay.show .sheet *{ visibility:visible; }
+    .overlay.show{ position:absolute; inset:0; background:#fff; align-items:flex-start; padding:0; }
+    .overlay.show .sheet{ max-width:100%; max-height:none; box-shadow:none; border-radius:0; }
+    .no-print, .close-btn, .sheet-handle{ display:none !important; }
+  }
 </style>
 </head>
 <body>
@@ -346,8 +353,8 @@
     <div class="mark">診</div>
     <h1>どちらで利用しますか？</h1>
     <p>あとからいつでも切り替えられます</p>
-    <button onclick="selectMode('center')" style="margin-bottom:10px;">大分高齢者紹介センター<br><span style="font-weight:400;font-size:11.5px;opacity:.85;">施設訪問・紹介管理・案件管理</span></button>
-    <button onclick="selectMode('yukyu')" style="background:var(--navy-deep);">悠久福祉会<br><span style="font-weight:400;font-size:11.5px;opacity:.85;">施設訪問・空床管理・入居実績</span></button>
+    <button onclick="selectMode('center')" style="margin-bottom:10px;">大分高齢者紹介センター　<span id="modeCountCenter"></span><br><span style="font-weight:400;font-size:11.5px;opacity:.85;">施設訪問・紹介管理・案件管理</span></button>
+    <button onclick="selectMode('yukyu')" style="background:var(--navy-deep);">悠久福祉会　<span id="modeCountYukyu"></span><br><span style="font-weight:400;font-size:11.5px;opacity:.85;">施設訪問・空床管理・入居実績</span></button>
   </div>
 </div>
 
@@ -363,7 +370,8 @@
 
   <div class="kpi-bar" id="visitKpiBar">
     <div class="kpi"><div class="kpi-num" id="kpiTotal">-</div><div class="kpi-label">対象施設</div></div>
-    <div class="kpi"><div class="kpi-num" id="kpiVisited">-</div><div class="kpi-label">今月訪問済</div></div>
+    <div class="kpi"><div class="kpi-num" id="kpiVisited" style="font-size:17px;">-</div><div class="kpi-label">今月訪問</div></div>
+    <div class="kpi"><div class="kpi-num" id="kpiRate">-</div><div class="kpi-label">達成率</div></div>
     <div class="kpi overdue"><div class="kpi-num" id="kpiOverdue">-</div><div class="kpi-label">要フォロー</div></div>
   </div>
 
@@ -668,6 +676,7 @@
     <button class="close-btn" onclick="closeMeetingSummary()">×</button>
     <div class="sheet-handle"></div>
     <h2 style="font-size:16px;" id="meetingSummaryTitle">会議用一覧</h2>
+    <button class="nearby-btn no-print" style="width:100%;margin-top:10px;" onclick="window.print()">🖨 この画面を印刷する</button>
     <div id="meetingSummaryBody" style="margin-top:14px;"></div>
   </div>
 </div>
@@ -831,12 +840,13 @@
 <div class="overlay" id="deleteVisitConfirmOverlay">
   <div class="sheet" style="max-width:360px;text-align:center;">
     <div class="sheet-handle"></div>
-    <h2 style="font-size:16px;">削除しますか？</h2>
+    <h2 style="font-size:16px;">ゴミ箱に移動しますか？</h2>
     <div class="vacancy-box" style="text-align:left;margin-top:14px;">
       <div class="vacancy-row"><span>施設名</span><span id="dvFacilityName" style="font-weight:700;"></span></div>
       <div class="vacancy-row"><span>訪問日</span><span id="dvVisitDate"></span></div>
       <div class="vacancy-row"><span>担当者</span><span id="dvRep"></span></div>
     </div>
+    <div class="empty" style="padding:8px 0 0;font-size:11px;">30日間はゴミ箱に残り、その後自動的に完全に削除されます</div>
     <div style="display:flex;gap:10px;margin-top:16px;">
       <button class="save-btn" style="background:var(--paper);color:var(--text);border:1.3px solid var(--line);margin-top:0;" onclick="closeDeleteVisitConfirm()">いいえ</button>
       <button class="save-btn" style="background:var(--danger);margin-top:0;" onclick="confirmRemoveVisit()">はい、削除する</button>
@@ -1192,6 +1202,10 @@ function selectWho(name){
   currentUserName = name; // 表示名・担当者欄の初期値として使用（ログイン権限＝管理者/営業担当はログイン方法の結果を優先）
   document.getElementById('whoAmIScreen').style.display='none';
   document.getElementById('loginWhoami').textContent = '（' + currentUserName + '）';
+  const centerCount = facilities.filter(f=>!f.group).length;
+  const yukyuCount = facilities.filter(f=>f.group).length;
+  document.getElementById('modeCountCenter').textContent = centerCount+'件';
+  document.getElementById('modeCountYukyu').textContent = yukyuCount+'件';
   document.getElementById('modeSelectScreen').style.display='flex';
 }
 
@@ -1210,6 +1224,10 @@ function selectMode(mode){
 
 function switchModePrompt(){
   document.getElementById('app').style.display='none';
+  const centerCount = facilities.filter(f=>!f.group).length;
+  const yukyuCount = facilities.filter(f=>f.group).length;
+  document.getElementById('modeCountCenter').textContent = centerCount+'件';
+  document.getElementById('modeCountYukyu').textContent = yukyuCount+'件';
   document.getElementById('modeSelectScreen').style.display='flex';
 }
 
@@ -1433,12 +1451,12 @@ function renderAll(){
 function renderKpi(){
   const monthPre = thisMonthPrefix();
   const visitTargets = visitTargetFacilities();
-  const visitedThisMonth = new Set(
-    visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre) && visitMatchesMode(v)).map(v=>v.facilityId)
-  ).size;
+  const visitedThisMonth = visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre) && visitMatchesMode(v)).length;
   const overdueCount = visitTargets.filter(f=>statusFor(f.id).status==='overdue').length;
+  const rate = Math.min(Math.round(visitedThisMonth / MONTHLY_VISIT_GOAL * 100), 100);
   document.getElementById('kpiTotal').textContent = visitTargets.length;
-  document.getElementById('kpiVisited').textContent = visitedThisMonth;
+  document.getElementById('kpiVisited').textContent = visitedThisMonth+'/'+MONTHLY_VISIT_GOAL;
+  document.getElementById('kpiRate').textContent = rate+'%';
   document.getElementById('kpiOverdue').textContent = overdueCount;
 }
 
@@ -1702,7 +1720,7 @@ async function confirmRemoveVisit(){
       visits = visits.filter(v=>v.id!==id);
       renderHistory(currentFacilityId);
       renderAll();
-      showToast('削除しました');
+      showToast('ゴミ箱に移動しました（30日間保存されます）');
     } else {
       showToast('削除に失敗しました: '+(data.error||''));
     }
@@ -2211,7 +2229,7 @@ const MONTHLY_VISIT_GOAL = 200; // 月間の営業目標件数（必要に応じ
 async function openTodayBrief(){
   const d = new Date();
   const weekday = ['日','月','火','水','木','金','土'][d.getDay()];
-  document.getElementById('todayBriefTitle').textContent = (d.getMonth()+1)+'/'+d.getDate()+'（'+weekday+'）本日の確認事項';
+  document.getElementById('todayBriefTitle').textContent = (d.getMonth()+1)+'/'+d.getDate()+'（'+weekday+'）本日のやること';
   document.getElementById('todayBriefBody').innerHTML = '<div class="empty">読み込み中...</div>';
   document.getElementById('todayBriefOverlay').classList.add('show');
   if(!dealLoaded){ dealLoaded = true; await dealLoadAll(); }
@@ -2235,12 +2253,14 @@ function renderTodayBrief(){
     + referrals.filter(r=>(r.visitDate===today || r.moveInDate===today) && r.status!=='キャンセル').length;
   const activeDeals = dealRecords.filter(d=>d.status!=='成約' && d.status!=='キャンセル');
   const urgentDeals = activeDeals.filter(d=>(Number(parseDealMemoTags(d.memo).priority)||3)>=4).length;
+  const waitingReferrals = referrals.filter(r=>r.status==='相談中').length;
 
   const el = document.getElementById('todayBriefBody');
   el.innerHTML =
     '<div class="vlist-row"><span>未訪問施設</span><span class="vlist-count full">'+unvisitedCount+'件</span></div>'
     + '<div class="vlist-row"><span>要フォロー</span><span class="vlist-count full">'+overdueCount+'件</span></div>'
     + '<div class="vlist-row"><span>空床あり</span><span class="vlist-count">'+vacantCount+'施設</span></div>'
+    + '<div class="vlist-row"><span>紹介待ち（相談中）</span><span class="vlist-count">'+waitingReferrals+'件</span></div>'
     + '<div class="vlist-row"><span>見学予定</span><span class="vlist-count">'+tourCount+'件</span></div>'
     + '<div class="vlist-row"><span>入居予定</span><span class="vlist-count">'+moveInCount+'件</span></div>'
     + '<div class="vlist-row"><span>本日の営業予定</span><span class="vlist-count">'+todayVisitCount+'件</span></div>'
