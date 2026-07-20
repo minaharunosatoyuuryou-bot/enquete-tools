@@ -1115,6 +1115,7 @@ let visits = [];
 let referrals = [];
 let repList = [];
 let repMeta = []; // [{name, status, target}] 担当者の勤務状況・月間目標件数
+let schedulePlans = []; // [{id, date, facilityId, facilityName, rep, status, memo}] 営業予定表（予定・訪問済・延期・キャンセル・繰越・紹介対応）
 let repListDraft = [];
 let allowedAccounts = [];
 let allowedAccountsDraft = [];
@@ -1310,6 +1311,7 @@ async function loadData(){
     referrals = data.referrals || [];
     repList = data.reps && data.reps.length ? data.reps : ['牧','岡野','岩矢','木﨑','高田'];
     repMeta = data.repMeta && data.repMeta.length ? data.repMeta : repList.map(r=>({name:r, status:'勤務中', target:Math.round(200/repList.length)}));
+    schedulePlans = data.schedulePlans || [];
   }catch(err){
     showToast('データ取得に失敗しました');
     console.error(err);
@@ -2350,6 +2352,7 @@ function renderVacancyList(){
 /* ================= 未訪問アラート（30日以上訪問なし） ================= */
 /* ================= 今月の実績（個人サマリー） ================= */
 const MONTHLY_VISIT_GOAL = 200; // 月間の営業目標件数（必要に応じてここを変えるだけで調整できます）
+const SCHEDULE_STATUS_OPTIONS = ['予定','訪問済','延期','キャンセル','繰越','紹介対応']; // 営業予定表の状態（GAS側と合わせること）
 
 /* ================= 本日の確認事項（ログイン直後に自動表示） ================= */
 async function openTodayBrief(){
@@ -2692,20 +2695,39 @@ async function reassignNow(){
 }
 /** 自動振り分けの計算ロジック本体（会議用一覧・営業予定表の両方から共通で使う）
  *  戻り値: {activeReps, assigned, fixedNoteList} / 稼働中の担当者がいなければ null */
-/** 割り当てリストを「今日」「今週の残り」「今月の残り」に分割する（優先度順ソート済みのリストの先頭から、
- *  残り日数に応じた1日あたりのペースで機械的に区切るだけの簡易版） */
+const PACE_DAILY_MIN = 4; // 1日あたりの訪問件数の下限（これより少なくは配分しない）
+const PACE_DAILY_MAX = 6; // 1日あたりの訪問件数の上限（1件あたり移動・面談で時間がかかるため、これ以上は詰め込まない）
+
+/** 割り当てリストを「今日」「今週の残り（日付ごと）」「今月の残り」に分割する（優先度順ソート済みのリストの先頭から、
+ *  1日あたり4〜6件を目安に機械的に区切るだけの簡易版）。同じ市区町村の施設はもともと自動振り分け側で
+ *  まとめて割り当てられているため、リストの先頭から順に区切るだけで、同じ地域が同じ日にまとまりやすくなっている。 */
 function splitByPace(list){
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
   const remainingDaysInMonth = Math.max(daysInMonth - now.getDate() + 1, 1);
-  const dailyCount = list.length > 0 ? Math.max(Math.ceil(list.length / remainingDaysInMonth), 1) : 0;
+  const rawDaily = list.length > 0 ? Math.ceil(list.length / remainingDaysInMonth) : 0;
+  const dailyCount = list.length > 0 ? Math.min(Math.max(rawDaily, PACE_DAILY_MIN), PACE_DAILY_MAX) : 0;
   const dow = now.getDay(); // 0=日
   const daysLeftThisWeek = dow===0 ? 1 : (7 - dow + 1); // 今日を含め、今週の残り日数（日曜まで）
   const weeklyCount = Math.min(list.length, dailyCount * daysLeftThisWeek);
   const todayList = list.slice(0, Math.min(dailyCount, list.length));
   const weekList = list.slice(todayList.length, weeklyCount);
   const restList = list.slice(weeklyCount);
-  return { todayList, weekList, restList, dailyCount, weeklyCount };
+
+  // 今週の残り分を、明日以降の日付ごとに4〜6件ずつ振り分ける（表示用の日付ラベル付きスケジュール）
+  const dailySchedule = [];
+  let cursor = 0;
+  let dayOffset = 1;
+  while(cursor < weekList.length && dayOffset < daysLeftThisWeek){
+    const d = new Date(now); d.setDate(now.getDate()+dayOffset);
+    const dateLabel = (d.getMonth()+1)+'/'+d.getDate();
+    const chunk = weekList.slice(cursor, cursor+dailyCount);
+    dailySchedule.push({ dateLabel, items: chunk });
+    cursor += chunk.length;
+    dayOffset++;
+  }
+
+  return { todayList, weekList, restList, dailyCount, weeklyCount, dailySchedule };
 }
 
 function computeAutoAssignment(){
@@ -2786,7 +2808,7 @@ function renderAutoAssign(){
     + '※簡易版です。90日以上未訪問→空床あり→紹介の多い施設→60日以上→30日以上、の優先順で、稼働中の担当者の月間目標に応じて割り振っています。📌固定担当の施設は最優先でそのまま割り当て、それ以外は市区町村ごとにまとめて、できるだけ同じ担当者が同じ地域を回れるようにしています。今月・今週・今日の内訳は、残りの割り当て件数を残り日数で均等に割った簡易ペース配分です。</div>';
   activeReps.forEach(m=>{
     const list = assigned[m.name];
-    const { todayList, weekList, restList } = splitByPace(list);
+    const { todayList, weekList, restList, dailySchedule } = splitByPace(list);
     html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:4px;">'+escapeHtml(m.name)+'さん</div>';
     html += '<div class="attr-tags" style="margin-bottom:8px;">'
       + '<span class="attr-tag on">今月 '+list.length+'/'+m.target+'件</span>'
@@ -2797,13 +2819,14 @@ function renderAutoAssign(){
       html += '<div class="empty" style="padding:6px 0;">割り当てなし</div>';
     } else {
       if(todayList.length>0){
-        html += '<div style="font-size:11px;font-weight:700;color:var(--danger);margin:4px 0 2px;">本日分</div>' + todayList.map(renderItem).join('');
+        html += '<div style="font-size:11px;font-weight:700;color:var(--danger);margin:4px 0 2px;">本日（'+todayList.length+'件）</div>' + todayList.map(renderItem).join('');
       }
-      if(weekList.length>0){
-        html += '<div style="font-size:11px;font-weight:700;color:var(--amber-deep);margin:6px 0 2px;">今週の残り</div>' + weekList.map(renderItem).join('');
-      }
+      dailySchedule.forEach(day=>{
+        if(day.items.length===0) return;
+        html += '<div style="font-size:11px;font-weight:700;color:var(--amber-deep);margin:6px 0 2px;">'+day.dateLabel+'（'+day.items.length+'件）</div>' + day.items.map(renderItem).join('');
+      });
       if(restList.length>0){
-        html += '<div style="font-size:11px;font-weight:700;color:var(--text-soft);margin:6px 0 2px;">今月の残り</div>' + restList.map(renderItem).join('');
+        html += '<div style="font-size:11px;font-weight:700;color:var(--text-soft);margin:6px 0 2px;">今月の残り（'+restList.length+'件）</div>' + restList.map(renderItem).join('');
       }
     }
     html += '<div class="divider"></div>';
@@ -2837,6 +2860,17 @@ function renderMeetingSummary(){
     const meta = repMeta.find(m=>m.name===rep);
     return {rep, cnt, target: meta ? meta.target : null, status: meta ? meta.status : '勤務中'};
   }).sort((a,b)=>b.cnt-a.cnt);
+
+  // 営業予定表（今月分）：予定・訪問済・延期・キャンセル・繰越・紹介対応の内訳
+  const monthPlans = schedulePlans.filter(p=>p.date && p.date.startsWith(monthPre));
+  const planStatusCounts = SCHEDULE_STATUS_OPTIONS.map(s=>({status:s, cnt: monthPlans.filter(p=>p.status===s).length}));
+  // 要フォロー：延期になった施設（延期回数が多い順）
+  const delayCounts = {};
+  monthPlans.filter(p=>p.status==='延期').forEach(p=>{
+    if(!delayCounts[p.facilityName]) delayCounts[p.facilityName] = 0;
+    delayCounts[p.facilityName]++;
+  });
+  const delayRows = Object.entries(delayCounts).sort((a,b)=>b[1]-a[1]);
 
   // 施設ごとの訪問回数（今月・全担当者合計）
   const byFacility = {};
@@ -2929,12 +2963,25 @@ function renderMeetingSummary(){
   html += '<div class="vlist-row"><span>残り</span><span class="vlist-count '+(remaining===0?'':'full')+'">'+(remaining===0?'達成🎉':remaining+'件')+'</span></div>';
 
   html += '<div class="divider"></div>';
-  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">担当者別</div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">担当者別（達成率）</div>';
   html += repCounts.map(r=>{
     const label = (r.status!=='勤務中' && r.status!=='応援のみ') ? '（'+r.status+'中）' : '';
-    const targetLabel = r.target!==null ? r.target+'件中' : '';
-    return '<div class="vlist-row"><span>'+escapeHtml(r.rep)+label+'</span><span class="vlist-count">'+targetLabel+r.cnt+'件済</span></div>';
+    const targetLabel = r.target!==null ? r.cnt+'/'+r.target+'件' : r.cnt+'件';
+    const pct = (r.target && r.target>0) ? Math.round(r.cnt/r.target*100)+'%' : '—';
+    return '<div class="vlist-row"><span>'+escapeHtml(r.rep)+label+'</span><span class="vlist-count">'+targetLabel+'　'+pct+'</span></div>';
   }).join('');
+
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">営業予定表（今月・予定と実績）</div>';
+  if(monthPlans.length===0){
+    html += '<div class="empty" style="padding:10px 0;">まだ営業予定表への登録がありません（営業予定表の「本日の予定を確定する」で登録されます）</div>';
+  } else {
+    html += planStatusCounts.map(p=>'<div class="vlist-row"><span>'+p.status+'</span><span class="vlist-count'+(p.status==='延期'||p.status==='キャンセル'?' full':'')+'">'+p.cnt+'件</span></div>').join('');
+    if(delayRows.length>0){
+      html += '<div style="font-size:11.5px;color:var(--text-soft);margin-top:8px;margin-bottom:4px;">要フォロー（延期の多い施設）</div>';
+      html += delayRows.map(([name,cnt])=>'<div class="vlist-row"><span>○ '+escapeHtml(name)+'</span><span class="vlist-count full">延期'+cnt+'回</span></div>').join('');
+    }
+  }
 
   html += '<div class="divider"></div>';
   html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">訪問施設一覧（'+facilityRows.length+'施設・タップで詳細）</div>';
@@ -3143,6 +3190,79 @@ function openSchedule(){
 function closeSchedule(){
   document.getElementById('scheduleOverlay').classList.remove('show');
 }
+/* ---------- 営業予定表（予定・訪問済・延期・キャンセル・繰越・紹介対応） ---------- */
+
+/** 本日、自動振り分けで割り当てられた施設を、営業予定表シートに「予定」として一括登録する。
+ *  すでに確定済みの分は重複登録されない（GAS側で日付・施設・担当者の組み合わせをチェック）。 */
+async function confirmTodayPlan(){
+  if(!repList.includes(currentUserName)){ showToast('担当者が選択されていません'); return; }
+  const result = computeAutoAssignment();
+  if(!result){ showToast('稼働中の担当者がいません'); return; }
+  const myList = result.assigned[currentUserName];
+  if(!myList){ showToast('現在稼働中の担当者に該当しません'); return; }
+  const { todayList } = splitByPace(myList);
+  if(todayList.length===0){ showToast('本日の割り当てがありません'); return; }
+  const today = todayStr();
+  const plans = todayList.map(item=>({ date: today, facilityId: item.f.id, facilityName: item.f.name, rep: currentUserName, status: '予定' }));
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'addSchedulePlans', ...authPayload(), plans})});
+    const data = await res.json();
+    if(data.ok){
+      await loadData();
+      renderSchedule();
+      showToast('本日の予定を確定しました（'+(data.added||0)+'件）');
+    } else {
+      showToast('確定に失敗しました: '+(data.error||''));
+    }
+  }catch(err){
+    showToast('通信エラーが発生しました');
+    console.error(err);
+  }
+}
+
+/** 営業予定表の1件の状態を更新する（予定→訪問済／延期／キャンセル／繰越／紹介対応） */
+async function updatePlanStatus(id, status){
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'updateSchedulePlan', ...authPayload(), id, status})});
+    const data = await res.json();
+    if(data.ok){
+      const idx = schedulePlans.findIndex(p=>p.id===id);
+      if(idx>-1) schedulePlans[idx].status = status;
+      renderSchedule();
+      showToast('状態を「'+status+'」に更新しました');
+    } else {
+      showToast('更新に失敗しました: '+(data.error||''));
+    }
+  }catch(err){
+    showToast('通信エラーが発生しました');
+    console.error(err);
+  }
+}
+
+/** 「延期」「繰越」になった予定を、明日の日付で新しい「予定」として登録し直す（同じ施設・担当者） */
+async function carryOverToTomorrow(id){
+  const p = schedulePlans.find(x=>x.id===id);
+  if(!p) return;
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  const tomorrowStr = tomorrow.getFullYear()+'-'+String(tomorrow.getMonth()+1).padStart(2,'0')+'-'+String(tomorrow.getDate()).padStart(2,'0');
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'addSchedulePlan', ...authPayload(), date:tomorrowStr, facilityId:p.facilityId, facilityName:p.facilityName, rep:p.rep, status:'予定'})});
+    const data = await res.json();
+    if(data.ok){
+      if(!data.alreadyExists){
+        schedulePlans.push({id:data.id, date:tomorrowStr, facilityId:p.facilityId, facilityName:p.facilityName, rep:p.rep, status:'予定'});
+      }
+      renderSchedule();
+      showToast(p.facilityName+'を明日（'+tomorrowStr+'）へ繰り越しました');
+    } else {
+      showToast('繰越に失敗しました: '+(data.error||''));
+    }
+  }catch(err){
+    showToast('通信エラーが発生しました');
+    console.error(err);
+  }
+}
+
 function renderSchedule(){
   const today = todayStr();
   const centerItems = [];
@@ -3237,6 +3357,26 @@ function renderSchedule(){
   html += '<div class="divider"></div>';
   html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">悠久福祉会（'+yukyuItems.length+'件）</div>';
   html += renderGroup(yukyuItems);
+  // ------- 本日の実績登録（営業予定表シートに記録・状態を訪問済/延期/キャンセル/繰越/紹介対応に変更できる） -------
+  html += '<div class="divider"></div>';
+  const todaySchedulePlans = schedulePlans.filter(p=>p.date===today && p.rep===currentUserName);
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">📋 本日の実績登録（'+escapeHtml(currentUserName||'未選択')+'さん）</div>';
+  if(todaySchedulePlans.length===0){
+    html += '<div class="empty" style="padding:6px 0 10px;">本日の予定はまだ確定していません</div>';
+    html += '<button class="nearby-btn" style="width:100%;" onclick="confirmTodayPlan()">📌 本日の予定を確定する</button>';
+  } else {
+    html += todaySchedulePlans.map(p=>{
+      const carryBtn = (p.status==='延期' || p.status==='繰越')
+        ? '<button class="popup-btn" style="margin-top:4px;" onclick="carryOverToTomorrow(\''+p.id+'\')">→ 明日へ繰越</button>' : '';
+      return '<div class="hist-item">'
+        + '<span class="hist-memo" style="font-weight:600;">'+escapeHtml(p.facilityName)+'</span>'
+        + '<select class="schedule-status-select" data-id="'+p.id+'" onchange="updatePlanStatus(\''+p.id+'\', this.value)" style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1.3px solid var(--line);font-size:12.5px;">'
+        + SCHEDULE_STATUS_OPTIONS.map(s=>'<option value="'+s+'"'+(s===p.status?' selected':'')+'>'+s+'</option>').join('')
+        + '</select>' + carryBtn
+        + '</div>';
+    }).join('');
+  }
+
   // ------- 自動振り分け（担当固定・地域考慮）：ログイン中の担当者の分だけ表示 -------
   html += '<div class="divider"></div>';
   const autoResult = computeAutoAssignment();
@@ -3247,7 +3387,7 @@ function renderSchedule(){
     const myList = repList.includes(currentUserName) ? (autoResult.assigned[currentUserName] || null) : null;
     if(myList){
       const myMeta = autoResult.activeReps.find(m=>m.name===currentUserName);
-      const { todayList, weekList, restList } = splitByPace(myList);
+      const { todayList, weekList, restList, dailySchedule } = splitByPace(myList);
       html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:4px;">🎯 自動振り分け（'+escapeHtml(currentUserName)+'さん）</div>';
       html += '<div class="attr-tags" style="margin-bottom:8px;">'
         + '<span class="attr-tag on">今月 '+myList.length+'/'+(myMeta?myMeta.target:0)+'件</span>'
@@ -3265,13 +3405,14 @@ function renderSchedule(){
         html += '<div class="empty" style="padding:10px 0;">割り当てなし</div>';
       } else {
         if(todayList.length>0){
-          html += '<div style="font-size:11px;font-weight:700;color:var(--danger);margin:4px 0 2px;">本日分</div>' + todayList.map(renderMyItem).join('');
+          html += '<div style="font-size:11px;font-weight:700;color:var(--danger);margin:4px 0 2px;">本日（'+todayList.length+'件）</div>' + todayList.map(renderMyItem).join('');
         }
-        if(weekList.length>0){
-          html += '<div style="font-size:11px;font-weight:700;color:var(--amber-deep);margin:6px 0 2px;">今週の残り</div>' + weekList.map(renderMyItem).join('');
-        }
+        dailySchedule.forEach(day=>{
+          if(day.items.length===0) return;
+          html += '<div style="font-size:11px;font-weight:700;color:var(--amber-deep);margin:6px 0 2px;">'+day.dateLabel+'（'+day.items.length+'件）</div>' + day.items.map(renderMyItem).join('');
+        });
         if(restList.length>0){
-          html += '<div style="font-size:11px;font-weight:700;color:var(--text-soft);margin:6px 0 2px;">今月の残り</div>' + restList.map(renderMyItem).join('');
+          html += '<div style="font-size:11px;font-weight:700;color:var(--text-soft);margin:6px 0 2px;">今月の残り（'+restList.length+'件）</div>' + restList.map(renderMyItem).join('');
         }
       }
     } else {
