@@ -524,7 +524,9 @@
       <button class="dl-btn dl-btn-success" onclick="dealOpenModal()">＋ 新規追加</button>
       <button class="dl-btn dl-btn-outline" onclick="dealExportCSV()">⬇ CSV出力</button>
       <button class="dl-btn dl-btn-outline" onclick="toggleDealMonthly()">📊 月別比較</button>
+      <button class="dl-btn dl-btn-outline" onclick="toggleDealDeadline()">⏰ 期限アラート</button>
     </div>
+    <div class="dl-table-wrap" id="dl-deadline-summary" style="display:none;margin-bottom:10px;padding:10px 12px;"></div>
     <div class="dl-table-wrap" id="dl-monthly-compare" style="display:none;margin-bottom:10px;padding:10px 12px;"></div>
     <div class="dl-table-wrap">
       <table>
@@ -1408,8 +1410,9 @@ function vacancyStatus(f){
   if(vac<=2) return {label:'残りわずか', cls:'few'};
   return {label:'空床あり', cls:'available'};
 }
+const STALE_VACANCY_DAYS = 20; // 空床情報が古いと判断する日数（この日数以上更新がなければ「要更新」表示）
 function isStale(f){
-  return f.updatedAt && daysBetween(f.updatedAt) >= 3;
+  return f.updatedAt && daysBetween(f.updatedAt) >= STALE_VACANCY_DAYS;
 }
 function careLevelLabels(codes){
   const map = {'0':'要支援','1':'要介護1','2':'要介護2','3':'要介護3','4':'要介護4','5':'要介護5'};
@@ -2228,18 +2231,29 @@ function renderVacancyList(){
     el.innerHTML = '<div class="empty">空床管理対象の施設が登録されていません（施設管理タブの「法人・グループ」欄に入力すると対象になります）</div>';
     return;
   }
-  el.innerHTML = managed.map(f=>{
+  const staleFacilities = managed.filter(f=>isStale(f));
+  let html = '';
+  if(staleFacilities.length>0){
+    html += '<div style="font-size:12.5px;font-weight:700;color:var(--danger);margin-bottom:8px;">⚠ 要更新（'+STALE_VACANCY_DAYS+'日以上更新なし・'+staleFacilities.length+'件）</div>';
+    html += staleFacilities.map(f=>
+      '<div class="vlist-row" onclick="closeVacancyList();openDetail(\''+f.id+'\')"><span>○ '+escapeHtml(f.name)+'</span><span class="vlist-count full">最終'+f.updatedAt+'（'+daysBetween(f.updatedAt)+'日前）</span></div>'
+    ).join('');
+    html += '<div class="divider"></div>';
+  }
+  html += managed.map(f=>{
     const vac = vacancyOf(f);
     const st = vacancyStatus(f);
     const numLine = (f.capacity && f.occupied!=='') ? (f.capacity+'/'+(f.occupied||0)) : '';
     const statusLabel = vac===null ? '未登録' : (vac<=0 ? '満床' : '空床'+vac);
     const dealCount = dealRecords.filter(d=>d.facility===f.name && d.status!=='成約' && d.status!=='キャンセル').length;
     const dealLine = dealCount>0 ? '<div style="font-size:11px;color:var(--navy);">案件'+dealCount+'件</div>' : '';
+    const updateLine = f.updatedAt ? '<div style="font-size:10.5px;color:'+(isStale(f)?'var(--danger)':'var(--text-soft)')+';">更新日 '+f.updatedAt+(f.updatedBy?'（'+escapeHtml(f.updatedBy)+'）':'')+'</div>' : '';
     return '<div class="vlist-row" onclick="closeVacancyList();openDetail(\''+f.id+'\')">'
-      + '<span>○ '+escapeHtml(f.name)+(numLine?'<div style="font-size:11px;color:var(--text-soft);">'+numLine+'</div>':'')+dealLine+'</span>'
+      + '<span>○ '+escapeHtml(f.name)+(numLine?'<div style="font-size:11px;color:var(--text-soft);">'+numLine+'</div>':'')+dealLine+updateLine+'</span>'
       + '<span class="vlist-count '+(st.cls==='full'?'full':'')+'">'+statusLabel+'</span>'
       + '</div>';
   }).join('');
+  el.innerHTML = html;
 }
 
 /* ================= 未訪問アラート（30日以上訪問なし） ================= */
@@ -2690,6 +2704,39 @@ function renderUnvisited(){
   el.innerHTML = html;
 }
 
+/** 営業予定表の「訪問予定」を1タップで訪問済みにする（今月の実績・月別実績・会議用一覧・未訪問一覧すべてに自動反映） */
+async function markVisitDone(facilityId, rep, purpose){
+  const f = facilities.find(x=>x.id===facilityId);
+  if(!f) return;
+  if(!confirm(f.name+'に本日訪問したことにしますか？')) return;
+  const today = todayStr();
+  const payload = {
+    action:'addVisit', ...authPayload(),
+    facilityId: f.id, facilityName: f.name,
+    visitDate: today, rep: rep, memo: '営業予定表より記録', nextVisit: '', purpose: purpose,
+    activities: '', contactPerson: ''
+  };
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify(payload)});
+    const data = await res.json();
+    if(data.ok){
+      visits.push({
+        id:data.id, facilityId:f.id, facilityName:f.name, visitDate:today,
+        rep:rep, memo:payload.memo, nextVisit:'', createdAt: new Date().toISOString(),
+        purpose: purpose, activities:'', contactPerson:''
+      });
+      renderAll();
+      renderSchedule();
+      showToast('訪問済みとして記録しました');
+    } else {
+      showToast('記録に失敗しました: '+(data.error||''));
+    }
+  }catch(err){
+    showToast('通信エラーが発生しました');
+    console.error(err);
+  }
+}
+
 function openSchedule(){
   renderSchedule();
   document.getElementById('scheduleOverlay').classList.add('show');
@@ -2703,17 +2750,21 @@ function renderSchedule(){
   const yukyuItems = [];
 
   visits.filter(v=>v.nextVisit && v.nextVisit>=today).forEach(v=>{
-    const item = {date:v.nextVisit, type:'訪問予定', label:v.facilityName, sub:'担当：'+v.rep, cls: v.nextVisit===today?'overdue':'upcoming'};
+    const item = {
+      date:v.nextVisit, type:'訪問予定', label:v.facilityName, sub:'担当：'+v.rep,
+      cls: v.nextVisit===today?'overdue':'upcoming',
+      action: '<button class="popup-btn" style="margin-top:6px;" onclick="markVisitDone(\''+v.facilityId+'\',\''+v.rep+'\',\''+(v.purpose||'center')+'\')">✓ 訪問済にする</button>'
+    };
     const purpose = v.purpose || 'center';
     if(purpose==='center' || purpose==='both') centerItems.push(item);
     if(purpose==='yukyu' || purpose==='both') yukyuItems.push(item);
   });
   // 紹介管理（見学予定・入居予定）は高齢者紹介センターの活動として分類
   referrals.filter(r=>r.visitDate && r.visitDate>=today && r.status!=='キャンセル' && r.status!=='入居決定').forEach(r=>{
-    centerItems.push({date:r.visitDate, type:'見学予定', label:(r.userName||'利用者未記入')+' → '+r.facilityName, sub:'担当：'+r.rep, cls:'upcoming'});
+    centerItems.push({date:r.visitDate, type:'見学予定', label:(r.userName||'利用者未記入')+' → '+r.facilityName, sub:'担当：'+r.rep, cls:'upcoming', action:''});
   });
   referrals.filter(r=>r.moveInDate && r.moveInDate>=today && r.status!=='キャンセル').forEach(r=>{
-    centerItems.push({date:r.moveInDate, type:'入居予定', label:(r.userName||'利用者未記入')+' → '+r.facilityName, sub:'担当：'+r.rep, cls:'done'});
+    centerItems.push({date:r.moveInDate, type:'入居予定', label:(r.userName||'利用者未記入')+' → '+r.facilityName, sub:'担当：'+r.rep, cls:'done', action:''});
   });
   centerItems.sort((a,b)=> a.date.localeCompare(b.date));
   yukyuItems.sort((a,b)=> a.date.localeCompare(b.date));
@@ -2724,7 +2775,7 @@ function renderSchedule(){
       '<div class="hist-item"><span class="hist-date">'+it.date+'</span> '
       + '<span class="visit-status '+it.cls+'" style="margin-left:6px;">'+it.type+'</span>'
       + '<div class="hist-memo">'+escapeHtml(it.label)+'</div>'
-      + '<div style="font-size:11px;color:var(--text-soft);">'+it.sub+'</div></div>'
+      + '<div style="font-size:11px;color:var(--text-soft);">'+it.sub+'</div>'+(it.action||'')+'</div>'
     ).join('');
   };
 
@@ -3193,6 +3244,7 @@ function dealRender(){
   document.getElementById('dl-cnt-lost').textContent = dealRecords.filter(r=>r.status==='キャンセル').length;
 
   if(dealMonthlyShown) renderDealMonthly();
+  if(dealDeadlineShown) renderDealDeadlineSummary();
 
   const tbody = document.getElementById('dl-table-body');
   document.getElementById('dl-empty-msg').style.display = filtered.length ? 'none' : 'block';
@@ -3202,8 +3254,14 @@ function dealRender(){
     const over = dealIsOverdue(r);
     const priority = parseDealMemoTags(r.memo).priority || '3';
     const closeDiff = r.closeDate ? Math.floor((DEAL_TODAY - new Date(r.closeDate)) / 86400000) : null;
+    const isFinal = r.status==='成約' || r.status==='キャンセル';
+    let deadlineBadge = '';
+    if(r.closeDate && !isFinal){
+      if(closeDiff > 0) deadlineBadge = '<span class="dl-alert-badge" style="background:var(--dl-red);">期限超過</span>';
+      else if(closeDiff >= -3) deadlineBadge = '<span class="dl-alert-badge" style="background:var(--dl-yellow);">あと'+(-closeDiff)+'日</span>';
+    }
     const closeFmt = r.closeDate
-      ? `<span class="${closeDiff > 7 && r.status!=='成約' && r.status!=='キャンセル' ? 'dl-date-overdue' : ''}">${dealFmt(r.closeDate)}</span>${over ? '<span class="dl-alert-badge">未対応</span>' : ''}`
+      ? `<span class="${closeDiff > 7 && !isFinal ? 'dl-date-overdue' : ''}">${dealFmt(r.closeDate)}</span>${over ? '<span class="dl-alert-badge">未対応</span>' : ''}${deadlineBadge}`
       : '—';
     const memo = r.memo ? `<span title="${String(r.memo).replace(/"/g,'&quot;')}" style="cursor:default">📝</span>` : '—';
     return `<tr class="${over ? 'dl-alert-row' : ''}">
@@ -3399,6 +3457,36 @@ function toggleDealMonthly(){
   dealMonthlyShown = !dealMonthlyShown;
   document.getElementById('dl-monthly-compare').style.display = dealMonthlyShown ? 'block':'none';
   if(dealMonthlyShown) renderDealMonthly();
+}
+
+let dealDeadlineShown = false;
+function toggleDealDeadline(){
+  dealDeadlineShown = !dealDeadlineShown;
+  document.getElementById('dl-deadline-summary').style.display = dealDeadlineShown ? 'block':'none';
+  if(dealDeadlineShown) renderDealDeadlineSummary();
+}
+function renderDealDeadlineSummary(){
+  const active = dealRecords.filter(d=>d.status!=='成約' && d.status!=='キャンセル');
+  const within3 = active.filter(d=>{
+    if(!d.closeDate) return false;
+    const diff = Math.floor((DEAL_TODAY - new Date(d.closeDate)) / 86400000);
+    return diff >= -3 && diff <= 0;
+  }).length;
+  const overdue = active.filter(d=>{
+    if(!d.closeDate) return false;
+    return Math.floor((DEAL_TODAY - new Date(d.closeDate)) / 86400000) > 0;
+  }).length;
+  const waitingTour = dealRecords.filter(d=>d.status==='見学予定').length;
+  const moveInWaiting = dealRecords.filter(d=>d.status==='入居予定' || d.status==='入居').length;
+  const success = dealRecords.filter(d=>d.status==='成約').length;
+
+  const el = document.getElementById('dl-deadline-summary');
+  el.innerHTML =
+    '<div class="vlist-row"><span>あと3日以内</span><span class="vlist-count full">'+within3+'件</span></div>'
+    + '<div class="vlist-row"><span>期限超過</span><span class="vlist-count full">'+overdue+'件</span></div>'
+    + '<div class="vlist-row"><span>見学待ち</span><span class="vlist-count">'+waitingTour+'件</span></div>'
+    + '<div class="vlist-row"><span>入居予定</span><span class="vlist-count">'+moveInWaiting+'件</span></div>'
+    + '<div class="vlist-row"><span>成約</span><span class="vlist-count">'+success+'件</span></div>';
 }
 
 function renderDealMonthly(){
