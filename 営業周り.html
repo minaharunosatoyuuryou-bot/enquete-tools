@@ -699,6 +699,10 @@
     <div class="sheet-handle"></div>
     <h2 style="font-size:16px;" id="meetingSummaryTitle">会議用一覧</h2>
     <button class="nearby-btn no-print" style="width:100%;margin-top:10px;" onclick="window.print()">🖨 この画面を印刷する</button>
+    <button class="nearby-btn no-print" style="width:100%;margin-top:8px;" onclick="toggleAutoAssign()">🎯 自動振り分けを見る</button>
+    <button class="nearby-btn no-print" style="width:100%;margin-top:8px;" onclick="toggleChecklist()">📋 印刷用チェックリストを見る</button>
+    <div id="autoAssignBody" style="display:none;margin-top:10px;"></div>
+    <div id="checklistBody" style="display:none;margin-top:10px;"></div>
     <div id="meetingSummaryBody" style="margin-top:14px;"></div>
   </div>
 </div>
@@ -717,6 +721,10 @@
     <div class="form-row">
       <label>施設名 *</label>
       <input type="text" id="afName" placeholder="例：〇〇居宅介護支援事業所">
+    </div>
+    <div class="form-row">
+      <label>担当固定（自動振り分け用・任意。指定するとその担当者に固定します）</label>
+      <select id="afFixedRep"><option value="">誰でもOK</option></select>
     </div>
     <div class="form-row">
       <label>市区町村</label>
@@ -817,6 +825,15 @@
     </div>
     <button class="save-btn" id="repSaveBtn" onclick="submitReps()" style="margin-top:10px;">この内容で保存する</button>
     <div class="login-err" id="repErr" style="height:auto;margin-top:8px;"></div>
+
+    <div class="divider admin-only"></div>
+    <div class="admin-only">
+      <h3 style="font-size:13.5px;margin:0 0 8px;">勤務状況・月間目標件数（管理者のみ）</h3>
+      <div id="repMetaTable"></div>
+      <button class="nearby-btn" style="width:100%;margin-top:8px;" onclick="autoCalcTargets()">🔄 目標件数を勤務中の担当者で均等に再計算</button>
+      <button class="save-btn" id="repMetaSaveBtn" onclick="submitRepMeta()" style="margin-top:10px;">この内容で保存する</button>
+      <div class="login-err" id="repMetaErr" style="height:auto;margin-top:8px;"></div>
+    </div>
 
     <div class="divider admin-only"></div>
     <div class="admin-only">
@@ -1088,6 +1105,7 @@ let facilities = [];
 let visits = [];
 let referrals = [];
 let repList = [];
+let repMeta = []; // [{name, status, target}] 担当者の勤務状況・月間目標件数
 let repListDraft = [];
 let allowedAccounts = [];
 let allowedAccountsDraft = [];
@@ -1282,6 +1300,7 @@ async function loadData(){
     visits = data.visits || [];
     referrals = data.referrals || [];
     repList = data.reps && data.reps.length ? data.reps : ['牧','岡野','岩矢','木﨑','高田'];
+    repMeta = data.repMeta && data.repMeta.length ? data.repMeta : repList.map(r=>({name:r, status:'勤務中', target:Math.round(200/repList.length)}));
   }catch(err){
     showToast('データ取得に失敗しました');
     console.error(err);
@@ -1834,10 +1853,14 @@ function openFacilityEdit(id, defaultGroup){
   const repSel = document.getElementById('afRep');
   repSel.innerHTML = '';
   repList.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r; repSel.appendChild(o); });
+  const fixedSel = document.getElementById('afFixedRep');
+  fixedSel.innerHTML = '<option value="">誰でもOK</option>';
+  repList.forEach(r=>{ const o=document.createElement('option'); o.value=r; o.textContent=r+'に固定'; fixedSel.appendChild(o); });
 
   const f = id ? facilities.find(x=>x.id===id) : null;
   document.getElementById('afTitle').textContent = id ? '施設情報を編集' : '施設を追加';
   document.getElementById('afGroup').value = f ? (f.group||'') : (defaultGroup||'');
+  document.getElementById('afFixedRep').value = f ? (f.fixedRep||'') : '';
   document.getElementById('afName').value = f ? f.name : '';
   document.getElementById('afCity').value = f ? f.city : '';
   document.getElementById('afKind').value = f ? (f.kind||'') : '';
@@ -1878,6 +1901,7 @@ async function submitAddFacility(){
   const city = document.getElementById('afCity').value.trim();
   const kind = document.getElementById('afKind').value;
   const group = document.getElementById('afGroup').value.trim();
+  const fixedRep = document.getElementById('afFixedRep').value;
   const addr = document.getElementById('afAddr').value.trim();
   const tel = document.getElementById('afTel').value.trim();
   const fax = document.getElementById('afFax').value.trim();
@@ -1895,7 +1919,7 @@ async function submitAddFacility(){
   if(!name || !addr){ errEl.textContent = '施設名と住所は必須です'; return; }
   const btn = document.getElementById('afSaveBtn');
   btn.disabled = true; btn.textContent = '保存中...';
-  const fields = { city, kind, group, name, rep, addr, tel, fax, mobile, capacity, occupied, acceptMale, acceptFemale, careLevels, tags, memo, updatedBy: currentUserName||'' };
+  const fields = { city, kind, group, fixedRep, name, rep, addr, tel, fax, mobile, capacity, occupied, acceptMale, acceptFemale, careLevels, tags, memo, updatedBy: currentUserName||'' };
   try{
     const action = editingFacilityId ? 'updateFacility' : 'addFacility';
     const body = editingFacilityId ? {action, ...authPayload(), id: editingFacilityId, ...fields} : {action, ...authPayload(), ...fields};
@@ -1906,12 +1930,12 @@ async function submitAddFacility(){
       if(editingFacilityId){
         const idx = facilities.findIndex(x=>x.id===editingFacilityId);
         if(idx>-1) facilities[idx] = { ...facilities[idx],
-          city, kind, group, name, rep, addr, tel, fax, mobile, capacity, occupied,
+          city, kind, group, fixedRep, name, rep, addr, tel, fax, mobile, capacity, occupied,
           acceptMale: acceptMale?'○':'', acceptFemale: acceptFemale?'○':'',
           careLevels, tags, memo, updatedAt: today, updatedBy: currentUserName||''
         };
       } else {
-        facilities.push({ id:data.id, city, kind, group, name, rep, addr, lat:'', lng:'',
+        facilities.push({ id:data.id, city, kind, group, fixedRep, name, rep, addr, lat:'', lng:'',
           tel, fax, mobile, capacity, occupied,
           acceptMale: acceptMale?'○':'', acceptFemale: acceptFemale?'○':'',
           careLevels, tags, memo, updatedAt: today, updatedBy: currentUserName||''
@@ -2544,6 +2568,153 @@ async function openMeetingSummary(){
 function closeMeetingSummary(){
   document.getElementById('meetingSummaryOverlay').classList.remove('show');
 }
+
+/** 施設の優先度スコア（数字が大きいほど優先） 90日以上未訪問(5) > 空床あり(4) > 紹介が多い(3) > 60日以上(2) > 30日以上(1) > それ以外(0) */
+function facilityPriorityScore(f){
+  const vs = visitsFor(f.id);
+  const days = vs.length ? daysBetween(vs[0].visitDate) : Infinity;
+  if(days>=90) return 5;
+  const vac = vacancyOf(f);
+  if(f.group && vac!==null && vac>0) return 4;
+  const refCount = referrals.filter(r=>r.facilityId===f.id).length;
+  if(refCount>=3) return 3;
+  if(days>=60) return 2;
+  if(days>=30) return 1;
+  return 0;
+}
+const PRIORITY_STAR = {5:'★★★★★',4:'★★★★',3:'★★★',2:'★★',1:'★',0:''};
+
+/* ---------- 印刷用チェックリスト ---------- */
+let checklistShown = false;
+function toggleChecklist(){
+  checklistShown = !checklistShown;
+  document.getElementById('checklistBody').style.display = checklistShown ? 'block' : 'none';
+  if(checklistShown) renderChecklist();
+}
+function renderChecklist(){
+  const targets = visitTargetFacilities().slice().sort((a,b)=>{
+    const da = visitsFor(a.id)[0] ? daysBetween(visitsFor(a.id)[0].visitDate) : Infinity;
+    const db = visitsFor(b.id)[0] ? daysBetween(visitsFor(b.id)[0].visitDate) : Infinity;
+    return db - da;
+  });
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:11px;">'
+    + '<thead><tr style="background:var(--navy-deep);color:#fff;">'
+    + '<th style="padding:5px;text-align:left;">施設名</th><th style="padding:5px;">最終訪問</th><th style="padding:5px;">担当</th>'
+    + '<th style="padding:5px;">空床</th><th style="padding:5px;">要F</th><th style="padding:5px;">次回予定</th><th style="padding:5px;min-width:80px;">メモ欄</th>'
+    + '</tr></thead><tbody>';
+  targets.forEach(f=>{
+    const vs = visitsFor(f.id);
+    const last = vs.length ? vs[0].visitDate : '未訪問';
+    const st = statusFor(f.id);
+    const followUp = st.status==='overdue' ? '〇' : '－';
+    const vac = f.group ? (vacancyOf(f)===null?'—':(vacancyOf(f)<=0?'満床':vacancyOf(f))) : '—';
+    html += '<tr style="border-bottom:1px solid var(--dl-border);">'
+      + '<td style="padding:5px;">'+escapeHtml(f.name)+'</td>'
+      + '<td style="padding:5px;text-align:center;white-space:nowrap;">'+last+'</td>'
+      + '<td style="padding:5px;text-align:center;">'+escapeHtml(f.rep||'')+'</td>'
+      + '<td style="padding:5px;text-align:center;">'+vac+'</td>'
+      + '<td style="padding:5px;text-align:center;">'+followUp+'</td>'
+      + '<td style="padding:5px;text-align:center;white-space:nowrap;">'+(st.next||'')+'</td>'
+      + '<td style="padding:5px;"></td>'
+      + '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('checklistBody').innerHTML = html;
+}
+
+/* ---------- 自動振り分け（優先度＋月間目標に基づく簡易版） ---------- */
+let autoAssignShown = false;
+function toggleAutoAssign(){
+  autoAssignShown = !autoAssignShown;
+  document.getElementById('autoAssignBody').style.display = autoAssignShown ? 'block' : 'none';
+  if(autoAssignShown) renderAutoAssign();
+}
+function renderAutoAssign(){
+  const activeReps = repMeta.filter(m=>m.status==='勤務中' || m.status==='応援のみ');
+  const el = document.getElementById('autoAssignBody');
+  if(activeReps.length===0){
+    el.innerHTML = '<div class="empty">稼働中の担当者がいません（⚙設定で勤務状況を確認してください）</div>';
+    return;
+  }
+  const activeNames = new Set(activeReps.map(m=>m.name));
+  const targets = visitTargetFacilities().slice().sort((a,b)=>{
+    const sa = facilityPriorityScore(a), sb = facilityPriorityScore(b);
+    if(sb!==sa) return sb-sa;
+    const da = visitsFor(a.id)[0] ? daysBetween(visitsFor(a.id)[0].visitDate) : Infinity;
+    const db = visitsFor(b.id)[0] ? daysBetween(visitsFor(b.id)[0].visitDate) : Infinity;
+    return db-da;
+  });
+  const assigned = {}; // rep -> [{f, fixed}]
+  const remaining = {}; // rep -> 残り目標
+  activeReps.forEach(m=>{ assigned[m.name] = []; remaining[m.name] = m.target || 0; });
+
+  // ① 担当固定：稼働中の担当者に固定されている施設は最優先でそのまま割り当てる
+  const fixedNoteList = [];
+  const unfixedTargets = [];
+  targets.forEach(f=>{
+    if(f.fixedRep && activeNames.has(f.fixedRep)){
+      assigned[f.fixedRep].push({f, fixed:true});
+      remaining[f.fixedRep]--;
+    } else {
+      if(f.fixedRep && !activeNames.has(f.fixedRep)){
+        fixedNoteList.push(f.name+'（固定担当:'+f.fixedRep+'が非稼働のため通常割り振り）');
+      }
+      unfixedTargets.push(f);
+    }
+  });
+
+  // ② 地域でまとめる：市区町村ごとにグループ化し、グループ単位でまとめて
+  //    その時点で一番手薄な担当者に割り振る（同じ地域はできるだけ同じ担当者に）
+  const cityOrder = [];
+  const cityGroups = {};
+  unfixedTargets.forEach(f=>{
+    const key = f.city || '__地域不明__';
+    if(!cityGroups[key]){ cityGroups[key] = []; cityOrder.push(key); }
+    cityGroups[key].push(f);
+  });
+  cityOrder.forEach(key=>{
+    const group = cityGroups[key];
+    let bestRep = null, bestRatio = Infinity;
+    activeReps.forEach(m=>{
+      if(remaining[m.name] <= 0) return;
+      const ratio = assigned[m.name].length / Math.max(m.target,1);
+      if(ratio < bestRatio){ bestRatio = ratio; bestRep = m.name; }
+    });
+    if(!bestRep) return; // 全員目標達成分は割り振り済み
+    group.forEach(f=>{
+      assigned[bestRep].push({f, fixed:false});
+      remaining[bestRep]--;
+    });
+  });
+
+  let html = '<div class="empty" style="padding:6px 0 12px;text-align:left;font-size:11px;">'
+    + '※簡易版です。90日以上未訪問→空床あり→紹介の多い施設→60日以上→30日以上、の優先順で、稼働中の担当者の月間目標に応じて割り振っています。📌固定担当の施設は最優先でそのまま割り当て、それ以外は市区町村ごとにまとめて、できるだけ同じ担当者が同じ地域を回れるようにしています。</div>';
+  activeReps.forEach(m=>{
+    const list = assigned[m.name];
+    html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:6px;">'+escapeHtml(m.name)+'さん（'+list.length+'/'+m.target+'件）</div>';
+    if(list.length===0){
+      html += '<div class="empty" style="padding:6px 0;">割り当てなし</div>';
+    } else {
+      html += list.map(item=>{
+        const f = item.f;
+        const score = facilityPriorityScore(f);
+        const mark = item.fixed ? '📌' : '○';
+        const cityTag = f.city ? '<span style="font-size:10.5px;color:var(--text-soft);margin-left:4px;">'+escapeHtml(f.city)+'</span>' : '';
+        return '<div class="vlist-row"><span>'+mark+' '+escapeHtml(f.name)+cityTag+'</span><span style="font-size:11px;color:var(--amber-deep);">'+(PRIORITY_STAR[score]||'')+'</span></div>';
+      }).join('');
+    }
+    html += '<div class="divider"></div>';
+  });
+  const inactiveReps = repMeta.filter(m=>m.status!=='勤務中' && m.status!=='応援のみ');
+  if(inactiveReps.length>0){
+    html += '<div style="font-size:11.5px;color:var(--text-soft);">対象外：'+inactiveReps.map(m=>escapeHtml(m.name)+'（'+m.status+'）').join('、')+'</div>';
+  }
+  if(fixedNoteList.length>0){
+    html += '<div style="font-size:11px;color:var(--danger);margin-top:6px;">⚠ '+fixedNoteList.map(escapeHtml).join('、')+'</div>';
+  }
+  el.innerHTML = html;
+}
+
 function renderMeetingSummary(){
   const monthPre = thisMonthPrefix();
   const allTargets = visitTargetFacilities();
@@ -2599,6 +2770,18 @@ function renderMeetingSummary(){
   const sundayStr = sunday.getFullYear()+'-'+String(sunday.getMonth()+1).padStart(2,'0')+'-'+String(sunday.getDate()).padStart(2,'0');
   const thisWeekCount = visits.filter(v=>v.nextVisit && v.nextVisit>=mondayStr && v.nextVisit<=sundayStr).length
     + referrals.filter(r=>((r.visitDate && r.visitDate>=mondayStr && r.visitDate<=sundayStr) || (r.moveInDate && r.moveInDate>=mondayStr && r.moveInDate<=sundayStr)) && r.status!=='キャンセル').length;
+  // 担当者別「今週の予定」内訳（訪問の次回予定＋紹介の見学予定／入居予定を担当者ごとに合算）
+  const thisWeekByRep = {};
+  repList.forEach(rep=>{ thisWeekByRep[rep] = 0; });
+  visits.filter(v=>v.nextVisit && v.nextVisit>=mondayStr && v.nextVisit<=sundayStr).forEach(v=>{
+    const rep = v.rep || '未設定';
+    thisWeekByRep[rep] = (thisWeekByRep[rep]||0) + 1;
+  });
+  referrals.filter(r=>((r.visitDate && r.visitDate>=mondayStr && r.visitDate<=sundayStr) || (r.moveInDate && r.moveInDate>=mondayStr && r.moveInDate<=sundayStr)) && r.status!=='キャンセル').forEach(r=>{
+    const rep = r.rep || '未設定';
+    thisWeekByRep[rep] = (thisWeekByRep[rep]||0) + 1;
+  });
+  const thisWeekRepRows = Object.entries(thisWeekByRep).filter(([,cnt])=>cnt>0).sort((a,b)=>b[1]-a[1]);
   const nextMonthDate = new Date(now.getFullYear(), now.getMonth()+1, 1);
   const nextMonthPre = nextMonthDate.getFullYear()+'-'+String(nextMonthDate.getMonth()+1).padStart(2,'0');
   const nextMonthCount = visits.filter(v=>v.nextVisit && v.nextVisit.startsWith(nextMonthPre)).length
@@ -2621,6 +2804,11 @@ function renderMeetingSummary(){
   html += '<div class="vlist-row"><span>空床あり</span><span class="vlist-count">'+facilities.filter(f=>f.group && vacancyOf(f)!==null && vacancyOf(f)>0).length+'施設</span></div>';
   html += '<div class="vlist-row"><span>未訪問</span><span class="vlist-count full">'+unvisitedCount+'施設</span></div>';
   html += '<div class="vlist-row"><span>今週の予定</span><span class="vlist-count">'+thisWeekCount+'件</span></div>';
+  if(thisWeekRepRows.length>0){
+    html += '<div style="font-size:11px;color:var(--text-soft);padding:2px 0 6px 4px;">'
+      + thisWeekRepRows.map(([rep,cnt])=>escapeHtml(rep)+' '+cnt+'件').join('　')
+      + '</div>';
+  }
   html += '<div class="vlist-row"><span>来月予定</span><span class="vlist-count">'+nextMonthCount+'件</span></div>';
   html += '<div class="vlist-row"><span>要フォロー</span><span class="vlist-count full">'+overdueFacilities.length+'件</span></div>';
   // ------- ここまで要約ブロック -------
@@ -3109,6 +3297,8 @@ function openPwChange(){
     document.getElementById('accNewEmail').value = '';
     document.getElementById('accNewName').value = '';
     renderAccountChips();
+    document.getElementById('repMetaErr').textContent = '';
+    renderRepMetaTable();
   }
   document.getElementById('pwOverlay').classList.add('show');
 }
@@ -3188,7 +3378,66 @@ async function submitReps(){
   btn.disabled = false; btn.textContent = 'この内容で保存する';
 }
 
-/* ---------- 許可アカウント管理（管理者のみ） ---------- */
+/* ---------- 担当者の勤務状況・月間目標件数（管理者のみ） ---------- */
+const REP_STATUS_OPTIONS = ['勤務中','産休','育休','休職中','応援のみ','退職'];
+/** 勤務中（＋応援のみ）の担当者の間で、月間目標件数を均等に再計算する（勤務状況に応じて自動で割り直す） */
+function autoCalcTargets(){
+  const rows = document.querySelectorAll('#repMetaTable .rm-status');
+  const active = [];
+  rows.forEach(sel=>{
+    if(sel.value==='勤務中' || sel.value==='応援のみ') active.push(sel.dataset.rep);
+  });
+  if(active.length===0){ showToast('勤務中の担当者がいません'); return; }
+  const base = Math.floor(MONTHLY_VISIT_GOAL / active.length);
+  const remainder = MONTHLY_VISIT_GOAL - base*active.length;
+  document.querySelectorAll('#repMetaTable .rm-target').forEach(inp=>{
+    const rep = inp.dataset.rep;
+    const idx = active.indexOf(rep);
+    if(idx===-1){ inp.value = 0; }
+    else { inp.value = base + (idx < remainder ? 1 : 0); }
+  });
+  showToast('目標件数を均等に再計算しました（保存を押して確定してください）');
+}
+
+function renderRepMetaTable(){
+  const el = document.getElementById('repMetaTable');
+  el.innerHTML = repList.map(rep=>{
+    const m = repMeta.find(x=>x.name===rep) || {status:'勤務中', target:Math.round(200/repList.length)};
+    return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">'
+      + '<span style="width:56px;font-weight:700;font-size:12.5px;">'+escapeHtml(rep)+'</span>'
+      + '<select class="rm-status" data-rep="'+escapeHtml(rep)+'" style="flex:1;padding:8px;border-radius:8px;border:1.3px solid var(--line);font-size:12px;">'
+      + REP_STATUS_OPTIONS.map(s=>'<option value="'+s+'"'+(s===m.status?' selected':'')+'>'+s+'</option>').join('')
+      + '</select>'
+      + '<input type="number" class="rm-target" data-rep="'+escapeHtml(rep)+'" value="'+(m.target||0)+'" min="0" style="width:64px;padding:8px;border-radius:8px;border:1.3px solid var(--line);font-size:12px;" placeholder="件">'
+      + '</div>';
+  }).join('');
+}
+async function submitRepMeta(){
+  const errEl = document.getElementById('repMetaErr');
+  errEl.textContent = '';
+  const newMeta = repList.map(rep=>{
+    const statusSel = document.querySelector('.rm-status[data-rep="'+rep+'"]');
+    const targetInput = document.querySelector('.rm-target[data-rep="'+rep+'"]');
+    return { name: rep, status: statusSel ? statusSel.value : '勤務中', target: targetInput ? Number(targetInput.value)||0 : 0 };
+  });
+  const btn = document.getElementById('repMetaSaveBtn');
+  btn.disabled = true; btn.textContent = '保存中...';
+  try{
+    const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify({action:'saveRepMeta', ...authPayload(), repMeta:newMeta})});
+    const data = await res.json();
+    if(data.ok){
+      repMeta = newMeta;
+      showToast('担当者の勤務状況・目標件数を更新しました');
+    } else {
+      errEl.textContent = data.error || '保存に失敗しました';
+    }
+  }catch(err){
+    errEl.textContent = '通信エラーが発生しました';
+    console.error(err);
+  }
+  btn.disabled = false; btn.textContent = 'この内容で保存する';
+}
+
 function renderAccountChips(){
   const el = document.getElementById('accountChips');
   if(!el) return;
