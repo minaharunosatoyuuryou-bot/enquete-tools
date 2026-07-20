@@ -370,7 +370,7 @@
 
   <div class="kpi-bar" id="visitKpiBar">
     <div class="kpi"><div class="kpi-num" id="kpiTotal">-</div><div class="kpi-label">対象施設</div></div>
-    <div class="kpi"><div class="kpi-num" id="kpiVisited" style="font-size:17px;">-</div><div class="kpi-label">今月訪問</div></div>
+    <div class="kpi" onclick="openVisitLog()" style="cursor:pointer;"><div class="kpi-num" id="kpiVisited" style="font-size:17px;">-</div><div class="kpi-label">今月訪問 ▸</div></div>
     <div class="kpi"><div class="kpi-num" id="kpiRate">-</div><div class="kpi-label">達成率</div></div>
     <div class="kpi overdue"><div class="kpi-num" id="kpiOverdue">-</div><div class="kpi-label">要フォロー</div></div>
   </div>
@@ -652,6 +652,26 @@
 
 <!-- 今月の実績モーダル -->
 <!-- 本日の確認事項（ログイン直後に自動表示） -->
+<!-- 今月の訪問記録一覧（誰が・いつ・どこに行ったか） -->
+<div class="overlay" id="visitLogOverlay">
+  <div class="sheet">
+    <button class="close-btn" onclick="closeVisitLog()">×</button>
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;" id="visitLogTitle">今月の訪問記録</h2>
+    <div id="visitLogBody" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<!-- 月別実績：月ごとの詳細 -->
+<div class="overlay" id="monthDetailOverlay">
+  <div class="sheet">
+    <button class="close-btn" onclick="closeMonthDetail()">×</button>
+    <div class="sheet-handle"></div>
+    <h2 style="font-size:16px;" id="monthDetailTitle">月の詳細</h2>
+    <div id="monthDetailBody" style="margin-top:14px;"></div>
+  </div>
+</div>
+
 <div class="overlay" id="todayBriefOverlay">
   <div class="sheet">
     <button class="close-btn" onclick="closeTodayBrief()">×</button>
@@ -1720,6 +1740,7 @@ async function confirmRemoveVisit(){
       visits = visits.filter(v=>v.id!==id);
       renderHistory(currentFacilityId);
       renderAll();
+      if(document.getElementById('visitLogOverlay').classList.contains('show')) renderVisitLog(thisMonthPrefix());
       showToast('ゴミ箱に移動しました（30日間保存されます）');
     } else {
       showToast('削除に失敗しました: '+(data.error||''));
@@ -2267,6 +2288,33 @@ function renderTodayBrief(){
     + '<div class="vlist-row"><span>案件</span><span class="vlist-count">'+activeDeals.length+'件'+(urgentDeals>0?'（急ぎ'+urgentDeals+'件）':'')+'</span></div>';
 }
 
+/* ================= 今月の訪問記録一覧（誰が・いつ・どこに行ったか） ================= */
+function openVisitLog(){
+  renderVisitLog(thisMonthPrefix());
+  document.getElementById('visitLogOverlay').classList.add('show');
+}
+function closeVisitLog(){
+  document.getElementById('visitLogOverlay').classList.remove('show');
+}
+function renderVisitLog(monthPre){
+  const [y,mo] = monthPre.split('-');
+  document.getElementById('visitLogTitle').textContent = y+'年'+parseInt(mo)+'月の訪問記録';
+  const list = visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre) && visitMatchesMode(v))
+    .slice().sort((a,b)=> b.visitDate.localeCompare(a.visitDate));
+  const el = document.getElementById('visitLogBody');
+  if(list.length===0){ el.innerHTML = '<div class="empty">この月の訪問記録はまだありません</div>'; return; }
+  const purposeLabel = {center:'紹介センター', yukyu:'悠久福祉会', both:'両方'};
+  el.innerHTML = list.map(v=>
+    '<div class="hist-item">'
+    + '<button class="del-btn" style="color:var(--navy);" onclick="closeVisitLog();openVisitEdit(\''+v.id+'\')">編集</button>'
+    + (isAdmin() ? '<button class="del-btn" onclick="removeVisit(\''+v.id+'\')">削除</button>' : '')
+    + '<span class="hist-date">'+v.visitDate+'</span><span class="hist-rep">'+v.rep+'</span>'
+    + ' <span class="attr-tag on" style="font-size:10px;">'+(purposeLabel[v.purpose]||'紹介センター')+'</span>'
+    + '<div class="hist-memo">'+escapeHtml(v.facilityName)+'</div>'
+    + '</div>'
+  ).join('');
+}
+
 function openMyResult(){
   document.getElementById('myResultTitle').textContent = (currentUserName||'あなた') + ' の今月の実績';
   renderMyResult();
@@ -2719,12 +2767,58 @@ function renderMonthly(){
     const detail = appMode==='center'
       ? '訪問'+c.total+'件・紹介'+c.consult+'件・入居'+c.moveIn+'件'
       : '訪問'+c.total+'件・入居'+c.moveIn+'件';
-    return '<div class="month-bar-row">'
-      + '<div class="month-bar-label">'+y+'年'+parseInt(mo)+'月</div>'
+    return '<div class="month-bar-row" onclick="openMonthDetail(\''+m+'\')" style="cursor:pointer;">'
+      + '<div class="month-bar-label">'+y+'年'+parseInt(mo)+'月 ▸</div>'
       + '<div class="month-bar-track"><div class="month-bar-fill" style="width:'+pct+'%"></div></div>'
       + '<div class="month-bar-value">'+detail+'</div>'
       + '</div>';
   }).join('');
+}
+
+/* ---------- 月別実績：特定の月をタップしたときの詳細 ---------- */
+function openMonthDetail(monthPre){
+  renderMonthDetail(monthPre);
+  document.getElementById('monthDetailOverlay').classList.add('show');
+}
+function closeMonthDetail(){
+  document.getElementById('monthDetailOverlay').classList.remove('show');
+}
+function renderMonthDetail(monthPre){
+  const [y,mo] = monthPre.split('-');
+  document.getElementById('monthDetailTitle').textContent = y+'年'+parseInt(mo)+'月の詳細';
+  const monthVisits = visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre) && visitMatchesMode(v));
+  const total = monthVisits.length;
+
+  const repCounts = repList.map(rep=>({rep, cnt: monthVisits.filter(v=>v.rep===rep).length})).sort((a,b)=>b.cnt-a.cnt);
+
+  const byFacility = {};
+  monthVisits.forEach(v=>{ byFacility[v.facilityName] = (byFacility[v.facilityName]||0)+1; });
+  const facilityRows = Object.entries(byFacility).sort((a,b)=>b[1]-a[1]);
+
+  const targets = visitTargetFacilities();
+  const visitedIds = new Set(monthVisits.map(v=>v.facilityId));
+  const unvisitedCount = targets.filter(f=>!visitedIds.has(f.id)).length;
+  const vacantCount = facilities.filter(f=>f.group && vacancyOf(f)!==null && vacancyOf(f)>0).length;
+
+  let html = '';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">担当者別</div>';
+  html += repCounts.map(r=>'<div class="vlist-row"><span>'+escapeHtml(r.rep)+'</span><span class="vlist-count">'+r.cnt+'件</span></div>').join('');
+  html += '<div class="vlist-row" style="border-top:2px solid var(--line);margin-top:6px;padding-top:10px;"><span style="font-weight:700;">総件数</span><span class="vlist-count" style="font-size:16px;">'+total+'件</span></div>';
+
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">訪問先一覧（'+facilityRows.length+'施設）</div>';
+  if(facilityRows.length===0){
+    html += '<div class="empty" style="padding:10px 0;">この月の訪問記録はありません</div>';
+  } else {
+    html += facilityRows.map(([name,cnt])=>'<div class="vlist-row"><span>○ '+escapeHtml(name)+'</span><span class="vlist-count">'+cnt+'回</span></div>').join('');
+  }
+
+  html += '<div class="divider"></div>';
+  html += '<div class="vlist-row"><span>未訪問（この月・対象施設のうち）</span><span class="vlist-count full">'+unvisitedCount+'件</span></div>';
+  html += '<div class="vlist-row"><span>空床あり（現在の状況）</span><span class="vlist-count">'+vacantCount+'施設</span></div>';
+  html += '<button class="nearby-btn" style="width:100%;margin-top:10px;" onclick="closeMonthDetail();renderVisitLog(\''+monthPre+'\');document.getElementById(\'visitLogOverlay\').classList.add(\'show\');">この月の訪問記録をすべて見る</button>';
+
+  document.getElementById('monthDetailBody').innerHTML = html;
 }
 
 /* ---------- パスワード変更 ---------- */
