@@ -708,6 +708,7 @@
     <h2 style="font-size:16px;" id="meetingSummaryTitle">会議用一覧</h2>
     <button class="nearby-btn no-print" style="width:100%;margin-top:10px;" onclick="window.print()">🖨 この画面を印刷する</button>
     <button class="nearby-btn no-print" style="width:100%;margin-top:8px;" onclick="toggleAutoAssign()">🎯 自動振り分けを見る</button>
+    <button class="nearby-btn no-print" style="width:100%;margin-top:8px;" onclick="reassignNow()">🔄 最新の勤務状況で再振り分け</button>
     <button class="nearby-btn no-print" style="width:100%;margin-top:8px;" onclick="toggleChecklist()">📋 印刷用チェックリストを見る</button>
     <div id="autoAssignBody" style="display:none;margin-top:10px;"></div>
     <div id="checklistBody" style="display:none;margin-top:10px;"></div>
@@ -2678,8 +2679,35 @@ function toggleAutoAssign(){
   document.getElementById('autoAssignBody').style.display = autoAssignShown ? 'block' : 'none';
   if(autoAssignShown) renderAutoAssign();
 }
+/** 最新のデータ（勤務状況・訪問実績など）を取り直してから自動振り分けを再計算する。
+ *  「木崎さんが産休に入った」等、勤務状況を保存した直後に押すと、全員分の割り振りと
+ *  営業予定表の「今日／今週」表示までまとめて最新の状態に更新される。 */
+async function reassignNow(){
+  showToast('最新データを取得中...');
+  await loadData();
+  autoAssignShown = true;
+  document.getElementById('autoAssignBody').style.display = 'block';
+  renderAutoAssign();
+  showToast('最新の勤務状況で再振り分けしました');
+}
 /** 自動振り分けの計算ロジック本体（会議用一覧・営業予定表の両方から共通で使う）
  *  戻り値: {activeReps, assigned, fixedNoteList} / 稼働中の担当者がいなければ null */
+/** 割り当てリストを「今日」「今週の残り」「今月の残り」に分割する（優先度順ソート済みのリストの先頭から、
+ *  残り日数に応じた1日あたりのペースで機械的に区切るだけの簡易版） */
+function splitByPace(list){
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  const remainingDaysInMonth = Math.max(daysInMonth - now.getDate() + 1, 1);
+  const dailyCount = list.length > 0 ? Math.max(Math.ceil(list.length / remainingDaysInMonth), 1) : 0;
+  const dow = now.getDay(); // 0=日
+  const daysLeftThisWeek = dow===0 ? 1 : (7 - dow + 1); // 今日を含め、今週の残り日数（日曜まで）
+  const weeklyCount = Math.min(list.length, dailyCount * daysLeftThisWeek);
+  const todayList = list.slice(0, Math.min(dailyCount, list.length));
+  const weekList = list.slice(todayList.length, weeklyCount);
+  const restList = list.slice(weeklyCount);
+  return { todayList, weekList, restList, dailyCount, weeklyCount };
+}
+
 function computeAutoAssignment(){
   const activeReps = repMeta.filter(m=>m.status==='勤務中' || m.status==='応援のみ');
   if(activeReps.length===0) return null;
@@ -2746,27 +2774,46 @@ function renderAutoAssign(){
   }
   const { activeReps, assigned, fixedNoteList } = result;
 
+  const renderItem = (item)=>{
+    const f = item.f;
+    const score = facilityPriorityScore(f);
+    const mark = item.fixed ? '📌' : '○';
+    const cityTag = f.city ? '<span style="font-size:10.5px;color:var(--text-soft);margin-left:4px;">'+escapeHtml(f.city)+'</span>' : '';
+    return '<div class="vlist-row"><span>'+mark+' '+escapeHtml(f.name)+cityTag+'</span><span style="font-size:11px;color:var(--amber-deep);">'+(PRIORITY_STAR[score]||'')+'</span></div>';
+  };
+
   let html = '<div class="empty" style="padding:6px 0 12px;text-align:left;font-size:11px;">'
-    + '※簡易版です。90日以上未訪問→空床あり→紹介の多い施設→60日以上→30日以上、の優先順で、稼働中の担当者の月間目標に応じて割り振っています。📌固定担当の施設は最優先でそのまま割り当て、それ以外は市区町村ごとにまとめて、できるだけ同じ担当者が同じ地域を回れるようにしています。</div>';
+    + '※簡易版です。90日以上未訪問→空床あり→紹介の多い施設→60日以上→30日以上、の優先順で、稼働中の担当者の月間目標に応じて割り振っています。📌固定担当の施設は最優先でそのまま割り当て、それ以外は市区町村ごとにまとめて、できるだけ同じ担当者が同じ地域を回れるようにしています。今月・今週・今日の内訳は、残りの割り当て件数を残り日数で均等に割った簡易ペース配分です。</div>';
   activeReps.forEach(m=>{
     const list = assigned[m.name];
-    html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:6px;">'+escapeHtml(m.name)+'さん（'+list.length+'/'+m.target+'件）</div>';
+    const { todayList, weekList, restList } = splitByPace(list);
+    html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:4px;">'+escapeHtml(m.name)+'さん</div>';
+    html += '<div class="attr-tags" style="margin-bottom:8px;">'
+      + '<span class="attr-tag on">今月 '+list.length+'/'+m.target+'件</span>'
+      + '<span class="attr-tag on">今週 '+Math.min(list.length, todayList.length+weekList.length)+'件</span>'
+      + '<span class="attr-tag on">今日 '+todayList.length+'件</span>'
+      + '</div>';
     if(list.length===0){
       html += '<div class="empty" style="padding:6px 0;">割り当てなし</div>';
     } else {
-      html += list.map(item=>{
-        const f = item.f;
-        const score = facilityPriorityScore(f);
-        const mark = item.fixed ? '📌' : '○';
-        const cityTag = f.city ? '<span style="font-size:10.5px;color:var(--text-soft);margin-left:4px;">'+escapeHtml(f.city)+'</span>' : '';
-        return '<div class="vlist-row"><span>'+mark+' '+escapeHtml(f.name)+cityTag+'</span><span style="font-size:11px;color:var(--amber-deep);">'+(PRIORITY_STAR[score]||'')+'</span></div>';
-      }).join('');
+      if(todayList.length>0){
+        html += '<div style="font-size:11px;font-weight:700;color:var(--danger);margin:4px 0 2px;">本日分</div>' + todayList.map(renderItem).join('');
+      }
+      if(weekList.length>0){
+        html += '<div style="font-size:11px;font-weight:700;color:var(--amber-deep);margin:6px 0 2px;">今週の残り</div>' + weekList.map(renderItem).join('');
+      }
+      if(restList.length>0){
+        html += '<div style="font-size:11px;font-weight:700;color:var(--text-soft);margin:6px 0 2px;">今月の残り</div>' + restList.map(renderItem).join('');
+      }
     }
     html += '<div class="divider"></div>';
   });
   const inactiveReps = repMeta.filter(m=>m.status!=='勤務中' && m.status!=='応援のみ');
   if(inactiveReps.length>0){
-    html += '<div style="font-size:11.5px;color:var(--text-soft);">対象外：'+inactiveReps.map(m=>escapeHtml(m.name)+'（'+m.status+'）').join('、')+'</div>';
+    html += inactiveReps.map(m=>
+      '<div style="font-size:12.5px;font-weight:700;color:var(--text-soft);margin-bottom:2px;">'+escapeHtml(m.name)+'さん</div>'
+      + '<div class="empty" style="padding:2px 0 10px;text-align:left;font-size:11.5px;">'+escapeHtml(m.status)+'中（自動振り分け対象外）</div>'
+    ).join('');
   }
   if(fixedNoteList.length>0){
     html += '<div style="font-size:11px;color:var(--danger);margin-top:6px;">⚠ '+fixedNoteList.map(escapeHtml).join('、')+'</div>';
@@ -2784,10 +2831,11 @@ function renderMeetingSummary(){
   const rate = Math.min(Math.round(totalThisMonth / MONTHLY_VISIT_GOAL * 100), 100);
   const remaining = Math.max(MONTHLY_VISIT_GOAL - totalThisMonth, 0);
 
-  // 担当者別 件数
+  // 担当者別 件数（目標件数・勤務状況もあわせて表示）
   const repCounts = repList.map(rep=>{
     const cnt = monthVisits.filter(v=>v.rep===rep).length;
-    return {rep, cnt};
+    const meta = repMeta.find(m=>m.name===rep);
+    return {rep, cnt, target: meta ? meta.target : null, status: meta ? meta.status : '勤務中'};
   }).sort((a,b)=>b.cnt-a.cnt);
 
   // 施設ごとの訪問回数（今月・全担当者合計）
@@ -2882,7 +2930,11 @@ function renderMeetingSummary(){
 
   html += '<div class="divider"></div>';
   html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">担当者別</div>';
-  html += repCounts.map(r=>'<div class="vlist-row"><span>'+escapeHtml(r.rep)+'</span><span class="vlist-count">'+r.cnt+'件</span></div>').join('');
+  html += repCounts.map(r=>{
+    const label = (r.status!=='勤務中' && r.status!=='応援のみ') ? '（'+r.status+'中）' : '';
+    const targetLabel = r.target!==null ? r.target+'件中' : '';
+    return '<div class="vlist-row"><span>'+escapeHtml(r.rep)+label+'</span><span class="vlist-count">'+targetLabel+r.cnt+'件済</span></div>';
+  }).join('');
 
   html += '<div class="divider"></div>';
   html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">訪問施設一覧（'+facilityRows.length+'施設・タップで詳細）</div>';
@@ -3195,17 +3247,32 @@ function renderSchedule(){
     const myList = repList.includes(currentUserName) ? (autoResult.assigned[currentUserName] || null) : null;
     if(myList){
       const myMeta = autoResult.activeReps.find(m=>m.name===currentUserName);
-      html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">🎯 自動振り分け（'+escapeHtml(currentUserName)+'さんの担当分・'+myList.length+'/'+(myMeta?myMeta.target:0)+'件）</div>';
+      const { todayList, weekList, restList } = splitByPace(myList);
+      html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:4px;">🎯 自動振り分け（'+escapeHtml(currentUserName)+'さん）</div>';
+      html += '<div class="attr-tags" style="margin-bottom:8px;">'
+        + '<span class="attr-tag on">今月 '+myList.length+'/'+(myMeta?myMeta.target:0)+'件</span>'
+        + '<span class="attr-tag on">今週 '+Math.min(myList.length, todayList.length+weekList.length)+'件</span>'
+        + '<span class="attr-tag on">今日 '+todayList.length+'件</span>'
+        + '</div>';
+      const renderMyItem = (item)=>{
+        const f = item.f;
+        const score = facilityPriorityScore(f);
+        const mark = item.fixed ? '📌' : '○';
+        const cityTag = f.city ? '<span style="font-size:10.5px;color:var(--text-soft);margin-left:4px;">'+escapeHtml(f.city)+'</span>' : '';
+        return '<div class="vlist-row" onclick="closeSchedule();openDetail(\''+f.id+'\')"><span>'+mark+' '+escapeHtml(f.name)+cityTag+'</span><span style="font-size:11px;color:var(--amber-deep);">'+(PRIORITY_STAR[score]||'')+'</span></div>';
+      };
       if(myList.length===0){
         html += '<div class="empty" style="padding:10px 0;">割り当てなし</div>';
       } else {
-        html += myList.map(item=>{
-          const f = item.f;
-          const score = facilityPriorityScore(f);
-          const mark = item.fixed ? '📌' : '○';
-          const cityTag = f.city ? '<span style="font-size:10.5px;color:var(--text-soft);margin-left:4px;">'+escapeHtml(f.city)+'</span>' : '';
-          return '<div class="vlist-row" onclick="closeSchedule();openDetail(\''+f.id+'\')"><span>'+mark+' '+escapeHtml(f.name)+cityTag+'</span><span style="font-size:11px;color:var(--amber-deep);">'+(PRIORITY_STAR[score]||'')+'</span></div>';
-        }).join('');
+        if(todayList.length>0){
+          html += '<div style="font-size:11px;font-weight:700;color:var(--danger);margin:4px 0 2px;">本日分</div>' + todayList.map(renderMyItem).join('');
+        }
+        if(weekList.length>0){
+          html += '<div style="font-size:11px;font-weight:700;color:var(--amber-deep);margin:6px 0 2px;">今週の残り</div>' + weekList.map(renderMyItem).join('');
+        }
+        if(restList.length>0){
+          html += '<div style="font-size:11px;font-weight:700;color:var(--text-soft);margin:6px 0 2px;">今月の残り</div>' + restList.map(renderMyItem).join('');
+        }
       }
     } else {
       html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">🎯 自動振り分け</div>';
