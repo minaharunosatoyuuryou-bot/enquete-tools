@@ -2297,26 +2297,72 @@ function renderTodayBrief(){
 
   const visitedThisMonthIds = new Set(visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre)).map(v=>v.facilityId));
   const unvisitedCount = targets.filter(f=>!visitedThisMonthIds.has(f.id)).length;
+  const visitedCount = targets.length - unvisitedCount;
+  const unvisitedRate = targets.length ? Math.round(visitedCount/targets.length*100) : 0;
   const overdueCount = targets.filter(f=>statusFor(f.id).status==='overdue').length;
   const vacantCount = facilities.filter(f=>f.group && vacancyOf(f)!==null && vacancyOf(f)>0).length;
   const tourCount = referrals.filter(r=>r.visitDate && r.visitDate>=today && r.status!=='キャンセル' && r.status!=='入居決定').length;
   const moveInCount = referrals.filter(r=>r.moveInDate && r.moveInDate>=today && r.status!=='キャンセル').length;
-  const todayVisitCount = visits.filter(v=>v.nextVisit===today && visitMatchesMode(v)).length
-    + referrals.filter(r=>(r.visitDate===today || r.moveInDate===today) && r.status!=='キャンセル').length;
-  const activeDeals = dealRecords.filter(d=>d.status!=='成約' && d.status!=='キャンセル');
-  const urgentDeals = activeDeals.filter(d=>(Number(parseDealMemoTags(d.memo).priority)||3)>=4).length;
   const waitingReferrals = referrals.filter(r=>r.status==='相談中').length;
+  const activeDeals = dealRecords.filter(d=>d.status!=='成約' && d.status!=='キャンセル');
+  const successThisMonth = dealRecords.filter(d=>d.status==='成約' && dealGetMonth(d)===monthPre).length;
 
-  const el = document.getElementById('todayBriefBody');
-  el.innerHTML =
-    '<div class="vlist-row"><span>未訪問施設</span><span class="vlist-count full">'+unvisitedCount+'件</span></div>'
-    + '<div class="vlist-row"><span>要フォロー</span><span class="vlist-count full">'+overdueCount+'件</span></div>'
-    + '<div class="vlist-row"><span>空床あり</span><span class="vlist-count">'+vacantCount+'施設</span></div>'
-    + '<div class="vlist-row"><span>紹介待ち（相談中）</span><span class="vlist-count">'+waitingReferrals+'件</span></div>'
-    + '<div class="vlist-row"><span>見学予定</span><span class="vlist-count">'+tourCount+'件</span></div>'
-    + '<div class="vlist-row"><span>入居予定</span><span class="vlist-count">'+moveInCount+'件</span></div>'
-    + '<div class="vlist-row"><span>本日の営業予定</span><span class="vlist-count">'+todayVisitCount+'件</span></div>'
-    + '<div class="vlist-row"><span>案件</span><span class="vlist-count">'+activeDeals.length+'件'+(urgentDeals>0?'（急ぎ'+urgentDeals+'件）':'')+'</span></div>';
+  // 本日の営業予定（施設名まで）
+  const todayNames = [];
+  visits.filter(v=>v.nextVisit===today && visitMatchesMode(v)).forEach(v=>todayNames.push(v.facilityName));
+  referrals.filter(r=>(r.visitDate===today || r.moveInDate===today) && r.status!=='キャンセル').forEach(r=>{
+    todayNames.push((r.userName||'利用者')+'様（'+(r.facilityName||'')+'）');
+  });
+
+  // 今月の目標
+  const thisMonthTotal = visits.filter(v=>v.visitDate && v.visitDate.startsWith(monthPre) && visitMatchesMode(v)).length;
+  const remaining = Math.max(MONTHLY_VISIT_GOAL - thisMonthTotal, 0);
+  const rate = Math.min(Math.round(thisMonthTotal / MONTHLY_VISIT_GOAL * 100), 100);
+
+  // アラート（長期未訪問）
+  const over90 = targets.filter(f=>{ const vs=visitsFor(f.id); return vs.length===0 || daysBetween(vs[0].visitDate)>=90; }).length;
+  const over180 = targets.filter(f=>{ const vs=visitsFor(f.id); return vs.length===0 || daysBetween(vs[0].visitDate)>=180; }).length;
+  const over270 = targets.filter(f=>{ const vs=visitsFor(f.id); return vs.length===0 || daysBetween(vs[0].visitDate)>=270; }).length;
+
+  let html = '';
+
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--danger);margin-bottom:8px;">【最優先】</div>';
+  html += '<div class="vlist-row"><span>①本日の営業予定</span><span class="vlist-count full">'+todayNames.length+'件</span></div>';
+  if(todayNames.length>0){
+    html += '<div style="font-size:11.5px;color:var(--text-soft);margin:2px 0 8px 12px;">・'+todayNames.map(n=>escapeHtml(n)).join('<br>・')+'</div>';
+  }
+  html += '<div class="vlist-row"><span>②要フォロー</span><span class="vlist-count full">'+overdueCount+'件</span></div>';
+  html += '<div class="vlist-row"><span>③見学予定</span><span class="vlist-count">'+tourCount+'件</span></div>';
+  html += '<div class="vlist-row"><span>④入居予定</span><span class="vlist-count">'+moveInCount+'件</span></div>';
+
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">【今月の目標】</div>';
+  html += '<div class="vlist-row"><span>今月訪問</span><span class="vlist-count">'+thisMonthTotal+'/'+MONTHLY_VISIT_GOAL+'件（'+rate+'%）</span></div>';
+  html += '<div class="vlist-row"><span>残り</span><span class="vlist-count '+(remaining===0?'':'full')+'">'+(remaining===0?'目標達成🎉':remaining+'件')+'</span></div>';
+
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">【確認事項】</div>';
+  html += '<div class="vlist-row"><span>未訪問施設</span><span class="vlist-count">'+unvisitedCount+'/'+targets.length+'件（'+unvisitedRate+'%訪問済）</span></div>';
+  html += '<div class="vlist-row"><span>空床あり</span><span class="vlist-count">'+vacantCount+'施設</span></div>';
+  html += '<div class="vlist-row"><span>紹介待ち</span><span class="vlist-count">'+waitingReferrals+'件</span></div>';
+  html += '<div class="vlist-row"><span>案件</span><span class="vlist-count">'+activeDeals.length+'件</span></div>';
+
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">営業の流れ（紹介→見学→入居→成約）</div>';
+  html += '<div class="attr-tags">'
+    + '<span class="attr-tag on">紹介待ち '+waitingReferrals+'件</span>'
+    + '<span class="attr-tag on">見学予定 '+tourCount+'件</span>'
+    + '<span class="attr-tag on">入居予定 '+moveInCount+'件</span>'
+    + '<span class="attr-tag on">今月成約 '+successThisMonth+'件</span>'
+    + '</div>';
+
+  html += '<div class="divider"></div>';
+  html += '<div style="font-size:12.5px;font-weight:700;color:var(--danger);margin-bottom:8px;">【アラート】長期未訪問</div>';
+  html += '<div class="vlist-row"><span>90日以上未訪問</span><span class="vlist-count full">'+over90+'件</span></div>';
+  html += '<div class="vlist-row"><span>180日以上未訪問</span><span class="vlist-count full">'+over180+'件</span></div>';
+  html += '<div class="vlist-row"><span>270日以上未訪問</span><span class="vlist-count full">'+over270+'件</span></div>';
+
+  document.getElementById('todayBriefBody').innerHTML = html;
 }
 
 /* ================= 今月の訪問記録一覧（誰が・いつ・どこに行ったか） ================= */
