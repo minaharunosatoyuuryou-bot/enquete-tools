@@ -2678,13 +2678,11 @@ function toggleAutoAssign(){
   document.getElementById('autoAssignBody').style.display = autoAssignShown ? 'block' : 'none';
   if(autoAssignShown) renderAutoAssign();
 }
-function renderAutoAssign(){
+/** 自動振り分けの計算ロジック本体（会議用一覧・営業予定表の両方から共通で使う）
+ *  戻り値: {activeReps, assigned, fixedNoteList} / 稼働中の担当者がいなければ null */
+function computeAutoAssignment(){
   const activeReps = repMeta.filter(m=>m.status==='勤務中' || m.status==='応援のみ');
-  const el = document.getElementById('autoAssignBody');
-  if(activeReps.length===0){
-    el.innerHTML = '<div class="empty">稼働中の担当者がいません（⚙設定で勤務状況を確認してください）</div>';
-    return;
-  }
+  if(activeReps.length===0) return null;
   const activeNames = new Set(activeReps.map(m=>m.name));
   const targets = visitTargetFacilities().slice().sort((a,b)=>{
     const sa = facilityPriorityScore(a), sb = facilityPriorityScore(b);
@@ -2735,6 +2733,18 @@ function renderAutoAssign(){
       remaining[bestRep]--;
     });
   });
+
+  return { activeReps, assigned, fixedNoteList };
+}
+
+function renderAutoAssign(){
+  const el = document.getElementById('autoAssignBody');
+  const result = computeAutoAssignment();
+  if(!result){
+    el.innerHTML = '<div class="empty">稼働中の担当者がいません（⚙設定で勤務状況を確認してください）</div>';
+    return;
+  }
+  const { activeReps, assigned, fixedNoteList } = result;
 
   let html = '<div class="empty" style="padding:6px 0 12px;text-align:left;font-size:11px;">'
     + '※簡易版です。90日以上未訪問→空床あり→紹介の多い施設→60日以上→30日以上、の優先順で、稼働中の担当者の月間目標に応じて割り振っています。📌固定担当の施設は最優先でそのまま割り当て、それ以外は市区町村ごとにまとめて、できるだけ同じ担当者が同じ地域を回れるようにしています。</div>';
@@ -3175,10 +3185,36 @@ function renderSchedule(){
   html += '<div class="divider"></div>';
   html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">悠久福祉会（'+yukyuItems.length+'件）</div>';
   html += renderGroup(yukyuItems);
+  // ------- 自動振り分け（担当固定・地域考慮）：ログイン中の担当者の分だけ表示 -------
+  html += '<div class="divider"></div>';
+  const autoResult = computeAutoAssignment();
+  if(!autoResult){
+    html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">🎯 自動振り分け</div>';
+    html += '<div class="empty" style="padding:10px 0;">稼働中の担当者がいません（⚙設定で勤務状況を確認してください）</div>';
+  } else {
+    const myList = repList.includes(currentUserName) ? (autoResult.assigned[currentUserName] || null) : null;
+    if(myList){
+      const myMeta = autoResult.activeReps.find(m=>m.name===currentUserName);
+      html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">🎯 自動振り分け（'+escapeHtml(currentUserName)+'さんの担当分・'+myList.length+'/'+(myMeta?myMeta.target:0)+'件）</div>';
+      if(myList.length===0){
+        html += '<div class="empty" style="padding:10px 0;">割り当てなし</div>';
+      } else {
+        html += myList.map(item=>{
+          const f = item.f;
+          const score = facilityPriorityScore(f);
+          const mark = item.fixed ? '📌' : '○';
+          const cityTag = f.city ? '<span style="font-size:10.5px;color:var(--text-soft);margin-left:4px;">'+escapeHtml(f.city)+'</span>' : '';
+          return '<div class="vlist-row" onclick="closeSchedule();openDetail(\''+f.id+'\')"><span>'+mark+' '+escapeHtml(f.name)+cityTag+'</span><span style="font-size:11px;color:var(--amber-deep);">'+(PRIORITY_STAR[score]||'')+'</span></div>';
+        }).join('');
+      }
+    } else {
+      html += '<div style="font-size:12.5px;font-weight:700;color:var(--navy-deep);margin-bottom:8px;">🎯 自動振り分け</div>';
+      html += '<div class="empty" style="padding:10px 0;">現在稼働中の担当者に該当しないため表示できません（⚙設定の勤務状況をご確認ください）</div>';
+    }
+  }
+
   el.innerHTML = html;
 }
-
-/* ---------- 悠久福祉会 月別入居実績 ---------- */
 function openYukyuMonthly(){
   renderYukyuMonthly();
   document.getElementById('yukyuMonthlyOverlay').classList.add('show');
