@@ -454,6 +454,14 @@
       <button class="nearby-btn" onclick="openVacancyList()">🛏 空床一覧</button>
       <button class="nearby-btn" onclick="openYukyuMonthly()">📊 月別入居実績</button>
     </div>
+    <div class="filters" style="margin-top:10px;align-items:center;">
+      <select id="bulkFixedCity" style="flex:1;"></select>
+      <select id="bulkFixedRep" style="flex:1;"></select>
+      <button class="dl-btn dl-btn-outline" onclick="bulkSetFixedRep()">📌 この地域を担当固定にする</button>
+    </div>
+    <div class="empty" style="padding:2px 2px 10px;text-align:left;color:var(--text-soft);font-size:11px;">
+      選んだ市区町村にある施設（悠久福祉会・紹介施設を問わず全て）を、まとめて選んだ担当者の「担当固定」に設定します。自動振り分けで最優先・確実にその担当者に割り当てられます。
+    </div>
     <div class="dl-table-wrap">
       <table>
         <thead>
@@ -1985,6 +1993,7 @@ async function submitDeleteFacility(){
 
 /* ---------- 施設管理タブ（管理者のみ） ---------- */
 function renderFacilityAdminTable(){
+  populateBulkFixedRepSelects();
   const q = (document.getElementById('fmSearch').value||'').trim();
   const list = facilities.filter(f=>f.group && (!q || f.name.includes(q))).slice()
     .sort((a,b)=>a.name.localeCompare(b.name,'ja'));
@@ -2004,6 +2013,46 @@ function renderFacilityAdminTable(){
       + '<td><button class="dl-btn-icon" title="編集" onclick="openFacilityEdit(\''+f.id+'\')">✏️</button></td>'
       + '</tr>';
   }).join('');
+}
+
+/* ---------- 地域一括「担当固定」設定 ---------- */
+function populateBulkFixedRepSelects(){
+  const citySel = document.getElementById('bulkFixedCity');
+  const repSel = document.getElementById('bulkFixedRep');
+  if(!citySel || !repSel) return;
+  const cities = [...new Set(facilities.map(f=>f.city).filter(c=>c))].sort((a,b)=>a.localeCompare(b,'ja'));
+  const prevCity = citySel.value;
+  citySel.innerHTML = '<option value="">市区町村を選択</option>' + cities.map(c=>'<option value="'+escapeHtml(c)+'">'+escapeHtml(c)+'</option>').join('');
+  if(cities.includes(prevCity)) citySel.value = prevCity;
+  const prevRep = repSel.value;
+  repSel.innerHTML = '<option value="">担当者を選択</option>' + repList.map(r=>'<option value="'+escapeHtml(r)+'">'+escapeHtml(r)+'</option>').join('');
+  if(repList.includes(prevRep)) repSel.value = prevRep;
+}
+
+async function bulkSetFixedRep(){
+  const city = document.getElementById('bulkFixedCity').value;
+  const rep = document.getElementById('bulkFixedRep').value;
+  if(!city){ showToast('市区町村を選択してください'); return; }
+  if(!rep){ showToast('担当者を選択してください'); return; }
+  const targets = facilities.filter(f=>f.city===city);
+  if(targets.length===0){ showToast('該当する施設がありません'); return; }
+  if(!confirm(city+'の施設 '+targets.length+'件を、担当固定「'+rep+'」に一括設定します。よろしいですか？')) return;
+  showToast('設定中...');
+  let okCount = 0, ngCount = 0;
+  for(const f of targets){
+    try{
+      const body = { action:'updateFacility', ...authPayload(), id:f.id,
+        city:f.city, kind:f.kind, group:f.group, fixedRep:rep, name:f.name, rep:f.rep,
+        addr:f.addr, tel:f.tel, fax:f.fax, mobile:f.mobile, capacity:f.capacity, occupied:f.occupied,
+        acceptMale: f.acceptMale==='○', acceptFemale: f.acceptFemale==='○',
+        careLevels:f.careLevels, tags:f.tags, memo:f.memo, updatedBy: currentUserName||'' };
+      const res = await fetch(GAS_URL, {method:'POST', body: JSON.stringify(body)});
+      const data = await res.json();
+      if(data.ok){ f.fixedRep = rep; okCount++; } else { ngCount++; }
+    }catch(err){ ngCount++; console.error(err); }
+  }
+  renderFacilityAdminTable();
+  showToast('完了：'+okCount+'件を担当固定に設定'+(ngCount>0?'（失敗'+ngCount+'件）':''));
 }
 
 /* ---------- 施設訪問タブでの空床表示 ---------- */
