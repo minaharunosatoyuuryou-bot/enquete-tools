@@ -359,8 +359,8 @@ function switchTab(tab){
       '<span class="qnum">Q'+q.n+'</span>'+
       '<p class="qtext">'+q.text+'</p>'+
       '<div class="opts">'+
-        '<div class="opt-btn" id="opt'+q.n+'_1" onclick="selectOpt('+q.n+',\''+q.opt1+'\',1)">'+q.opt1+'</div>'+
-        '<div class="opt-btn" id="opt'+q.n+'_2" onclick="selectOpt('+q.n+',\''+q.opt2+'\',2)">'+q.opt2+'</div>'+
+        '<div class="opt-btn" id="opt'+q.n+'_1" onclick="selectOpt('+q.n+',\''+q.opt1.replace(/'/g,"\\'")+'\',1)">'+q.opt1+'</div>'+
+        '<div class="opt-btn" id="opt'+q.n+'_2" onclick="selectOpt('+q.n+',\''+q.opt2.replace(/'/g,"\\'")+'\',2)">'+q.opt2+'</div>'+
       '</div>'+
       obsHtml;
     wrap.appendChild(div);
