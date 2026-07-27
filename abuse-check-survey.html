@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>虐待の芽チェックリスト（入所施設版）</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   :root{
     --ink:#2f3b34;
@@ -16,6 +17,7 @@
     --clay:#b5613f;
     --warn-bg:#fbe9a8;
     --warn-border:#e0b93c;
+    --card:#ffffff;
   }
   *{box-sizing:border-box;}
   body{
@@ -29,406 +31,530 @@
   header{
     background:var(--moss-dark);
     color:#f6f4ee;
-    padding:28px 20px 22px;
+    padding:22px 16px 20px;
     text-align:center;
   }
-  header h1{margin:0 0 6px;font-size:1.3rem;letter-spacing:.03em;}
-  header p{margin:0;font-size:.82rem;color:#d9e3dc;}
-  .wrap{max-width:720px;margin:0 auto;padding:18px 16px;}
-  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px 18px 20px;margin-bottom:16px;}
-  .intro{font-size:.86rem;color:#4a5650;}
-  .field{margin-bottom:4px;}
-  .field label{display:block;font-size:.82rem;font-weight:bold;margin-bottom:6px;}
-  .field input,.field select{width:100%;padding:10px;border:1px solid var(--line);border-radius:6px;font-size:.95rem;background:#fff;}
-  .qnum{display:inline-block;background:var(--moss);color:#fff;font-size:.75rem;border-radius:5px;padding:2px 8px;margin-bottom:8px;}
-  .qtext{font-size:.92rem;margin:0 0 12px;font-weight:600;}
-  .subhint{font-size:.75rem;color:#8a8172;margin:2px 0 8px;}
-  .opts{display:flex;flex-direction:column;gap:8px;}
-  .opt{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer;font-size:.9rem;transition:background .15s, border-color .15s;}
-  .opt input{width:18px;height:18px;accent-color:var(--moss);}
-  .opt.checked{border-color:var(--moss);background:#eef3ef;}
-  .obs-box{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);}
-  .obs-box .opt{border-style:dashed;}
-  .submit-btn{width:100%;padding:14px;background:var(--moss-dark);color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:bold;cursor:pointer;margin-top:6px;}
-  .submit-btn:disabled{opacity:.5;}
-  .footer-link{text-align:center;margin-top:24px;}
-  .footer-link button{background:none;border:1px solid var(--line);color:#6b6257;padding:8px 14px;border-radius:20px;font-size:.78rem;cursor:pointer;}
-  .thanks{text-align:center;padding:40px 16px;}
-  .thanks .mark{font-size:2.2rem;color:var(--moss);}
-  .hidden{display:none !important;}
-  .agg-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
-  .agg-toolbar select,.agg-toolbar button{padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:.85rem;background:#fff;}
-  .agg-toolbar button.primary{background:var(--moss-dark);color:#fff;border:none;cursor:pointer;}
-  table.agg{width:100%;border-collapse:collapse;font-size:.76rem;margin-top:6px;}
-  table.agg th,table.agg td{border:1px solid var(--line);padding:6px 5px;text-align:center;vertical-align:middle;}
-  table.agg th{background:#eef1ec;}
-  table.agg td.qtext-cell{text-align:left;font-weight:600;width:30%;}
+  header h1{
+    margin:0 0 4px;
+    font-size:1.25rem;
+    letter-spacing:.02em;
+  }
+  header p{
+    margin:0;
+    font-size:.82rem;
+    opacity:.85;
+  }
+  .tabbar{
+    display:flex;
+    max-width:760px;
+    margin:16px auto 0;
+    padding:0 12px;
+    gap:8px;
+  }
+  .tabbar button{
+    flex:1;
+    padding:10px 6px;
+    border:1px solid var(--line);
+    background:var(--card);
+    color:var(--moss-dark);
+    border-radius:8px 8px 0 0;
+    font-size:.85rem;
+    cursor:pointer;
+  }
+  .tabbar button.active{
+    background:var(--moss);
+    color:#fff;
+    border-color:var(--moss);
+    font-weight:bold;
+  }
+  main{
+    max-width:760px;
+    margin:0 auto;
+    padding:18px 12px 40px;
+  }
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:18px 16px;
+    margin-bottom:16px;
+  }
+  .view{display:none;}
+  .view.active{display:block;}
+  label.field-label{
+    display:block;
+    font-size:.85rem;
+    color:var(--moss-dark);
+    font-weight:bold;
+    margin-bottom:6px;
+  }
+  select, input[type=text], input[type=password], input[type=number]{
+    width:100%;
+    padding:10px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:.95rem;
+    background:#fff;
+    color:var(--ink);
+    margin-bottom:14px;
+  }
+  .qcard{
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:14px;
+    margin-bottom:14px;
+    background:#fdfcf9;
+  }
+  .qnum{
+    display:inline-block;
+    background:var(--moss);
+    color:#fff;
+    font-size:.75rem;
+    font-weight:bold;
+    padding:2px 9px;
+    border-radius:20px;
+    margin-bottom:6px;
+  }
+  .qtext{font-size:.92rem;margin:0 0 10px;}
+  .opts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+  .opt-btn{
+    flex:1;
+    min-width:110px;
+    text-align:center;
+    padding:10px 8px;
+    border:1.5px solid var(--line);
+    border-radius:8px;
+    cursor:pointer;
+    font-size:.88rem;
+    background:#fff;
+    user-select:none;
+  }
+  .opt-btn.selected{
+    background:var(--moss);
+    color:#fff;
+    border-color:var(--moss);
+    font-weight:bold;
+  }
+  .obs-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:.82rem;
+    color:#5a5548;
+    border-top:1px dashed var(--line);
+    padding-top:8px;
+    cursor:pointer;
+  }
+  .obs-row input{width:auto;margin:0;}
+  .btn{
+    display:inline-block;
+    width:100%;
+    padding:13px;
+    background:var(--clay);
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    font-size:1rem;
+    font-weight:bold;
+    cursor:pointer;
+  }
+  .btn.secondary{background:var(--moss);}
+  .btn.ghost{background:#fff;color:var(--moss-dark);border:1.5px solid var(--moss);}
+  .note{font-size:.8rem;color:#77705f;margin-top:6px;}
+  .toast{
+    position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+    background:var(--moss-dark);color:#fff;padding:12px 20px;border-radius:20px;
+    font-size:.9rem;box-shadow:0 6px 18px rgba(0,0,0,.2);display:none;z-index:50;
+  }
+  table.agg{
+    width:100%;
+    border-collapse:collapse;
+    font-size:.78rem;
+  }
+  table.agg th, table.agg td{
+    border:1px solid var(--line);
+    padding:6px 5px;
+    text-align:center;
+    vertical-align:middle;
+  }
+  table.agg th{background:var(--moss-dark);color:#fff;}
+  table.agg td.qtext-cell{text-align:left;font-size:.76rem;}
   table.agg td.warn{background:var(--warn-bg);border-color:var(--warn-border);font-weight:bold;}
-  .agg-note{font-size:.75rem;color:#7a7264;margin-top:8px;}
-  .total-line{font-size:.8rem;color:#4a5650;margin-bottom:10px;}
-  .pw-box{max-width:320px;margin:60px auto;text-align:center;}
-  .pw-box input{padding:10px;font-size:1rem;width:60%;border:1px solid var(--line);border-radius:6px;}
-  .pw-box button{padding:10px 16px;font-size:1rem;border:none;background:var(--moss-dark);color:#fff;border-radius:6px;cursor:pointer;margin-left:6px;}
-  .err{color:var(--clay);font-size:.8rem;margin-top:8px;}
-  .staff-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);}
-  .staff-row label{font-size:.88rem;}
-  .staff-row input{width:80px;padding:6px;border:1px solid var(--line);border-radius:6px;text-align:right;}
-  .save-btn{background:var(--moss-dark);color:#fff;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-size:.9rem;margin-top:10px;}
+  .table-scroll{overflow-x:auto;}
+  .staff-grid{display:grid;grid-template-columns:1fr 90px;gap:8px;align-items:center;margin-bottom:6px;}
+  .staff-grid span{font-size:.85rem;}
+  .rate-card{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;font-size:.85rem;
+  }
+  .rate-card b{color:var(--moss-dark);}
+  #qrWrap{text-align:center;padding:16px;}
+  .locked{text-align:center;padding:30px 10px;}
+  .filters{display:flex;gap:10px;margin-bottom:14px;}
+  .filters select{margin-bottom:0;}
 </style>
 </head>
 <body>
 
 <header>
   <h1>虐待の芽チェックリスト（入所施設版）</h1>
-  <p>無記名・匿名での自己チェックです。安心してご回答ください。</p>
+  <p>匿名アンケート・悠久福祉会 虐待防止委員会</p>
 </header>
 
-<div class="wrap">
-
-  <!-- ▼ 回答フォーム画面 -->
-  <div id="formView">
-    <div class="card intro">
-      虐待の芽や不適切ケアを自己チェックして、高齢者虐待を防止しましょう。あてはまるものを選び、最後に送信してください。回答は匿名で集計され、個人が特定されることはありません。
-    </div>
-
-    <div class="card">
-      <div class="field" style="margin-bottom:14px;">
-        <label>施設</label>
-        <select id="facilitySelect" required>
-          <option value="">選択してください</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>実施回（例：2026年7月度）</label>
-        <input type="text" id="roundInput" placeholder="施設からの案内に記載の実施回を入力してください">
-      </div>
-    </div>
-
-    <form id="checklistForm"></form>
-
-    <button class="submit-btn" id="submitBtn">回答を送信する</button>
-
-    <div class="footer-link">
-      <button type="button" id="toAggBtn">🔒 委員会用：集計結果・施設設定を見る</button>
-    </div>
-  </div>
-
-  <!-- ▼ 送信完了画面 -->
-  <div id="thanksView" class="hidden">
-    <div class="card thanks">
-      <div class="mark">✓</div>
-      <p>ご回答ありがとうございました。</p>
-      <p style="font-size:.8rem;color:#7a7264;">結果は委員会で集計し、運営改善に役立てます。</p>
-    </div>
-  </div>
-
-  <!-- ▼ パスワード画面 -->
-  <div id="pwView" class="hidden">
-    <div class="pw-box">
-      <p>委員会用画面のパスワードを入力してください</p>
-      <input type="password" id="pwInput" maxlength="10">
-      <button id="pwBtn">開く</button>
-      <div class="err" id="pwErr"></div>
-      <div class="footer-link"><button type="button" id="backFromPwBtn">回答画面に戻る</button></div>
-    </div>
-  </div>
-
-  <!-- ▼ 集計結果画面 -->
-  <div id="aggView" class="hidden">
-
-    <div class="card">
-      <h3 style="margin-top:0;font-size:1rem;">施設別 職員数の設定</h3>
-      <div id="staffCountList"></div>
-      <button class="save-btn" id="saveStaffBtn">職員数を保存</button>
-      <div class="err" id="staffErr"></div>
-    </div>
-
-    <div class="card">
-      <div class="agg-toolbar">
-        <select id="facilityFilter"><option value="__all__">すべての施設</option></select>
-        <select id="roundFilter"><option value="__all__">すべての実施回（累計）</option></select>
-        <button id="reloadBtn" class="primary">再読込</button>
-        <button id="exportBtn">Excelダウンロード</button>
-      </div>
-      <div class="total-line" id="totalLine"></div>
-      <div id="aggTableWrap">読み込み中...</div>
-      <div class="agg-note">黄色のセルは、回答が総数の35%以上を占めた項目です。「目撃・伝聞」欄は主回答とは独立した割合です。</div>
-    </div>
-
-    <div class="footer-link">
-      <button type="button" id="backFromAggBtn">回答画面に戻る</button>
-    </div>
-  </div>
-
+<div class="tabbar">
+  <button id="tabSurveyBtn" class="active" onclick="switchTab('survey')">職員回答</button>
+  <button id="tabCommitteeBtn" onclick="switchTab('committee')">委員会（集計）</button>
 </div>
 
+<main>
+
+  <!-- ============ 職員回答画面 ============ -->
+  <div id="view-survey" class="view active">
+    <div class="card">
+      <label class="field-label">実施回（例：2026年7月度）</label>
+      <input type="text" id="roundInput" placeholder="2026年7月度">
+      <label class="field-label">施設</label>
+      <select id="facilitySelect">
+        <option value="">選択してください</option>
+      </select>
+      <p class="note">回答は匿名で集計されます。個人が特定される情報は記録されません。</p>
+    </div>
+
+    <div id="questionsWrap"></div>
+
+    <button class="btn" id="submitBtn">回答を送信する</button>
+  </div>
+
+  <!-- ============ 委員会画面 ============ -->
+  <div id="view-committee" class="view">
+
+    <div id="lockScreen" class="card locked">
+      <p>委員会用パスワードを入力してください</p>
+      <input type="password" id="pwInput" placeholder="パスワード">
+      <button class="btn secondary" onclick="checkPassword()">開く</button>
+    </div>
+
+    <div id="committeeBody" style="display:none;">
+
+      <div class="card">
+        <label class="field-label">施設別 職員数の設定（回収率の計算に使用）</label>
+        <div id="staffGrid"></div>
+        <button class="btn ghost" onclick="saveStaffCounts()">職員数を保存</button>
+      </div>
+
+      <div class="card">
+        <label class="field-label">回収状況</label>
+        <div id="rateWrap"></div>
+      </div>
+
+      <div class="card">
+        <label class="field-label">集計結果</label>
+        <div class="filters">
+          <select id="roundFilter"></select>
+          <select id="facilityFilter"></select>
+        </div>
+        <div class="table-scroll" id="aggTableWrap"></div>
+        <p class="note">黄色は、回答が総数の35%以上を占めた項目です。</p>
+        <button class="btn secondary" id="exportBtn" style="margin-top:10px;">Excelでダウンロード</button>
+      </div>
+
+      <div class="card" id="qrWrap">
+        <label class="field-label">回答用URL（QRコード）</label>
+        <div id="qrcode"></div>
+        <p class="note" id="urlText"></p>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
 <script>
+// ==== 設定 ====
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbyECZk0qGV3KR7Nk98uFAOMAGy1JMaZVGi4iHCO1oIE-Y8ReKZVLy1KxOC7H35QTjA5Tw/exec';
-var PASSWORD = '2408';
+var COMMITTEE_PASSWORD = '2408';
 
 var FACILITIES = [
   '悠久の里一番館', '悠久の里二番館', '悠久の里三番館',
   '悠久の里横尾', '悠久の里佐伯', '悠久の里米良', 'みどりの郷ほんじょう'
 ];
 
-// primary: 主回答（2択・必須） / obs: 目撃・伝聞（複数選択可・任意）
 var QUESTIONS = [
-  {n:1, text:'利用者に友達感覚で接したり、子供扱いしたりしていませんか？', primary:['している','していない'], obs:['見たことがある','聞いたことがある']},
-  {n:2, text:'利用者に対して、アセスメント・施設サービス計画書に基づかず、あだ名や○○ちゃん呼び、呼び捨てなどをしていませんか？', primary:['している','していない'], obs:['聞いたことがある']},
-  {n:3, text:'利用者に対して、威圧的な態度、命令口調（「○○して」「ダメ！」など）で接していませんか？', primary:['している','していない'], obs:['見たことがある','聞いたことがある']},
-  {n:4, text:'利用者への声掛けなしに介助したり、居室に入ったり、勝手に私物に触ったりしていませんか？', primary:['している','していない'], obs:['見たことがある']},
-  {n:5, text:'利用者のプライバシーに配慮せず、職員同士で話題にしたり個人情報を取り扱ったりしていませんか？', primary:['している','していない'], obs:['聞いたことがある']},
-  {n:6, text:'利用者に対して、「ちょっと待って」を乱用し、長時間待たせていませんか？', primary:['いる','いない'], obs:['見たことがある','聞いたことがある']},
-  {n:7, text:'利用者に必要な日用品（眼鏡、義歯、補聴器など）や道具（コールボタンなど）が壊れていたり、使えなかったりしていませんか？', primary:['している','していない'], obs:[]},
-  {n:8, text:'利用者の呼びかけやコールを無視したり、意見や訴えに否定的な態度をとったりしていませんか？', primary:['している','していない'], obs:['見たことがある']},
-  {n:9, text:'食事や入浴介助の無理強いなど、利用者に嫌悪感を抱かせるような援助を強要していませんか？', primary:['している','していない'], obs:['見たことがある']},
-  {n:10, text:'利用者の身体で遊んだり、人格を無視した関わり（落書きをする、くすぐるなど）をしたりしていませんか？', primary:['している','していない'], obs:['見たことがある']},
-  {n:11, text:'利用者や利用者の家族の言動をあざ笑ったり、悪口を言ったりしていませんか？', primary:['している','していない'], obs:['聞いたことがある']},
-  {n:12, text:'プライバシーへの配慮に欠けたケア（排泄について大声で話す、カーテンを開けたまま排泄ケアをするなど）をしていませんか？', primary:['している','していない'], obs:['見たことがある']},
-  {n:13, text:'利用者に対して乱暴で雑な介助や、いい加減な態度・受け答えをしていませんか？', primary:['している','していない'], obs:['見たことがある','聞いたことがある']},
-  {n:14, text:'他の職員に仕事に関わる相談ができない等、職場でのコミュニケーションがとりにくくなっていませんか？', primary:['とりにくい','良好'], obs:[]},
-  {n:15, text:'他の職員が行っているサービス提供・ケアに問題があると感じることがありませんか？', primary:['ある','ない'], obs:[]}
+ {n:1, text:'利用者に友達感覚で接したり、子供扱いしたりしていませんか?', opt1:'している', opt2:'していない', obs:'見たこと・聞いたことがある'},
+ {n:2, text:'利用者に対して、アセスメント・施設サービス計画書に基づかず、あだ名や〇〇ちゃん呼び、呼び捨てなどをしていませんか?', opt1:'している', opt2:'していない', obs:'聞いたことがある'},
+ {n:3, text:'利用者に対して、威圧的な態度、命令口調(「〇〇して」「ダメ!」など)で接していませんか?', opt1:'している', opt2:'していない', obs:'見たこと・聞いたことがある'},
+ {n:4, text:'利用者への声掛けなしに介助したり、勝手に私物に触ったりしていませんか?', opt1:'している', opt2:'していない', obs:'見たことがある'},
+ {n:5, text:'利用者のプライバシーに配慮せず、職員同士で話題にしたり、個人情報を取り扱ったりしていませんか?', opt1:'している', opt2:'していない', obs:'聞いたことがある'},
+ {n:6, text:'利用者に対して、「ちょっと待って」を乱用し、長時間待たせていませんか?', opt1:'いる', opt2:'いない', obs:'見たこと・聞いたことがある'},
+ {n:7, text:'利用者に必要な日用品（眼鏡、義歯、補聴器など）や道具（コールボタンなど）が壊れていたり、使えなかったりしていませんか？', opt1:'ある', opt2:'ない', obs:null},
+ {n:8, text:'利用者の呼びかけやコールを無視したり、意見や訴えに否定的な態度をとったりしていませんか?', opt1:'している', opt2:'していない', obs:'見たことがある'},
+ {n:9, text:'食事や入浴介助の無理強いなど、利用者に嫌悪感を抱かせるような援助を強要していませんか?', opt1:'している', opt2:'していない', obs:'見たことがある'},
+ {n:10, text:'利用者の身体で遊んだり、人格を無視した関わり(落書きをする、くすぐるなど)をしたりしていませんか?', opt1:'している', opt2:'していない', obs:'見たことがある'},
+ {n:11, text:'利用者や利用者の家族の言動をあざ笑ったり、悪口を言ったりしていませんか?', opt1:'している', opt2:'していない', obs:'聞いたことがある'},
+ {n:12, text:'プライバシーへの配慮に欠けたケア(排泄について大声で話す、カーテンを開けたまま排泄ケアをするなど)していませんか?', opt1:'している', opt2:'していない', obs:'見たことがある'},
+ {n:13, text:'利用者に対して乱暴で雑な介助や、いい加減な態度・受け答えをしていませんか?', opt1:'している', opt2:'していない', obs:'見たこと・聞いたことがある'},
+ {n:14, text:'他の職員に仕事に関わる相談ができない等、職場でのコミュニケーションがとりにくくなっていませんか?', opt1:'とりにくい', opt2:'良好', obs:null},
+ {n:15, text:'他の職員が行っているサービス提供・ケアに問題があると感じることはありませんか?', opt1:'ある', opt2:'ない', obs:null}
 ];
 
-// 施設プルダウン設定
-var facilitySelect = document.getElementById('facilitySelect');
-FACILITIES.forEach(function(f){
-  var o = document.createElement('option'); o.value = f; o.textContent = f;
-  facilitySelect.appendChild(o);
-});
+var answers = {};
 
-// ==== 回答フォーム構築 ====
-var form = document.getElementById('checklistForm');
-QUESTIONS.forEach(function(q){
-  var block = document.createElement('div');
-  block.className = 'card';
-  var primaryHtml = q.primary.map(function(o){
-    return '<label class="opt" data-q="'+q.n+'">'+
-      '<input type="radio" name="q'+q.n+'_primary" value="'+o+'" required>'+
-      '<span>'+o+'</span></label>';
-  }).join('');
-  var obsHtml = '';
-  if(q.obs.length){
-    obsHtml = '<div class="obs-box"><div class="subhint">該当する場合は追加でチェック（複数選択・任意）</div><div class="opts">' +
-      q.obs.map(function(o){
-        return '<label class="opt" data-q="'+q.n+'">'+
-          '<input type="checkbox" name="q'+q.n+'_obs" value="'+o+'">'+
-          '<span>'+o+'</span></label>';
-      }).join('') + '</div></div>';
-  }
-  block.innerHTML = '<span class="qnum">問'+q.n+'</span>'+
-    '<p class="qtext">'+q.text+'</p>'+
-    '<div class="opts">'+primaryHtml+'</div>' + obsHtml;
-  form.appendChild(block);
-});
+// ==== タブ切替 ====
+function switchTab(tab){
+  document.getElementById('view-survey').classList.toggle('active', tab==='survey');
+  document.getElementById('view-committee').classList.toggle('active', tab==='committee');
+  document.getElementById('tabSurveyBtn').classList.toggle('active', tab==='survey');
+  document.getElementById('tabCommitteeBtn').classList.toggle('active', tab==='committee');
+}
 
-form.addEventListener('change', function(e){
-  var t = e.target;
-  if(t.type !== 'radio' && t.type !== 'checkbox') return;
-  document.querySelectorAll('input[name="'+t.name+'"]').forEach(function(inp){
-    inp.closest('.opt').classList.toggle('checked', inp.checked);
+// ==== 初期化：施設セレクト ====
+(function initFacilitySelect(){
+  var sel = document.getElementById('facilitySelect');
+  FACILITIES.forEach(function(f){
+    var o = document.createElement('option');
+    o.value = f; o.textContent = f;
+    sel.appendChild(o);
   });
-});
+})();
+
+// ==== 質問カード描画 ====
+(function renderQuestions(){
+  var wrap = document.getElementById('questionsWrap');
+  QUESTIONS.forEach(function(q){
+    var div = document.createElement('div');
+    div.className = 'qcard';
+    var obsHtml = '';
+    if(q.obs){
+      obsHtml = '<label class="obs-row"><input type="checkbox" id="obs'+q.n+'" onchange="setObs('+q.n+',this.checked)"> '+q.obs+'（見たり聞いたりしたことがある場合はチェック）</label>';
+    }
+    div.innerHTML =
+      '<span class="qnum">Q'+q.n+'</span>'+
+      '<p class="qtext">'+q.text+'</p>'+
+      '<div class="opts">'+
+        '<div class="opt-btn" id="opt'+q.n+'_1" onclick="selectOpt('+q.n+',\''+q.opt1+'\',1)">'+q.opt1+'</div>'+
+        '<div class="opt-btn" id="opt'+q.n+'_2" onclick="selectOpt('+q.n+',\''+q.opt2+'\',2)">'+q.opt2+'</div>'+
+      '</div>'+
+      obsHtml;
+    wrap.appendChild(div);
+  });
+})();
+
+function selectOpt(n, value, idx){
+  answers['q'+n] = value;
+  document.getElementById('opt'+n+'_1').classList.toggle('selected', idx===1);
+  document.getElementById('opt'+n+'_2').classList.toggle('selected', idx===2);
+}
+function setObs(n, checked){
+  answers['q'+n+'_obs'] = checked;
+}
+
+function showToast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(function(){ t.style.display = 'none'; }, 2600);
+}
 
 // ==== 送信 ====
 document.getElementById('submitBtn').addEventListener('click', function(){
-  if(!facilitySelect.value){
-    alert('施設を選択してください。');
-    return;
+  var round = document.getElementById('roundInput').value.trim();
+  var facility = document.getElementById('facilitySelect').value;
+  if(!round){ showToast('実施回を入力してください'); return; }
+  if(!facility){ showToast('施設を選択してください'); return; }
+  for(var i=0;i<QUESTIONS.length;i++){
+    if(!answers['q'+QUESTIONS[i].n]){
+      showToast('Q'+QUESTIONS[i].n+'に回答してください');
+      return;
+    }
   }
-  var missing = QUESTIONS.find(function(q){
-    return !form.querySelector('input[name="q'+q.n+'_primary"]:checked');
+  var payload = Object.assign({round: round, facility: facility}, answers);
+  fetch(GAS_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(payload)
+  }).then(function(){
+    showToast('送信しました。ご協力ありがとうございました。');
+    answers = {};
+    document.querySelectorAll('.opt-btn.selected').forEach(function(el){ el.classList.remove('selected'); });
+    document.querySelectorAll('.obs-row input').forEach(function(el){ el.checked = false; });
+    document.getElementById('roundInput').value = '';
+    document.getElementById('facilitySelect').value = '';
+    window.scrollTo(0,0);
+  }).catch(function(){
+    showToast('送信に失敗しました。通信環境をご確認ください。');
   });
-  if(missing){
-    alert('問'+missing.n+'に未回答があります。すべての設問にお答えください。');
-    return;
-  }
-  var payload = { facility: facilitySelect.value, round: document.getElementById('roundInput').value || '' };
-  QUESTIONS.forEach(function(q){
-    payload['q'+q.n+'_primary'] = form.querySelector('input[name="q'+q.n+'_primary"]:checked').value;
-    payload['q'+q.n+'_obs'] = Array.from(form.querySelectorAll('input[name="q'+q.n+'_obs"]:checked')).map(function(i){ return i.value; });
-  });
-  var btn = document.getElementById('submitBtn');
-  btn.disabled = true; btn.textContent = '送信中...';
-  fetch(GAS_URL, { method:'POST', body: JSON.stringify(payload) })
-    .then(function(){
-      document.getElementById('formView').classList.add('hidden');
-      document.getElementById('thanksView').classList.remove('hidden');
-    })
-    .catch(function(){
-      alert('送信に失敗しました。通信環境をご確認のうえ、もう一度お試しください。');
-      btn.disabled = false; btn.textContent = '回答を送信する';
-    });
 });
 
-// ==== 画面切り替え ====
-function showView(id){
-  ['formView','thanksView','pwView','aggView'].forEach(function(v){
-    document.getElementById(v).classList.toggle('hidden', v !== id);
-  });
-}
-document.getElementById('toAggBtn').addEventListener('click', function(){ showView('pwView'); });
-document.getElementById('backFromPwBtn').addEventListener('click', function(){ showView('formView'); });
-document.getElementById('backFromAggBtn').addEventListener('click', function(){ showView('formView'); });
-
-document.getElementById('pwBtn').addEventListener('click', function(){
+// ==== 委員会：ロック ====
+function checkPassword(){
   var v = document.getElementById('pwInput').value;
-  if(v === PASSWORD){
-    document.getElementById('pwErr').textContent = '';
-    showView('aggView');
-    loadAggregation();
+  if(v === COMMITTEE_PASSWORD){
+    document.getElementById('lockScreen').style.display = 'none';
+    document.getElementById('committeeBody').style.display = 'block';
+    loadCommitteeData();
   } else {
-    document.getElementById('pwErr').textContent = 'パスワードが違います。';
+    showToast('パスワードが違います');
   }
-});
-
-document.getElementById('facilityFilter').innerHTML =
-  '<option value="__all__">すべての施設</option>' +
-  FACILITIES.map(function(f){ return '<option value="'+f+'">'+f+'</option>'; }).join('');
-
-// ==== 集計・職員数 ====
-var allResponses = [];
-var staffCounts = {};
-
-function loadAggregation(){
-  document.getElementById('aggTableWrap').textContent = '読み込み中...';
-  fetch(GAS_URL)
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      allResponses = data.responses || [];
-      staffCounts = data.staffCounts || {};
-      populateRoundFilter(allResponses);
-      renderStaffCountInputs();
-      renderAggregation();
-    })
-    .catch(function(){
-      document.getElementById('aggTableWrap').textContent = '読み込みに失敗しました。GAS_URLの設定をご確認ください。';
-    });
-}
-document.getElementById('reloadBtn').addEventListener('click', loadAggregation);
-document.getElementById('roundFilter').addEventListener('change', renderAggregation);
-document.getElementById('facilityFilter').addEventListener('change', renderAggregation);
-
-function renderStaffCountInputs(){
-  var wrap = document.getElementById('staffCountList');
-  wrap.innerHTML = FACILITIES.map(function(f){
-    var v = staffCounts[f] || 0;
-    return '<div class="staff-row"><label>'+f+'</label><input type="number" min="0" data-facility="'+f+'" value="'+v+'"></div>';
-  }).join('');
 }
 
-document.getElementById('saveStaffBtn').addEventListener('click', function(){
+var allData = null;
+
+function loadCommitteeData(){
+  fetch(GAS_URL).then(function(r){ return r.json(); }).then(function(data){
+    allData = data;
+    renderStaffGrid(data.staffCounts);
+    renderFilters(data.responses);
+    renderRates(data);
+    renderAggTable();
+    renderQr();
+  }).catch(function(){
+    showToast('データの取得に失敗しました');
+  });
+}
+
+function renderStaffGrid(staffCounts){
+  var wrap = document.getElementById('staffGrid');
+  wrap.innerHTML = '';
+  FACILITIES.forEach(function(f){
+    var row = document.createElement('div');
+    row.className = 'staff-grid';
+    var val = (staffCounts && staffCounts[f]) ? staffCounts[f] : 0;
+    row.innerHTML = '<span>'+f+'</span><input type="number" min="0" id="staffCount_'+f+'" value="'+val+'">';
+    wrap.appendChild(row);
+  });
+}
+
+function saveStaffCounts(){
   var counts = {};
-  document.querySelectorAll('#staffCountList input').forEach(function(inp){
-    counts[inp.getAttribute('data-facility')] = Number(inp.value) || 0;
+  FACILITIES.forEach(function(f){
+    counts[f] = document.getElementById('staffCount_'+f).value;
   });
-  fetch(GAS_URL, { method:'POST', body: JSON.stringify({ type:'staffCounts', counts: counts }) })
-    .then(function(){
-      staffCounts = counts;
-      document.getElementById('staffErr').textContent = '保存しました。';
-      document.getElementById('staffErr').style.color = 'var(--moss-dark)';
-      renderAggregation();
-    })
-    .catch(function(){
-      document.getElementById('staffErr').textContent = '保存に失敗しました。';
-      document.getElementById('staffErr').style.color = 'var(--clay)';
-    });
-});
+  fetch(GAS_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify({type:'staffCounts', counts: counts})
+  }).then(function(){
+    showToast('職員数を保存しました');
+    loadCommitteeData();
+  }).catch(function(){
+    showToast('保存に失敗しました');
+  });
+}
 
-function populateRoundFilter(data){
-  var sel = document.getElementById('roundFilter');
-  var current = sel.value;
-  sel.innerHTML = '<option value="__all__">すべての実施回（累計）</option>';
-  var rounds = Array.from(new Set(data.map(function(d){ return d.round; }).filter(Boolean)));
-  rounds.sort();
-  rounds.forEach(function(r){
-    var o = document.createElement('option'); o.value = r; o.textContent = r;
-    sel.appendChild(o);
+function renderRates(data){
+  var wrap = document.getElementById('rateWrap');
+  wrap.innerHTML = '';
+  FACILITIES.forEach(function(f){
+    var staff = (data.staffCounts && data.staffCounts[f]) ? data.staffCounts[f] : 0;
+    var collected = data.responses.filter(function(r){ return r.facility === f; }).length;
+    var rate = staff ? Math.round(collected/staff*1000)/10 : 0;
+    var div = document.createElement('div');
+    div.className = 'rate-card';
+    div.innerHTML = '<span>'+f+'</span><span><b>'+collected+'</b> / '+staff+'名　('+rate+'%)</span>';
+    wrap.appendChild(div);
   });
-  if(rounds.indexOf(current) !== -1) sel.value = current;
+  var totalStaff = FACILITIES.reduce(function(s,f){ return s + ((data.staffCounts && data.staffCounts[f]) ? data.staffCounts[f] : 0); },0);
+  var totalCollected = data.responses.length;
+  var totalRate = totalStaff ? Math.round(totalCollected/totalStaff*1000)/10 : 0;
+  var totalDiv = document.createElement('div');
+  totalDiv.className = 'rate-card';
+  totalDiv.style.background = '#f0ede3';
+  totalDiv.innerHTML = '<span><b>全体</b></span><span><b>'+totalCollected+'</b> / '+totalStaff+'名　('+totalRate+'%)</span>';
+  wrap.appendChild(totalDiv);
+}
+
+function renderFilters(responses){
+  var rounds = Array.from(new Set(responses.map(function(r){ return r.round; }))).filter(Boolean);
+  var roundSel = document.getElementById('roundFilter');
+  roundSel.innerHTML = '<option value="__all__">すべての実施回（累計）</option>' +
+    rounds.map(function(r){ return '<option value="'+r+'">'+r+'</option>'; }).join('');
+  roundSel.onchange = renderAggTable;
+
+  var facSel = document.getElementById('facilityFilter');
+  facSel.innerHTML = '<option value="__all__">すべての施設</option>' +
+    FACILITIES.map(function(f){ return '<option value="'+f+'">'+f+'</option>'; }).join('');
+  facSel.onchange = renderAggTable;
 }
 
 function currentFiltered(){
+  if(!allData) return [];
   var round = document.getElementById('roundFilter').value;
   var facility = document.getElementById('facilityFilter').value;
-  return allResponses.filter(function(d){
-    var roundOk = (round === '__all__') || (d.round === round);
-    var facOk = (facility === '__all__') || (d.facility === facility);
-    return roundOk && facOk;
+  return allData.responses.filter(function(r){
+    var okRound = (round === '__all__') || (r.round === round);
+    var okFac = (facility === '__all__') || (r.facility === facility);
+    return okRound && okFac;
   });
 }
 
-function totalStaffForFilter(){
-  var facility = document.getElementById('facilityFilter').value;
-  if(facility === '__all__'){
-    return FACILITIES.reduce(function(sum,f){ return sum + (staffCounts[f]||0); }, 0);
-  }
-  return staffCounts[facility] || 0;
-}
-
-function renderAggregation(){
+function renderAggTable(){
   var rows = currentFiltered();
   var total = rows.length;
-  var staffTotal = totalStaffForFilter();
-  var rateText = staffTotal ? '（回収率：' + Math.round(total/staffTotal*1000)/10 + '%　対象職員数：' + staffTotal + '名）' : '';
-  document.getElementById('totalLine').textContent = '回答数：' + total + '件 ' + rateText;
+  var maxOpts = 3;
 
-  var thead = '<tr><th rowspan="2">No.</th><th rowspan="2">チェック項目</th>' +
-    '<th colspan="2">主回答</th><th colspan="2">目撃・伝聞（独立集計）</th></tr>' +
-    '<tr><th>主回答①</th><th>主回答②</th><th>見たことがある</th><th>聞いたことがある</th></tr>';
+  var thead = '<tr><th>No.</th><th>チェック項目</th><th colspan="3">結果</th></tr>';
 
   var trs = QUESTIONS.map(function(q){
-    var pCounts = q.primary.map(function(o){
-      return rows.filter(function(r){ return r['q'+q.n+'_primary'] === o; }).length;
-    });
-    var pCells = q.primary.map(function(o,i){
-      var pct = total ? Math.round(pCounts[i]/total*1000)/10 : 0;
-      var warn = total && pct >= 35;
-      return '<td class="'+(warn?'warn':'')+'">'+o+'<br>'+pCounts[i]+'件（'+pct+'%）</td>';
-    }).join('');
-
-    var obsLabels = ['見たことがある','聞いたことがある'];
-    var obsCells = obsLabels.map(function(label){
-      if(q.obs.indexOf(label) === -1) return '<td>―</td>';
-      var count = rows.filter(function(r){ return (r['q'+q.n+'_obs']||[]).indexOf(label) !== -1; }).length;
+    var opts = [q.opt1, q.opt2];
+    if(q.obs) opts.push(q.obs);
+    var cells = opts.map(function(o){
+      var count;
+      if(q.obs && o === q.obs){
+        count = rows.filter(function(r){ return r['q'+q.n+'_obs'] === '○'; }).length;
+      } else {
+        count = rows.filter(function(r){ return r['q'+q.n] === o; }).length;
+      }
       var pct = total ? Math.round(count/total*1000)/10 : 0;
-      var warn = total && pct >= 35;
-      return '<td class="'+(warn?'warn':'')+'">'+count+'件（'+pct+'%）</td>';
+      var warn = (total && pct >= 35) ? ' class="warn"' : '';
+      return '<td'+warn+'>'+o+'<br>'+count+'件（'+pct+'%）</td>';
     }).join('');
-
-    return '<tr><td>'+q.n+'</td><td class="qtext-cell">'+q.text+'</td>'+pCells+obsCells+'</tr>';
+    for(var i=opts.length;i<maxOpts;i++){ cells += '<td>―</td>'; }
+    return '<tr><td>'+q.n+'</td><td class="qtext-cell">'+q.text+'</td>'+cells+'</tr>';
   }).join('');
 
   document.getElementById('aggTableWrap').innerHTML =
-    '<table class="agg"><thead>'+thead+'</thead><tbody>'+trs+'</tbody></table>';
+    '<table class="agg"><thead>'+thead+'</thead><tbody>'+trs+'</tbody></table>'+
+    '<p class="note">回答総数：'+total+'件</p>';
 }
 
 // ==== Excelエクスポート ====
 document.getElementById('exportBtn').addEventListener('click', function(){
   var rows = currentFiltered();
   var total = rows.length;
-  var sheetData = [['No.','チェック項目','区分','選択肢','件数','割合(%)','35%以上']];
+  var sheetData = [['No.','チェック項目','選択肢','件数','割合(%)','35%以上']];
   QUESTIONS.forEach(function(q){
-    q.primary.forEach(function(o){
-      var count = rows.filter(function(r){ return r['q'+q.n+'_primary'] === o; }).length;
+    var opts = [q.opt1, q.opt2];
+    if(q.obs) opts.push(q.obs);
+    opts.forEach(function(o){
+      var count;
+      if(q.obs && o === q.obs){
+        count = rows.filter(function(r){ return r['q'+q.n+'_obs'] === '○'; }).length;
+      } else {
+        count = rows.filter(function(r){ return r['q'+q.n] === o; }).length;
+      }
       var pct = total ? Math.round(count/total*1000)/10 : 0;
-      sheetData.push([q.n, q.text, '主回答', o, count, pct, (total && pct>=35) ? '★' : '']);
-    });
-    q.obs.forEach(function(o){
-      var count = rows.filter(function(r){ return (r['q'+q.n+'_obs']||[]).indexOf(o) !== -1; }).length;
-      var pct = total ? Math.round(count/total*1000)/10 : 0;
-      sheetData.push([q.n, q.text, '目撃・伝聞', o, count, pct, (total && pct>=35) ? '★' : '']);
+      sheetData.push([q.n, q.text, o, count, pct, (total && pct>=35) ? '★' : '']);
     });
   });
   var ws = XLSX.utils.aoa_to_sheet(sheetData);
-  ws['!cols'] = [{wch:5},{wch:50},{wch:10},{wch:16},{wch:8},{wch:10},{wch:8}];
+  ws['!cols'] = [{wch:5},{wch:50},{wch:20},{wch:8},{wch:10},{wch:8}];
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '集計結果');
   var round = document.getElementById('roundFilter').value;
-  var facility = document.getElementById('facilityFilter').value;
-  var label = (facility==='__all__'?'全施設':facility) + '_' + (round==='__all__'?'累計':round);
+  var label = round === '__all__' ? '累計' : round;
   XLSX.writeFile(wb, '虐待の芽チェックリスト集計_' + label + '.xlsx');
 });
+
+// ==== QRコード ====
+function renderQr(){
+  var url = window.location.href.split('#')[0];
+  document.getElementById('urlText').textContent = url;
+  var qrDiv = document.getElementById('qrcode');
+  qrDiv.innerHTML = '';
+  new QRCode(qrDiv, { text: url, width: 180, height: 180 });
+}
 </script>
 
 </body>
