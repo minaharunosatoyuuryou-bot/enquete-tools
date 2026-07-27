@@ -192,16 +192,34 @@
   .locked{text-align:center;padding:30px 10px;}
   .filters{display:flex;gap:10px;margin-bottom:14px;}
   .filters select{margin-bottom:0;}
+  .resp-row{
+    display:flex;justify-content:space-between;align-items:center;gap:8px;
+    padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;font-size:.82rem;
+  }
+  .resp-row .del-btn{
+    background:#fff;border:1.5px solid var(--clay);color:var(--clay);
+    padding:5px 10px;border-radius:6px;font-size:.78rem;cursor:pointer;white-space:nowrap;
+  }
+  .resp-list{max-height:320px;overflow-y:auto;}
+  .btn-row{display:flex;gap:8px;margin-top:10px;}
+  .btn-row .btn{width:auto;flex:1;}
+  @media print{
+    .no-print, .card:not(#printArea){ display:none !important; }
+    body{padding:0;background:#fff;}
+    main{padding:0;max-width:100%;}
+    #printArea{border:none;padding:0;}
+    table.agg{font-size:11px;}
+  }
 </style>
 </head>
 <body>
 
-<header>
+<header class="no-print">
   <h1>虐待の芽チェックリスト（入所施設版）</h1>
   <p>匿名アンケート・悠久福祉会 虐待防止委員会</p>
 </header>
 
-<div class="tabbar">
+<div class="tabbar no-print">
   <button id="tabSurveyBtn" class="active" onclick="switchTab('survey')">職員回答</button>
   <button id="tabCommitteeBtn" onclick="switchTab('committee')">委員会（集計）</button>
 </div>
@@ -228,7 +246,7 @@
   <!-- ============ 委員会画面 ============ -->
   <div id="view-committee" class="view">
 
-    <div id="lockScreen" class="card locked">
+    <div id="lockScreen" class="card locked no-print">
       <p>委員会用パスワードを入力してください</p>
       <input type="password" id="pwInput" placeholder="パスワード">
       <button class="btn secondary" onclick="checkPassword()">開く</button>
@@ -236,29 +254,37 @@
 
     <div id="committeeBody" style="display:none;">
 
-      <div class="card">
+      <div class="card no-print">
         <label class="field-label">施設別 職員数の設定（回収率の計算に使用）</label>
         <div id="staffGrid"></div>
         <button class="btn ghost" onclick="saveStaffCounts()">職員数を保存</button>
       </div>
 
-      <div class="card">
+      <div class="card no-print">
         <label class="field-label">回収状況</label>
         <div id="rateWrap"></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="printArea">
         <label class="field-label">集計結果</label>
-        <div class="filters">
+        <div class="filters no-print">
           <select id="roundFilter"></select>
           <select id="facilityFilter"></select>
         </div>
         <div class="table-scroll" id="aggTableWrap"></div>
         <p class="note">黄色は、回答が総数の35%以上を占めた項目です。</p>
-        <button class="btn secondary" id="exportBtn" style="margin-top:10px;">Excelでダウンロード</button>
+        <div class="btn-row no-print">
+          <button class="btn secondary" id="exportBtn">Excelでダウンロード</button>
+          <button class="btn ghost" onclick="window.print()">印刷する</button>
+        </div>
       </div>
 
-      <div class="card" id="qrWrap">
+      <div class="card no-print">
+        <label class="field-label">個別回答一覧（削除）</label>
+        <div class="resp-list" id="respList"></div>
+      </div>
+
+      <div class="card no-print" id="qrWrap">
         <label class="field-label">回答用URL（QRコード）</label>
         <div id="qrcode"></div>
         <p class="note" id="urlText"></p>
@@ -408,6 +434,7 @@ function loadCommitteeData(){
     renderFilters(data.responses);
     renderRates(data);
     renderAggTable();
+    renderRespList();
     renderQr();
   }).catch(function(){
     showToast('データの取得に失敗しました');
@@ -470,12 +497,12 @@ function renderFilters(responses){
   var roundSel = document.getElementById('roundFilter');
   roundSel.innerHTML = '<option value="__all__">すべての実施回（累計）</option>' +
     rounds.map(function(r){ return '<option value="'+r+'">'+r+'</option>'; }).join('');
-  roundSel.onchange = renderAggTable;
+  roundSel.onchange = function(){ renderAggTable(); renderRespList(); };
 
   var facSel = document.getElementById('facilityFilter');
   facSel.innerHTML = '<option value="__all__">すべての施設</option>' +
     FACILITIES.map(function(f){ return '<option value="'+f+'">'+f+'</option>'; }).join('');
-  facSel.onchange = renderAggTable;
+  facSel.onchange = function(){ renderAggTable(); renderRespList(); };
 }
 
 function currentFiltered(){
@@ -517,6 +544,36 @@ function renderAggTable(){
   document.getElementById('aggTableWrap').innerHTML =
     '<table class="agg"><thead>'+thead+'</thead><tbody>'+trs+'</tbody></table>'+
     '<p class="note">回答総数：'+total+'件</p>';
+}
+
+function renderRespList(){
+  var rows = currentFiltered();
+  var wrap = document.getElementById('respList');
+  if(rows.length === 0){
+    wrap.innerHTML = '<p class="note">該当する回答はありません</p>';
+    return;
+  }
+  wrap.innerHTML = rows.map(function(r){
+    var ts = r.timestamp ? new Date(r.timestamp).toLocaleString('ja-JP') : '';
+    return '<div class="resp-row">'+
+      '<span>'+(r.round||'')+'　'+(r.facility||'')+'　<span style="color:#999;">'+ts+'</span></span>'+
+      '<button class="del-btn" onclick="deleteResponse(\''+r.id+'\')">削除</button>'+
+    '</div>';
+  }).join('');
+}
+
+function deleteResponse(id){
+  if(!confirm('この回答を削除します。よろしいですか？（元に戻せません）')) return;
+  fetch(GAS_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify({type:'deleteResponse', id: id})
+  }).then(function(){
+    showToast('削除しました');
+    loadCommitteeData();
+  }).catch(function(){
+    showToast('削除に失敗しました');
+  });
 }
 
 // ==== Excelエクスポート ====
