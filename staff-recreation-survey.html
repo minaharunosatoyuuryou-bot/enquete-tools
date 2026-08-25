@@ -367,6 +367,7 @@ form.addEventListener('submit', async (e)=>{
 
   const data = new FormData(form);
   const payload = {
+    id: 'r' + Date.now() + Math.random().toString(36).slice(2,8),
     dept: data.get('dept') || '',
     name: data.get('name') || '（無記名）',
     join: data.get('join') || '',
@@ -505,7 +506,79 @@ async function loadTally(){
       comments.map(c=>`<li>${escapeHtml(c)}</li>`).join('') + '</ul>';
   }
 
+  html += rosterHtml(rows);
+
   tallyContent.innerHTML = html;
+
+  tallyContent.querySelectorAll('.delete-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> deleteResponse(btn.dataset.id));
+  });
+}
+
+function rosterHtml(rows){
+  const groups = {};
+  rows.forEach(r=>{
+    const dept = r.dept || 'その他';
+    if(!groups[dept]) groups[dept] = [];
+    groups[dept].push(r);
+  });
+
+  let html = `<h3 style="font-size:14px;margin:26px 0 12px;color:var(--navy);">施設別 名簿</h3>`;
+  html += `<p style="font-size:12px;color:var(--ink-soft);margin:-6px 0 14px;">間違って送信された回答は「削除」で消せます</p>`;
+
+  Object.keys(groups).forEach(dept=>{
+    const list = groups[dept];
+    html += `<div style="margin-bottom:18px;">
+      <div style="font-weight:700;font-size:13.5px;background:#eef1f6;padding:7px 10px;border-radius:8px 8px 0 0;">${escapeHtml(dept)}（${list.length}名）</div>
+      <div style="border:1px solid var(--line);border-top:none;border-radius:0 0 8px 8px;overflow:hidden;">`;
+    list.forEach((r,i)=>{
+      html += `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;${i>0?'border-top:1px solid var(--line);':''}">
+          <div style="font-size:13px;min-width:0;">
+            <div style="font-weight:600;">${escapeHtml(r.name || '（無記名）')}
+              <span style="font-weight:400;color:${r.join==='不参加'?'#a3a3a3':'var(--blue)'};font-size:11.5px;margin-left:6px;">${escapeHtml(r.join||'')}</span>
+            </div>
+            <div style="color:var(--ink-soft);font-size:11.5px;margin-top:2px;">
+              ${r.kids==='参加する' ? '子供参加' + (r.kidsCount ? '（'+escapeHtml(r.kidsCount)+'）' : '') + '　' : ''}${escapeHtml(r.events||'')}
+            </div>
+          </div>
+          <button type="button" class="delete-btn" data-id="${escapeHtml(r.id||'')}" style="flex-shrink:0;border:1px solid var(--red);color:var(--red);background:#fff;border-radius:7px;padding:6px 10px;font-size:12px;cursor:pointer;">削除</button>
+        </div>`;
+    });
+    html += `</div></div>`;
+  });
+
+  return html;
+}
+
+async function deleteResponse(id){
+  if(!id){
+    alert('この回答は削除に対応していません（IDがありません）。');
+    return;
+  }
+  if(!confirm('この回答を削除しますか？元に戻せません。')) return;
+
+  try{
+    if(GAS_URL){
+      const res = await fetch(GAS_URL, {
+        method:'POST',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({action:'delete', id})
+      });
+      const result = await res.json();
+      if(result.result !== 'ok'){
+        alert('削除に失敗しました。');
+        return;
+      }
+    } else {
+      const local = JSON.parse(localStorage.getItem('recreationSurveyResponses') || '[]');
+      const filtered = local.filter(r => r.id !== id);
+      localStorage.setItem('recreationSurveyResponses', JSON.stringify(filtered));
+    }
+    await loadTally();
+  }catch(err){
+    alert('削除に失敗しました。通信環境をご確認のうえ、もう一度お試しください。');
+  }
 }
 </script>
 
