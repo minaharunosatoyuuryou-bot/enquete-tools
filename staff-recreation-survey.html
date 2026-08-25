@@ -1,0 +1,513 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>職員対抗レクリエーション アンケート</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#16233f;
+    --navy-deep:#0e1830;
+    --gold:#d9a441;
+    --gold-soft:#f1cf85;
+    --red:#c8373b;
+    --blue:#3e6e9e;
+    --paper:#fffdf8;
+    --ink:#1c2130;
+    --ink-soft:#5b6376;
+    --line:#e4ddd0;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Noto Sans JP', sans-serif;
+    background:var(--navy);
+    color:var(--ink);
+    min-height:100vh;
+  }
+  .bunting{
+    display:flex;
+    width:100%;
+    line-height:0;
+    overflow:hidden;
+    background:var(--navy-deep);
+  }
+  .bunting span{
+    flex:1 0 32px;
+    height:26px;
+    clip-path:polygon(50% 100%, 0 0, 100% 0);
+    margin:0 3px;
+  }
+  .bunting span:nth-child(4n+1){background:var(--red);}
+  .bunting span:nth-child(4n+2){background:var(--paper);}
+  .bunting span:nth-child(4n+3){background:var(--gold);}
+  .bunting span:nth-child(4n){background:var(--blue);}
+
+  header{
+    text-align:center;
+    padding:36px 20px 30px;
+    color:var(--paper);
+  }
+  header .eyebrow{
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    font-weight:700;
+    letter-spacing:.3em;
+    font-size:12px;
+    color:var(--gold-soft);
+    margin-bottom:10px;
+  }
+  header h1{
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    font-weight:900;
+    font-size:clamp(26px, 6vw, 38px);
+    margin:0 0 12px;
+    line-height:1.35;
+  }
+  header p{
+    margin:0;
+    font-size:14px;
+    color:#cdd6e8;
+    line-height:1.8;
+  }
+
+  main{
+    max-width:640px;
+    margin:0 auto;
+    padding:0 16px 60px;
+  }
+  form{
+    background:var(--paper);
+    border-radius:18px;
+    box-shadow:0 20px 50px rgba(0,0,0,.35);
+    overflow:hidden;
+  }
+  .section{
+    padding:26px 24px;
+    border-bottom:1px solid var(--line);
+  }
+  .section:last-of-type{border-bottom:none;}
+  .q-num{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:26px;height:26px;
+    border-radius:50%;
+    background:var(--navy);
+    color:var(--gold-soft);
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    font-weight:700;
+    font-size:13px;
+    margin-right:8px;
+    flex-shrink:0;
+  }
+  .q-title{
+    display:flex;
+    align-items:flex-start;
+    font-weight:700;
+    font-size:15.5px;
+    margin-bottom:4px;
+  }
+  .q-sub{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin:0 0 14px 34px;
+  }
+  .required{
+    color:var(--red);
+    font-size:11px;
+    font-weight:700;
+    margin-left:6px;
+    border:1px solid var(--red);
+    border-radius:4px;
+    padding:1px 5px;
+  }
+  .optional{
+    color:var(--ink-soft);
+    font-size:11px;
+    margin-left:6px;
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:1px 5px;
+  }
+
+  .options{margin-left:34px; display:flex; flex-direction:column; gap:8px;}
+  label.opt{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:11px 14px;
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    font-size:14px;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  label.opt:has(input:checked){
+    border-color:var(--gold);
+    background:#fbf1dc;
+  }
+  label.opt input{accent-color:var(--gold);width:17px;height:17px;flex-shrink:0;}
+
+  input[type=text], textarea{
+    margin-left:34px;
+    width:calc(100% - 34px);
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    padding:11px 13px;
+    font-family:inherit;
+    font-size:14px;
+    color:var(--ink);
+    resize:vertical;
+  }
+  input[type=text]:focus, textarea:focus{
+    outline:none;
+    border-color:var(--gold);
+  }
+  textarea{min-height:80px;}
+
+  .team-hint{
+    margin:14px 34px 0;
+    padding:10px 12px;
+    background:#eef3f9;
+    border-left:3px solid var(--blue);
+    font-size:12.5px;
+    color:#2c445e;
+    border-radius:0 8px 8px 0;
+  }
+
+  .submit-wrap{padding:26px 24px 30px;}
+  button.submit{
+    width:100%;
+    border:none;
+    padding:16px;
+    border-radius:12px;
+    background:linear-gradient(135deg, var(--red), #a92c30);
+    color:#fff;
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    font-weight:700;
+    font-size:16px;
+    letter-spacing:.05em;
+    cursor:pointer;
+    box-shadow:0 8px 18px rgba(200,55,59,.35);
+    transition:transform .12s;
+  }
+  button.submit:active{transform:scale(.98);}
+  button.submit:disabled{opacity:.6;cursor:default;}
+  .err{color:var(--red);font-size:12px;margin:8px 0 0 34px;display:none;}
+
+  .done{
+    display:none;
+    text-align:center;
+    padding:70px 24px;
+    background:var(--paper);
+    border-radius:18px;
+    box-shadow:0 20px 50px rgba(0,0,0,.35);
+  }
+  .done .medal{
+    width:64px;height:64px;
+    margin:0 auto 18px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, var(--gold-soft), var(--gold) 70%);
+    display:flex;align-items:center;justify-content:center;
+    font-size:28px;
+    box-shadow:0 6px 14px rgba(217,164,65,.5);
+  }
+  .done h2{font-family:'Zen Kaku Gothic New',sans-serif; margin:0 0 10px;}
+  .done p{color:var(--ink-soft); font-size:14px; line-height:1.8;}
+
+  footer{
+    text-align:center;
+    color:#7c88a3;
+    font-size:11px;
+    padding:20px 0 34px;
+  }
+</style>
+</head>
+<body>
+
+<div class="bunting" id="bunting"></div>
+
+<header>
+  <div class="eyebrow">MINAHARUNOSATO CUP</div>
+  <h1>職員対抗レクリエーション<br>アンケート</h1>
+  <p>今年もやります、職員対抗レク！<br>一番多くの希望が集まった競技に決定します。開催時間は19:00〜21:00の予定です。<br>みなさんの希望を教えてください。所要時間は約2分です。</p>
+</header>
+
+<main>
+  <form id="surveyForm">
+
+    <div class="section">
+      <div class="q-title"><span class="q-num">1</span>施設名<span class="required">必須</span></div>
+      <div class="options">
+        <label class="opt"><input type="radio" name="dept" value="みなはるの里有料" required>みなはるの里有料</label>
+        <label class="opt"><input type="radio" name="dept" value="みなはるの里デイサービス" required>みなはるの里デイサービス</label>
+        <label class="opt"><input type="radio" name="dept" value="みなはるの里特養" required>みなはるの里特養</label>
+        <label class="opt"><input type="radio" name="dept" value="悠々訪問看護ステーション" required>悠々訪問看護ステーション</label>
+        <label class="opt"><input type="radio" name="dept" value="悠久の里一番館" required>悠久の里一番館</label>
+        <label class="opt"><input type="radio" name="dept" value="悠久の里三番館" required>悠久の里三番館</label>
+        <label class="opt"><input type="radio" name="dept" value="悠久の里横尾" required>悠久の里横尾</label>
+        <label class="opt"><input type="radio" name="dept" value="悠久の里佐伯" required>悠久の里佐伯</label>
+        <label class="opt"><input type="radio" name="dept" value="悠久の里米良" required>悠久の里米良</label>
+        <label class="opt"><input type="radio" name="dept" value="みどりの郷ほんじょう" required>ほんじょう</label>
+        <label class="opt"><input type="radio" name="dept" value="その他・本部" required>その他・本部</label>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="q-title"><span class="q-num">2</span>お名前<span class="optional">任意</span></div>
+      <p class="q-sub">無記名でも構いません</p>
+      <input type="text" name="name" placeholder="例）大分 太郎">
+    </div>
+
+    <div class="section">
+      <div class="q-title"><span class="q-num">3</span>参加・不参加<span class="required">必須</span></div>
+      <div class="options">
+        <label class="opt"><input type="radio" name="join" value="参加する" required>参加する</label>
+        <label class="opt"><input type="radio" name="join" value="不参加" required>不参加</label>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="q-title"><span class="q-num">4</span>お子様の参加<span class="required">必須</span></div>
+      <p class="q-sub">お子様も一緒にご参加いただけます</p>
+      <div class="options">
+        <label class="opt"><input type="radio" name="kids" value="参加する" required>参加する</label>
+        <label class="opt"><input type="radio" name="kids" value="参加しない" required>参加しない</label>
+      </div>
+      <input type="text" name="kidsCount" placeholder="参加する場合：人数・年齢など（任意）" style="margin-top:10px;">
+    </div>
+
+    <div class="section">
+      <div class="q-title"><span class="q-num">5</span>やってみたい種目<span class="optional">複数選択可</span></div>
+      <p class="q-sub">気になるものすべてにチェックしてください（一番希望の多かった競技に決定します）</p>
+      <div class="options">
+        <label class="opt"><input type="checkbox" name="events" value="ボーリング">ボーリング</label>
+        <label class="opt"><input type="checkbox" name="events" value="バドミントン">バドミントン</label>
+        <label class="opt"><input type="checkbox" name="events" value="ソフトバレー">ソフトバレー</label>
+        <label class="opt"><input type="checkbox" name="events" value="卓球">卓球</label>
+        <label class="opt"><input type="checkbox" name="events" value="その他">その他</label>
+      </div>
+      <input type="text" name="eventsOther" placeholder="「その他」を選んだ方はこちらに種目名をご記入ください" style="margin-top:10px;">
+    </div>
+
+    <div class="section">
+      <div class="q-title"><span class="q-num">6</span>ご意見・アイデア<span class="optional">任意</span></div>
+      <p class="q-sub">チーム名の案、景品の希望、その他なんでもどうぞ</p>
+      <textarea name="comment" placeholder="自由にご記入ください"></textarea>
+    </div>
+
+    <div class="submit-wrap">
+      <button type="submit" class="submit" id="submitBtn">回答を送信する</button>
+      <div class="err" id="errMsg">必須項目を選択してください</div>
+    </div>
+  </form>
+
+  <div class="done" id="doneMsg">
+    <div class="medal">🏅</div>
+    <h2>ご回答ありがとうございました！</h2>
+    <p>みなさんの声を参考に、開催内容を決めていきます。<br>当日をお楽しみに！</p>
+  </div>
+
+  <div style="text-align:center;padding:26px 0 4px;">
+    <a href="#" id="adminLink" style="color:#94a1bf;font-size:12px;text-decoration:underline;">集計を見る（管理者用）</a>
+  </div>
+
+  <div id="adminPanel" style="display:none;padding-top:14px;">
+    <div style="background:var(--paper);border-radius:18px;box-shadow:0 20px 50px rgba(0,0,0,.35);padding:26px 24px;">
+
+      <div id="pwGate">
+        <p style="font-size:14px;margin:0 0 10px;">パスワードを入力してください</p>
+        <input type="password" id="pwInput" style="width:100%;border:1.5px solid var(--line);border-radius:10px;padding:11px 13px;font-size:14px;">
+        <button type="button" id="pwSubmit" class="submit" style="margin-top:12px;">表示する</button>
+        <div id="pwErr" style="color:var(--red);font-size:12px;margin-top:8px;display:none;">パスワードが違います</div>
+      </div>
+
+      <div id="tallyView" style="display:none;">
+        <h2 style="font-family:'Zen Kaku Gothic New',sans-serif;margin:0 0 16px;font-size:19px;">集計結果</h2>
+        <div id="tallyContent"></div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<footer>みなはるの里 職員対抗レクリエーション実行委員</footer>
+
+<script>
+// bunting flags
+const bunting = document.getElementById('bunting');
+for(let i=0;i<26;i++){ bunting.innerHTML += '<span></span>'; }
+
+// ------------------------------------------------------------------
+// GAS連携設定：Google Apps Scriptをウェブアプリとして公開し、
+// 発行されたURLを下の GAS_URL に貼り付けてください。
+// （回答はスプレッドシートの新しいシートに1行ずつ追記され、
+//   集計画面はこのURLに ?action=list でGETして全件を読み込みます）
+// 併せて共有した gas-code.gs をApps Scriptエディタに貼り付けてください。
+// ------------------------------------------------------------------
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxrPXKq2ikipUgLp2QOuDQIw9zk6R6bM8tLUjDF9MgQw7DSro-hEUGWjoARDObYJMQM/exec";
+const ADMIN_PASSWORD = "2408";
+
+const form = document.getElementById('surveyForm');
+const doneMsg = document.getElementById('doneMsg');
+const submitBtn = document.getElementById('submitBtn');
+const errMsg = document.getElementById('errMsg');
+
+form.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  errMsg.style.display = 'none';
+
+  if(!form.checkValidity()){
+    form.reportValidity();
+    return;
+  }
+
+  const data = new FormData(form);
+  const payload = {
+    dept: data.get('dept') || '',
+    name: data.get('name') || '（無記名）',
+    join: data.get('join') || '',
+    kids: data.get('kids') || '',
+    kidsCount: data.get('kidsCount') || '',
+    events: data.getAll('events').join('、'),
+    eventsOther: data.get('eventsOther') || '',
+    comment: data.get('comment') || '',
+    timestamp: new Date().toLocaleString('ja-JP')
+  };
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = '送信中…';
+
+  try{
+    if(GAS_URL){
+      await fetch(GAS_URL, {
+        method:'POST',
+        mode:'no-cors',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+    } else {
+      // GAS未設定時のフォールバック（ブラウザに一時保存のみ）
+      const local = JSON.parse(localStorage.getItem('recreationSurveyResponses') || '[]');
+      local.push(payload);
+      localStorage.setItem('recreationSurveyResponses', JSON.stringify(local));
+    }
+    form.style.display = 'none';
+    doneMsg.style.display = 'block';
+  }catch(err){
+    errMsg.textContent = '送信に失敗しました。通信環境をご確認のうえ、もう一度お試しください。';
+    errMsg.style.display = 'block';
+    submitBtn.disabled = false;
+    submitBtn.textContent = '回答を送信する';
+  }
+});
+
+// ------------------------------------------------------------------
+// 集計表示（管理者用）
+// ------------------------------------------------------------------
+const adminLink = document.getElementById('adminLink');
+const adminPanel = document.getElementById('adminPanel');
+const pwGate = document.getElementById('pwGate');
+const pwInput = document.getElementById('pwInput');
+const pwSubmit = document.getElementById('pwSubmit');
+const pwErr = document.getElementById('pwErr');
+const tallyView = document.getElementById('tallyView');
+const tallyContent = document.getElementById('tallyContent');
+
+adminLink.addEventListener('click', (e)=>{
+  e.preventDefault();
+  adminPanel.style.display = 'block';
+  adminPanel.scrollIntoView({behavior:'smooth', block:'start'});
+});
+
+pwSubmit.addEventListener('click', async ()=>{
+  if(pwInput.value !== ADMIN_PASSWORD){
+    pwErr.style.display = 'block';
+    return;
+  }
+  pwErr.style.display = 'none';
+  pwGate.style.display = 'none';
+  tallyView.style.display = 'block';
+  await loadTally();
+});
+
+function countBy(rows, key){
+  const m = {};
+  rows.forEach(r=>{
+    const v = r[key];
+    if(!v) return;
+    String(v).split('、').filter(Boolean).forEach(x=>{
+      m[x] = (m[x]||0) + 1;
+    });
+  });
+  return Object.entries(m).sort((a,b)=> b[1]-a[1]);
+}
+
+function barsHtml(title, entries){
+  if(!entries.length) return '';
+  const max = entries[0][1];
+  const bars = entries.map(([label,n])=>`
+    <div style="margin-bottom:9px;">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px;">
+        <span>${escapeHtml(label)}</span><span style="font-weight:700;">${n}件</span>
+      </div>
+      <div style="background:#eee;border-radius:6px;height:9px;overflow:hidden;">
+        <div style="width:${Math.round(n/max*100)}%;background:var(--gold);height:100%;"></div>
+      </div>
+    </div>`).join('');
+  return `<h3 style="font-size:14px;margin:20px 0 10px;color:var(--navy);">${title}</h3>${bars}`;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function loadTally(){
+  tallyContent.innerHTML = '<p style="color:var(--ink-soft);font-size:13px;">読み込み中…</p>';
+  let rows = [];
+  try{
+    if(GAS_URL){
+      const res = await fetch(GAS_URL + '?action=list');
+      rows = await res.json();
+    } else {
+      rows = JSON.parse(localStorage.getItem('recreationSurveyResponses') || '[]');
+    }
+  }catch(err){
+    tallyContent.innerHTML = '<p style="color:var(--red);font-size:13px;">データの取得に失敗しました。GAS_URLの設定をご確認ください。</p>';
+    return;
+  }
+
+  if(!rows.length){
+    tallyContent.innerHTML = '<p style="color:var(--ink-soft);font-size:13px;">まだ回答がありません。</p>';
+    return;
+  }
+
+  let html = `<p style="font-size:13px;color:var(--ink-soft);margin:0 0 4px;">総回答数：<strong style="color:var(--ink);">${rows.length}件</strong></p>`;
+  html += barsHtml('施設別', countBy(rows,'dept'));
+  html += barsHtml('参加・不参加', countBy(rows,'join'));
+  html += barsHtml('お子様の参加', countBy(rows,'kids'));
+  html += barsHtml('種目別希望（最多得票の種目に決定）', countBy(rows,'events'));
+
+  const others = rows.map(r=>r.eventsOther).filter(Boolean);
+  if(others.length){
+    html += `<h3 style="font-size:14px;margin:20px 0 10px;color:var(--navy);">「その他」の内訳</h3>`;
+    html += '<ul style="padding-left:18px;font-size:13px;line-height:1.9;margin:0;">' +
+      others.map(o=>`<li>${escapeHtml(o)}</li>`).join('') + '</ul>';
+  }
+
+  const comments = rows.map(r=>r.comment).filter(Boolean);
+  if(comments.length){
+    html += `<h3 style="font-size:14px;margin:20px 0 10px;color:var(--navy);">ご意見・アイデア</h3>`;
+    html += '<ul style="padding-left:18px;font-size:13px;line-height:1.9;margin:0;">' +
+      comments.map(c=>`<li>${escapeHtml(c)}</li>`).join('') + '</ul>';
+  }
+
+  tallyContent.innerHTML = html;
+}
+</script>
+
+</body>
+</html>
